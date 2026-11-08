@@ -22,11 +22,11 @@ function NativeTabLayout() {
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="saved">
         <NativeTabs.Trigger.Icon sf={{ default: 'bookmark', selected: 'bookmark.fill' }} />
-        <NativeTabs.Trigger.Label>Merkliste</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Label>Agenda</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="settings">
-        <NativeTabs.Trigger.Icon sf={{ default: 'gearshape', selected: 'gearshape.fill' }} />
-        <NativeTabs.Trigger.Label>Mehr</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon sf={{ default: 'info.circle', selected: 'info.circle.fill' }} />
+        <NativeTabs.Trigger.Label>Info</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
     </NativeTabs>
   );
@@ -91,7 +91,7 @@ function ClassicTabLayout() {
       <Tabs.Screen
         name="saved"
         options={{
-          title: 'Merkliste',
+          title: 'Agenda',
           tabBarIcon: ({ color, focused }) =>
             isIOS ? (
               <SymbolView name="bookmark" tintColor={color} size={23} />
@@ -103,12 +103,12 @@ function ClassicTabLayout() {
       <Tabs.Screen
         name="settings"
         options={{
-          title: 'Mehr',
+          title: 'Info',
           tabBarIcon: ({ color, focused }) =>
             isIOS ? (
-              <SymbolView name="gearshape" tintColor={color} size={23} />
+              <SymbolView name="info" tintColor={color} size={23} />
             ) : (
-              <Feather name="settings" size={20} color={focused ? colors.primary : colors.mutedForeground} />
+              <Feather name="info" size={20} color={focused ? colors.primary : colors.mutedForeground} />
             ),
         }}
       />

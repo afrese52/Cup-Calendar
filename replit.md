@@ -37,8 +37,9 @@ Inoffizielle Android-first Begleit-App für Fortnite-Wettbewerbe mit Kalender, F
 
 ## Product
 
-- Turnierbeispiele nach Region, Spielmodus und Turniertyp filtern.
-- Turnierdetails öffnen und Veranstaltungen lokal in der Merkliste speichern oder entfernen.
+- Monatskalender mit Monatsnavigation, markiertem Tag, Kategorie-Filtern und passender Tagesagenda.
+- Agenda-Liste mit gespeicherten Favoriten und Turnierdetails.
+- Veranstaltungen lokal in der Merkliste speichern oder entfernen.
 - Der Einstellungsbereich enthält den Hinweis zum inoffiziellen Fanprojekt.
 - Supabase, Live-Datenimport, Push-Nachrichten, Konten und Pro-Käufe sind noch nicht verbunden.
 

@@ -2,6 +2,7 @@ export type TournamentRegion = 'EU' | 'NAE' | 'NAW' | 'BR' | 'ASIA' | 'OCE' | 'M
 export type TournamentMode = 'Battle Royale' | 'Zero Build' | 'Reload' | 'Community';
 export type TournamentType = 'FNCS' | 'Cash Cup' | 'Ranked Cup' | 'Community';
 export type TeamFormat = 'Solo' | 'Duos' | 'Trios' | 'Squads';
+export type EventCategory = 'Turnier' | 'Liga' | 'Qualifikation' | 'Trainingsrunde';
 
 export interface TournamentEvent {
   id: string;
@@ -11,9 +12,17 @@ export interface TournamentEvent {
   gameMode: TournamentMode;
   teamFormat: TeamFormat;
   tournamentType: TournamentType;
+  category: EventCategory;
   startTime: string;
   endTime: string;
   featured: boolean;
+}
+
+export function toLocalDateKey(value: Date | string): string {
+  const date = value instanceof Date ? value : new Date(value);
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${date.getFullYear()}-${month}-${day}`;
 }
 
 function upcoming(hoursAhead: number): string {
@@ -32,6 +41,7 @@ function sampleEvent(
   gameMode: TournamentMode,
   teamFormat: TeamFormat,
   tournamentType: TournamentType,
+  category: EventCategory,
   hoursAhead: number,
   featured = false,
 ): TournamentEvent {
@@ -44,6 +54,7 @@ function sampleEvent(
     gameMode,
     teamFormat,
     tournamentType,
+    category,
     startTime,
     endTime: endAfter(startTime),
     featured,
@@ -61,6 +72,7 @@ export const sampleEvents: TournamentEvent[] = [
     'Battle Royale',
     'Duos',
     'FNCS',
+    'Turnier',
     9,
     true,
   ),
@@ -72,16 +84,18 @@ export const sampleEvents: TournamentEvent[] = [
     'Zero Build',
     'Solo',
     'Cash Cup',
+    'Turnier',
     26,
   ),
   sampleEvent(
     'preview-reload-nae-duos',
-    'Reload Cash Cup',
-    'Beispieltermin für einen Reload-Cup in NAE.',
+    'Reload Ligaabend',
+    'Beispieltermin für eine Liga-Runde in Reload.',
     'NAE',
     'Reload',
     'Duos',
-    'Cash Cup',
+    'Community',
+    'Liga',
     40,
   ),
   sampleEvent(
@@ -92,6 +106,7 @@ export const sampleEvents: TournamentEvent[] = [
     'Battle Royale',
     'Solo',
     'Ranked Cup',
+    'Qualifikation',
     55,
   ),
   sampleEvent(
@@ -102,6 +117,7 @@ export const sampleEvents: TournamentEvent[] = [
     'Community',
     'Trios',
     'Community',
+    'Trainingsrunde',
     76,
   ),
 ];

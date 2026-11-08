@@ -1,144 +1,60 @@
 import { Feather } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import React, { useMemo, useState } from 'react';
-import { FlatList, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { EventCard } from '@/components/EventCard';
+import { MonthCalendar } from '@/components/MonthCalendar';
 import { useColors } from '@/hooks/useColors';
+import { toLocalDateKey, type EventCategory } from '@/data/events';
 import { useCupCal } from '@/state/AppContext';
-import type { TournamentEvent } from '@/data/events';
 
-type FilterKey = 'region' | 'gameMode' | 'tournamentType';
-type FilterValue = string;
+type CategoryFilter = 'Alle Termine' | EventCategory;
 
-const filterGroups: { key: FilterKey; title: string; options: FilterValue[] }[] = [
-  { key: 'region', title: 'Region', options: ['Alle', 'EU', 'NAE', 'NAW', 'BR', 'ASIA', 'OCE', 'ME'] },
-  { key: 'gameMode', title: 'Modus', options: ['Alle', 'Battle Royale', 'Zero Build', 'Reload', 'Community'] },
-  { key: 'tournamentType', title: 'Format', options: ['Alle', 'FNCS', 'Cash Cup', 'Ranked Cup', 'Community'] },
+const categoryFilters: CategoryFilter[] = [
+  'Alle Termine',
+  'Turnier',
+  'Liga',
+  'Qualifikation',
+  'Trainingsrunde',
 ];
 
-function FilterRow({
-  title,
-  options,
-  selected,
-  onSelect,
-}: {
-  title: string;
-  options: string[];
-  selected: string;
-  onSelect: (value: string) => void;
-}) {
-  const colors = useColors();
-  return (
-    <View style={styles.filterGroup}>
-      <Text style={[styles.filterLabel, { color: colors.mutedForeground }]}>{title}</Text>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterChips}>
-        {options.map((option) => {
-          const active = selected === option;
-          return (
-            <Pressable
-              key={`${title}-${option}`}
-              accessibilityRole="button"
-              accessibilityState={{ selected: active }}
-              testID={`filter-${title}-${option}`}
-              onPress={() => {
-                void Haptics.selectionAsync();
-                onSelect(option);
-              }}
-              style={({ pressed }) => [
-                styles.filterChip,
-                { backgroundColor: active ? colors.primary : colors.card, borderColor: active ? colors.primary : colors.border },
-                pressed && styles.pressed,
-              ]}
-            >
-              <Text style={[styles.filterChipText, { color: active ? colors.primaryForeground : colors.secondaryForeground }]}>
-                {option}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </ScrollView>
-    </View>
-  );
+const categoryColorKey: Record<EventCategory, 'categoryTournament' | 'categoryLeague' | 'categoryQualification' | 'categoryTraining'> = {
+  Turnier: 'categoryTournament',
+  Liga: 'categoryLeague',
+  Qualifikation: 'categoryQualification',
+  Trainingsrunde: 'categoryTraining',
+};
+
+function capitalize(value: string) {
+  return value.charAt(0).toLocaleUpperCase('de-DE') + value.slice(1);
 }
 
-function CalendarHeader({
-  filters,
-  onSelect,
-  onReset,
-  featured,
-}: {
-  filters: Record<FilterKey, string>;
-  onSelect: (key: FilterKey, value: string) => void;
-  onReset: () => void;
-  featured: TournamentEvent | undefined;
-}) {
+function deviceTimezoneLabel() {
+  const zone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Gerätezeit';
+  const offset = new Intl.DateTimeFormat('en', { timeZoneName: 'longOffset' })
+    .formatToParts(new Date())
+    .find((part) => part.type === 'timeZoneName')?.value
+    ?.replace('GMT', 'UTC') ?? 'UTC';
+  return `Zeiten in Gerätezeit · ${zone} (${offset})`;
+}
+
+function CategoryLegend() {
   const colors = useColors();
-  const today = new Intl.DateTimeFormat('de-DE', { weekday: 'long', day: 'numeric', month: 'long' }).format(new Date());
-  const eventDate = featured
-    ? new Intl.DateTimeFormat('de-DE', { weekday: 'short', day: '2-digit', month: 'short' }).format(new Date(featured.startTime))
-    : 'Bald verfügbar';
+  const entries: { category: EventCategory; colorKey: (typeof categoryColorKey)[EventCategory] }[] = [
+    { category: 'Turnier', colorKey: 'categoryTournament' },
+    { category: 'Liga', colorKey: 'categoryLeague' },
+    { category: 'Qualifikation', colorKey: 'categoryQualification' },
+    { category: 'Trainingsrunde', colorKey: 'categoryTraining' },
+  ];
 
   return (
-    <View style={styles.header}>
-      <View style={styles.headerTop}>
-        <View>
-          <Text style={[styles.eyebrow, { color: colors.primary }]}>CUPCAL <Text style={{ color: colors.mutedForeground }}>/ VORSCHAU</Text></Text>
-          <Text style={[styles.greeting, { color: colors.foreground }]}>Dein Wettkampfplan.</Text>
-          <Text style={[styles.today, { color: colors.mutedForeground }]}>{today}</Text>
+    <View style={styles.legend}>
+      {entries.map(({ category, colorKey }) => (
+        <View key={category} style={styles.legendItem}>
+          <View style={[styles.legendDot, { backgroundColor: colors[colorKey] }]} />
+          <Text style={[styles.legendText, { color: colors.mutedForeground }]}>{category}</Text>
         </View>
-        <View style={[styles.calendarIcon, { backgroundColor: colors.accent }]}>
-          <Feather name="calendar" size={21} color={colors.accentForeground} />
-        </View>
-      </View>
-
-      <View style={[styles.previewNotice, { backgroundColor: colors.surfaceRaised, borderColor: colors.border }]}>
-        <View style={[styles.noticeDot, { backgroundColor: colors.warning }]} />
-        <Text style={[styles.noticeText, { color: colors.mutedForeground }]}>
-          Beispieldaten · Live-Turnierdaten noch nicht verbunden
-        </Text>
-      </View>
-
-      {featured ? (
-        <View style={[styles.featured, { backgroundColor: colors.primary }]}>
-          <View style={styles.featuredTop}>
-            <Text style={styles.featuredLabel}>ALS NÄCHSTES</Text>
-            <View style={[styles.featuredMark, { backgroundColor: colors.heroHighlight }]}>
-              <Feather name="zap" size={13} color={colors.primary} />
-            </View>
-          </View>
-          <Text style={[styles.featuredTitle, { color: colors.heroForeground }]} numberOfLines={2}>{featured.title}</Text>
-          <View style={styles.featuredBottom}>
-            <Text style={[styles.featuredMeta, { color: colors.heroMeta }]}>{eventDate} · {featured.region} · {featured.teamFormat}</Text>
-            <Feather name="arrow-up-right" size={17} color={colors.heroForeground} />
-          </View>
-        </View>
-      ) : null}
-
-      <View style={styles.sectionHeader}>
-        <View>
-          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Turniere</Text>
-          <Text style={[styles.sectionSub, { color: colors.mutedForeground }]}>Finde deinen nächsten Drop-in</Text>
-        </View>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Alle Filter zurücksetzen"
-          testID="reset-filters"
-          onPress={onReset}
-          style={({ pressed }) => [styles.resetButton, pressed && styles.pressed]}
-        >
-          <Feather name="sliders" size={17} color={colors.mutedForeground} />
-        </Pressable>
-      </View>
-
-      {filterGroups.map((group) => (
-        <FilterRow
-          key={group.key}
-          title={group.title}
-          options={group.options}
-          selected={filters[group.key]}
-          onSelect={(value) => onSelect(group.key, value)}
-        />
       ))}
     </View>
   );
@@ -146,106 +62,269 @@ function CalendarHeader({
 
 export default function CalendarScreen() {
   const colors = useColors();
-  const { events, bookmarkedIds, toggleBookmark, isReady, storageError } = useCupCal();
-  const [filters, setFilters] = useState<Record<FilterKey, string>>({
-    region: 'Alle',
-    gameMode: 'Alle',
-    tournamentType: 'Alle',
-  });
-
-  const orderedEvents = useMemo(() => [...events].sort((a, b) => a.startTime.localeCompare(b.startTime)), [events]);
-  const filteredEvents = useMemo(
-    () =>
-      orderedEvents.filter((event) =>
-        filterGroups.every(({ key }) => filters[key] === 'Alle' || event[key] === filters[key]),
-      ),
-    [orderedEvents, filters],
+  const { events, bookmarkedIds, toggleBookmark, storageError } = useCupCal();
+  const [selectedDate, setSelectedDate] = useState(() => new Date());
+  const [currentMonth, setCurrentMonth] = useState(
+    () => new Date(new Date().getFullYear(), new Date().getMonth(), 1),
   );
-  const featured = orderedEvents.find((event) => event.featured);
+  const [selectedCategory, setSelectedCategory] = useState<CategoryFilter>('Alle Termine');
+  const [filterOpen, setFilterOpen] = useState(false);
+
+  const visibleEvents = useMemo(
+    () =>
+      [...events]
+        .filter((event) => selectedCategory === 'Alle Termine' || event.category === selectedCategory)
+        .sort((a, b) => a.startTime.localeCompare(b.startTime)),
+    [events, selectedCategory],
+  );
+  const monthEvents = useMemo(
+    () =>
+      visibleEvents.filter((event) => {
+        const date = new Date(event.startTime);
+        return date.getFullYear() === currentMonth.getFullYear() && date.getMonth() === currentMonth.getMonth();
+      }),
+    [visibleEvents, currentMonth],
+  );
+  const selectedDayEvents = useMemo(
+    () => visibleEvents.filter((event) => toLocalDateKey(event.startTime) === toLocalDateKey(selectedDate)),
+    [visibleEvents, selectedDate],
+  );
+  const monthName = capitalize(
+    new Intl.DateTimeFormat('de-DE', { month: 'long' }).format(currentMonth),
+  );
+  const selectedDateLabel = capitalize(
+    new Intl.DateTimeFormat('de-DE', {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+    }).format(selectedDate),
+  );
+
+  const moveMonth = (amount: number) => {
+    setCurrentMonth((month) => new Date(month.getFullYear(), month.getMonth() + amount, 1));
+    void Haptics.selectionAsync();
+  };
+
+  const selectToday = () => {
+    const now = new Date();
+    setSelectedDate(now);
+    setCurrentMonth(new Date(now.getFullYear(), now.getMonth(), 1));
+    void Haptics.selectionAsync();
+  };
+
+  const selectDate = (date: Date) => {
+    setSelectedDate(date);
+    if (date.getMonth() !== currentMonth.getMonth() || date.getFullYear() !== currentMonth.getFullYear()) {
+      setCurrentMonth(new Date(date.getFullYear(), date.getMonth(), 1));
+    }
+    void Haptics.selectionAsync();
+  };
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]} edges={['top']}>
-      <FlatList
-        data={filteredEvents}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <EventCard
-            event={item}
-            isBookmarked={bookmarkedIds.includes(item.id)}
-            onBookmarkToggle={(id) => void toggleBookmark(id)}
-          />
-        )}
-        ListHeaderComponent={
-          <CalendarHeader
-            filters={filters}
-            featured={featured}
-            onSelect={(key, value) => setFilters((current) => ({ ...current, [key]: value }))}
-            onReset={() => setFilters({ region: 'Alle', gameMode: 'Alle', tournamentType: 'Alle' })}
-          />
-        }
-        ListEmptyComponent={
-          <View style={styles.empty}>
-            <Feather name="filter" size={22} color={colors.mutedForeground} />
-            <Text style={[styles.emptyTitle, { color: colors.foreground }]}>Keine Treffer</Text>
-            <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>Ändere die Filter, um weitere Turniere zu sehen.</Text>
-          </View>
-        }
-        ListFooterComponent={
-          <Text style={[styles.disclaimer, { color: colors.mutedForeground }]}>
-            Inoffizielles Fanprojekt, nicht von Epic Games unterstützt.
-          </Text>
-        }
+      <ScrollView
         contentContainerStyle={[
-          styles.listContent,
-          { paddingTop: Platform.OS === 'web' ? 67 : 8, paddingBottom: Platform.OS === 'web' ? 110 : 104 },
+          styles.content,
+          { paddingTop: Platform.OS === 'web' ? 67 : 5, paddingBottom: Platform.OS === 'web' ? 112 : 32 },
         ]}
         showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-      />
-      {storageError ? (
-        <View style={[styles.storageWarning, { backgroundColor: colors.surfaceRaised, borderColor: colors.border }]}>
-          <Text style={[styles.storageWarningText, { color: colors.warning }]}>{storageError}</Text>
+      >
+        <View style={styles.brandRow}>
+          <View style={styles.brand}>
+            <View style={[styles.brandMark, { backgroundColor: colors.primary }]} />
+            <Text style={[styles.brandName, { color: colors.mutedForeground }]}>CAP-CALENDAR</Text>
+          </View>
+          <View style={[styles.previewBadge, { borderColor: colors.warning, backgroundColor: colors.warning + '16' }]}>
+            <Feather name="alert-triangle" size={11} color={colors.warning} />
+            <Text style={[styles.previewBadgeText, { color: colors.warning }]}>TESTDATEN · FIKTIVE TERMINE</Text>
+          </View>
         </View>
-      ) : null}
-      {!isReady ? <View pointerEvents="none" style={[styles.loadingShade, { backgroundColor: colors.background + '66' }]} /> : null}
+
+        <View style={styles.monthHeading}>
+          <View style={styles.monthTitleBlock}>
+            <Text style={[styles.monthTitle, { color: colors.foreground }]}>{monthName}</Text>
+            <Text style={[styles.monthSub, { color: colors.mutedForeground }]}>
+              {currentMonth.getFullYear()} · {monthEvents.length} {monthEvents.length === 1 ? 'Termin' : 'Termine'}
+            </Text>
+          </View>
+          <View style={styles.monthControls}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Vorheriger Monat"
+              testID="previous-month"
+              onPress={() => moveMonth(-1)}
+              style={({ pressed }) => [
+                styles.monthArrow,
+                { borderColor: colors.border, backgroundColor: colors.background },
+                pressed && styles.pressed,
+              ]}
+            >
+              <Feather name="chevron-left" size={20} color={colors.foreground} />
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Zum heutigen Datum"
+              testID="today-button"
+              onPress={selectToday}
+              style={({ pressed }) => [
+                styles.todayButton,
+                { borderColor: colors.primary },
+                pressed && styles.pressed,
+              ]}
+            >
+              <Text style={[styles.todayButtonText, { color: colors.primary }]}>Heute</Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Nächster Monat"
+              testID="next-month"
+              onPress={() => moveMonth(1)}
+              style={({ pressed }) => [
+                styles.monthArrow,
+                { borderColor: colors.border, backgroundColor: colors.background },
+                pressed && styles.pressed,
+              ]}
+            >
+              <Feather name="chevron-right" size={20} color={colors.foreground} />
+            </Pressable>
+          </View>
+        </View>
+
+        <MonthCalendar
+          currentMonth={currentMonth}
+          selectedDate={selectedDate}
+          events={visibleEvents}
+          onSelectDate={selectDate}
+        />
+
+        <CategoryLegend />
+
+        <View style={styles.filterWrap}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ expanded: filterOpen }}
+            accessibilityLabel={`Filter, ${selectedCategory}`}
+            testID="calendar-filter"
+            onPress={() => setFilterOpen((open) => !open)}
+            style={({ pressed }) => [
+              styles.filterButton,
+              { borderColor: colors.border, backgroundColor: colors.card },
+              pressed && styles.pressed,
+            ]}
+          >
+            <Feather name="sliders" size={18} color={colors.mutedForeground} />
+            <Text style={[styles.filterTitle, { color: colors.foreground }]}>Filter</Text>
+            <Text style={[styles.filterSelection, { color: colors.mutedForeground }]} numberOfLines={1}>
+              {selectedCategory}
+            </Text>
+            <Feather name={filterOpen ? 'chevron-up' : 'chevron-down'} size={18} color={colors.mutedForeground} />
+          </Pressable>
+          {filterOpen ? (
+            <View style={[styles.filterMenu, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              {categoryFilters.map((category) => {
+                const active = selectedCategory === category;
+                const color = category === 'Alle Termine' ? colors.foreground : colors[categoryColorKey[category]];
+                return (
+                  <Pressable
+                    key={category}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: active }}
+                    testID={`calendar-filter-${category}`}
+                    onPress={() => {
+                      setSelectedCategory(category);
+                      setFilterOpen(false);
+                    }}
+                    style={({ pressed }) => [styles.filterOption, pressed && styles.pressed]}
+                  >
+                    <View style={[styles.optionDot, { backgroundColor: color }]} />
+                    <Text style={[styles.filterOptionText, { color: colors.foreground }]}>{category}</Text>
+                    {active ? <Feather name="check" size={16} color={colors.primary} /> : null}
+                  </Pressable>
+                );
+              })}
+            </View>
+          ) : null}
+        </View>
+
+        <View style={styles.dayHeading}>
+          <Text style={[styles.dayTitle, { color: colors.foreground }]}>{selectedDateLabel}</Text>
+          <Text style={[styles.timezone, { color: colors.mutedForeground }]}>{deviceTimezoneLabel()}</Text>
+        </View>
+
+        {selectedDayEvents.length ? (
+          <View style={styles.dayEvents}>
+            {selectedDayEvents.map((event) => (
+              <EventCard
+                key={event.id}
+                event={event}
+                isBookmarked={bookmarkedIds.includes(event.id)}
+                onBookmarkToggle={(id) => void toggleBookmark(id)}
+              />
+            ))}
+          </View>
+        ) : (
+          <View style={[styles.emptyDay, { borderColor: colors.border, backgroundColor: colors.card }]}>
+            <View style={[styles.emptyIcon, { backgroundColor: colors.secondary }]}>
+              <Feather name="calendar" size={18} color={colors.mutedForeground} />
+            </View>
+            <View style={styles.emptyCopy}>
+              <Text style={[styles.emptyTitle, { color: colors.foreground }]}>Keine Termine an diesem Tag</Text>
+              <Text style={[styles.emptyDescription, { color: colors.mutedForeground }]}>
+                Wähle einen anderen Tag im Kalender.
+              </Text>
+            </View>
+          </View>
+        )}
+
+        {storageError ? <Text style={[styles.storageError, { color: colors.warning }]}>{storageError}</Text> : null}
+        <Text style={[styles.disclaimer, { color: colors.mutedForeground }]}>
+          Inoffizielles Fanprojekt · Nicht von Epic Games unterstützt
+        </Text>
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   safe: { flex: 1 },
-  listContent: { flexGrow: 1 },
-  header: { paddingTop: 14, paddingBottom: 16 },
-  headerTop: { marginHorizontal: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 },
-  eyebrow: { fontSize: 10, fontWeight: '800', letterSpacing: 1.8, marginBottom: 8 },
-  greeting: { fontSize: 28, fontWeight: '700', letterSpacing: -0.7 },
-  today: { fontSize: 13, marginTop: 4, textTransform: 'capitalize' },
-  calendarIcon: { width: 46, height: 46, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
-  previewNotice: { marginHorizontal: 20, borderWidth: 1, borderRadius: 12, minHeight: 39, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 15 },
-  noticeDot: { width: 7, height: 7, borderRadius: 4 },
-  noticeText: { fontSize: 11, fontWeight: '600' },
-  featured: { marginHorizontal: 20, borderRadius: 22, padding: 19, marginBottom: 23 },
-  featuredTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 },
-  featuredLabel: { fontSize: 10, letterSpacing: 1.4, fontWeight: '800' },
-  featuredMark: { width: 25, height: 25, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
-  featuredTitle: { fontSize: 23, lineHeight: 28, fontWeight: '800', marginBottom: 15 },
-  featuredBottom: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  featuredMeta: { fontSize: 12, fontWeight: '700' },
-  sectionHeader: { paddingHorizontal: 20, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
-  sectionTitle: { fontSize: 20, fontWeight: '700' },
-  sectionSub: { fontSize: 12, marginTop: 3 },
-  resetButton: { width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  filterGroup: { marginBottom: 10 },
-  filterLabel: { marginLeft: 20, marginBottom: 7, fontSize: 10, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase' },
-  filterChips: { paddingHorizontal: 20, gap: 7 },
-  filterChip: { minHeight: 32, justifyContent: 'center', borderRadius: 10, borderWidth: 1, paddingHorizontal: 11 },
-  filterChipText: { fontSize: 11, fontWeight: '600' },
-  pressed: { opacity: 0.72 },
-  empty: { alignItems: 'center', justifyContent: 'center', paddingHorizontal: 40, paddingVertical: 42, gap: 8 },
-  emptyTitle: { fontSize: 17, fontWeight: '700' },
-  emptyText: { textAlign: 'center', fontSize: 13, lineHeight: 19 },
-  disclaimer: { textAlign: 'center', marginHorizontal: 26, marginTop: 6, fontSize: 10, lineHeight: 16 },
-  storageWarning: { position: 'absolute', bottom: 14, left: 20, right: 20, borderWidth: 1, borderRadius: 12, padding: 12 },
-  storageWarningText: { fontSize: 12, textAlign: 'center', fontWeight: '600' },
-  loadingShade: { ...StyleSheet.absoluteFill },
+  content: { flexGrow: 1 },
+  brandRow: { marginHorizontal: 20, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', minHeight: 28, marginBottom: 18, gap: 8 },
+  brand: { flexDirection: 'row', alignItems: 'center', gap: 9 },
+  brandMark: { width: 11, height: 11, borderRadius: 3, transform: [{ rotate: '45deg' }] },
+  brandName: { fontSize: 11, fontWeight: '800', letterSpacing: 2.2 },
+  previewBadge: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 8, height: 26, flexDirection: 'row', alignItems: 'center', gap: 5 },
+  previewBadgeText: { fontSize: 8, fontWeight: '800', letterSpacing: 0.8 },
+  monthHeading: { marginHorizontal: 20, minHeight: 70, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 13, gap: 8 },
+  monthTitleBlock: { flexShrink: 1 },
+  monthTitle: { fontSize: 34, lineHeight: 40, fontWeight: '800', letterSpacing: -1.2 },
+  monthSub: { fontSize: 13, marginTop: 4, fontWeight: '500' },
+  monthControls: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  monthArrow: { width: 43, height: 46, borderRadius: 14, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  todayButton: { height: 46, borderRadius: 14, borderWidth: 1.5, paddingHorizontal: 13, alignItems: 'center', justifyContent: 'center' },
+  todayButtonText: { fontSize: 14, fontWeight: '700' },
+  pressed: { opacity: 0.7, transform: [{ scale: 0.98 }] },
+  legend: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 12, marginHorizontal: 22, marginTop: 12, marginBottom: 15 },
+  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  legendDot: { width: 6, height: 6, borderRadius: 3 },
+  legendText: { fontSize: 11, fontWeight: '500' },
+  filterWrap: { marginHorizontal: 19, marginBottom: 22 },
+  filterButton: { minHeight: 54, borderWidth: 1, borderRadius: 16, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 15, gap: 10 },
+  filterTitle: { fontSize: 14, fontWeight: '700' },
+  filterSelection: { flex: 1, fontSize: 13 },
+  filterMenu: { borderWidth: 1, borderRadius: 16, marginTop: 7, overflow: 'hidden' },
+  filterOption: { minHeight: 45, paddingHorizontal: 15, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  optionDot: { width: 7, height: 7, borderRadius: 4 },
+  filterOptionText: { flex: 1, fontSize: 13, fontWeight: '600' },
+  dayHeading: { marginHorizontal: 20, marginBottom: 12 },
+  dayTitle: { fontSize: 20, lineHeight: 25, fontWeight: '800', letterSpacing: -0.35 },
+  timezone: { marginTop: 6, fontSize: 12 },
+  dayEvents: { paddingTop: 1 },
+  emptyDay: { marginHorizontal: 20, minHeight: 83, borderWidth: 1, borderRadius: 16, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, gap: 12 },
+  emptyIcon: { width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  emptyCopy: { flex: 1 },
+  emptyTitle: { fontSize: 13, fontWeight: '700' },
+  emptyDescription: { marginTop: 3, fontSize: 11 },
+  storageError: { marginHorizontal: 20, marginTop: 12, fontSize: 12, textAlign: 'center' },
+  disclaimer: { marginHorizontal: 24, marginTop: 18, fontSize: 10, textAlign: 'center' },
 });

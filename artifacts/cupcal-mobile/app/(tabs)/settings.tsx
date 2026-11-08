@@ -74,8 +74,8 @@ export default function SettingsScreen() {
         showsVerticalScrollIndicator={false}
       >
         <Text style={[styles.eyebrow, { color: colors.primary }]}>CUPCAL</Text>
-        <Text style={[styles.heading, { color: colors.foreground }]}>Mehr</Text>
-        <Text style={[styles.intro, { color: colors.mutedForeground }]}>Deine App-Einstellungen und Informationen.</Text>
+        <Text style={[styles.heading, { color: colors.foreground }]}>Info</Text>
+        <Text style={[styles.intro, { color: colors.mutedForeground }]}>Informationen zu CupCal und deinen lokalen Daten.</Text>
 
         <Text style={[styles.groupLabel, { color: colors.mutedForeground }]}>APP</Text>
         <View style={[styles.group, { backgroundColor: colors.card, borderColor: colors.border }]}>
