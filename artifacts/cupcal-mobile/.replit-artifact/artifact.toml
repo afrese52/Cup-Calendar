@@ -1,0 +1,24 @@
+kind = "mobile"
+previewPath = "/"
+title = "CupCal: Kalender für FN"
+description = "Eine Android-first Begleit-App für Fortnite-Wettbewerbe mit Turnierkalender, Filtern, Favoriten und zuverlässigem Offline-Zugriff."
+version = "1.0.0"
+id = "artifacts/cupcal-mobile"
+router = "expo-domain"
+
+[[services]]
+name = "expo"
+ensurePreviewReachable = "/status"
+paths = [ "/" ]
+localPort = 22431
+
+[services.development]
+run = "pnpm --filter @workspace/cupcal-mobile run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/cupcal-mobile", "run", "build" ]
+run = [ "pnpm", "--filter", "@workspace/cupcal-mobile", "run", "serve" ]
+
+[services.env]
+PORT = "22431"
+BASE_PATH = "/"

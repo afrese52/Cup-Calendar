@@ -1,10 +1,11 @@
-# [Project name]
+# CupCal: Kalender für FN
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+Inoffizielle Android-first Begleit-App für Fortnite-Wettbewerbe mit Kalender, Filtern, Turnierdetails und lokal gespeicherten Favoriten.
 
 ## Run & Operate
 
 - `pnpm --filter @workspace/api-server run dev` — run the API server (port 5000)
+- `pnpm --filter @workspace/cupcal-mobile run dev` — run the Expo mobile app
 - `pnpm run typecheck` — full typecheck across all packages
 - `pnpm run build` — typecheck + build all packages
 - `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
@@ -22,19 +23,28 @@ _Replace the heading above with the project's name, and this line with one sente
 
 ## Where things live
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+- `artifacts/cupcal-mobile/app/` — Kalender, Merkliste, Einstellungen und Turnierdetails
+- `artifacts/cupcal-mobile/data/events.ts` — deutlich gekennzeichnete Beispieldaten; Live-Daten sind noch nicht verbunden
+- `artifacts/cupcal-mobile/state/AppContext.tsx` — gemeinsamer App-Zustand und lokale Favoriten
+- `artifacts/cupcal-mobile/constants/colors.ts` — CupCal-Farbthema
+- `lib/api-spec/openapi.yaml` — Quelle der API-Verträge
 
 ## Architecture decisions
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+- Android-first Paket-ID gemäß Feinkonzept: `com.cupcal.android`; nach dem ersten nativen Build nicht mehr ändern.
+- Favoriten werden zunächst lokal mit AsyncStorage gespeichert; es gibt noch keine Konto- oder Cloud-Synchronisierung.
+- Beispieltermine dürfen nicht als echte oder live synchronisierte Turnierdaten dargestellt werden.
 
 ## Product
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+- Turnierbeispiele nach Region, Spielmodus und Turniertyp filtern.
+- Turnierdetails öffnen und Veranstaltungen lokal in der Merkliste speichern oder entfernen.
+- Der Einstellungsbereich enthält den Hinweis zum inoffiziellen Fanprojekt.
+- Supabase, Live-Datenimport, Push-Nachrichten, Konten und Pro-Käufe sind noch nicht verbunden.
 
 ## User preferences
 
-_Populate as you build — explicit user instructions worth remembering across sessions._
+- Nutzerseitige Texte und Antworten sollen auf Deutsch sein.
 
 ## Gotchas
 
