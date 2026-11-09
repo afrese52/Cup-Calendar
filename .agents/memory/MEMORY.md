@@ -1,1 +1,2 @@
 - [Expo-Vorschau-Timing](expo-preview-timing.md) — Screenshots direkt nach einem Expo-Neustart können vor dem ersten Web-Bundle leer sein.
+- [Expo-SQLite-Web-Fallback](expo-sqlite-web-fallback.md) — Ein Laufzeit-Platform-Check verhindert nicht, dass Metro SQLite-WASM fürs Web bündelt.

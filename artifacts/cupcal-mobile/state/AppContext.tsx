@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { sampleEvents, type TournamentEvent } from '@/data/events';
+import { loadCachedEvents, saveEventsToCache } from '@/services/localEventStore';
 
 const BOOKMARKS_KEY = 'cupcal.bookmarks.v1';
 
@@ -17,9 +18,12 @@ interface AppContextValue {
 const AppContext = createContext<AppContextValue | null>(null);
 
 export function AppProvider({ children }: { children: ReactNode }) {
+  const [events, setEvents] = useState<TournamentEvent[]>([]);
   const [bookmarkedIds, setBookmarkedIds] = useState<string[]>([]);
-  const [isReady, setIsReady] = useState(false);
+  const [bookmarksReady, setBookmarksReady] = useState(false);
+  const [eventsReady, setEventsReady] = useState(false);
   const [storageError, setStorageError] = useState<string | null>(null);
+  const isReady = bookmarksReady && eventsReady;
 
   useEffect(() => {
     let isMounted = true;
@@ -35,9 +39,36 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (isMounted) setStorageError('Favoriten konnten nicht geladen werden.');
       })
       .finally(() => {
-        if (isMounted) setIsReady(true);
+        if (isMounted) setBookmarksReady(true);
       });
 
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadEvents() {
+      try {
+        let cachedEvents = await loadCachedEvents();
+        if (cachedEvents === null) {
+          await saveEventsToCache(sampleEvents);
+          cachedEvents = sampleEvents;
+        }
+        if (isMounted) setEvents(cachedEvents);
+      } catch {
+        if (isMounted) {
+          setEvents(sampleEvents);
+          setStorageError('Offline-Termine konnten nicht gespeichert werden.');
+        }
+      } finally {
+        if (isMounted) setEventsReady(true);
+      }
+    }
+
+    void loadEvents();
     return () => {
       isMounted = false;
     };
@@ -71,14 +102,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo(
     () => ({
-      events: sampleEvents,
+      events,
       bookmarkedIds,
       isReady,
       storageError,
       toggleBookmark,
       clearBookmarks,
     }),
-    [bookmarkedIds, isReady, storageError, toggleBookmark, clearBookmarks],
+    [events, bookmarkedIds, isReady, storageError, toggleBookmark, clearBookmarks],
   );
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
