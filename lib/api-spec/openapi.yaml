@@ -10,6 +10,8 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: events
+    description: Public tournament calendar
 paths:
   /healthz:
     get:
@@ -24,6 +26,48 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /v1/events:
+    get:
+      operationId: getEvents
+      tags: [events]
+      summary: List tournament events
+      parameters:
+        - name: region
+          in: query
+          schema:
+            type: string
+            enum: [EU, NAE, NAW, BR, ASIA, OCE, ME, GLOBAL, ALL]
+        - name: game_mode
+          in: query
+          schema:
+            type: string
+            enum: [Battle Royale, Zero Build, Reload, Community, ALL]
+        - name: tournament_type
+          in: query
+          schema:
+            type: string
+            enum: [FNCS, Cash Cup, Ranked Cup, Community, ALL]
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date-time
+      responses:
+        "200":
+          description: Tournament events
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EventListResponse"
+        "400":
+          description: Invalid filters
+        "503":
+          description: Event data is temporarily unavailable
 components:
   schemas:
     HealthStatus:
@@ -33,4 +77,64 @@ components:
           type: string
       required:
         - status
+    TournamentEvent:
+      type: object
+      properties:
+        id: { type: string }
+        title: { type: string }
+        description: { type: string }
+        region:
+          type: string
+          enum: [EU, NAE, NAW, BR, ASIA, OCE, ME, GLOBAL]
+        gameMode:
+          type: string
+          enum: [Battle Royale, Zero Build, Reload, Community]
+        teamFormat:
+          type: string
+          enum: [Solo, Duos, Trios, Squads]
+        tournamentType:
+          type: string
+          enum: [FNCS, Cash Cup, Ranked Cup, Community]
+        category:
+          type: string
+          enum: [Turnier, Liga, Qualifikation, Trainingsrunde]
+        startTime: { type: string, format: date-time }
+        endTime: { type: string, format: date-time }
+        featured: { type: boolean }
+      required:
+        - id
+        - title
+        - description
+        - region
+        - gameMode
+        - teamFormat
+        - tournamentType
+        - category
+        - startTime
+        - endTime
+        - featured
+    EventListResponse:
+      type: object
+      properties:
+        count: { type: integer }
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/TournamentEvent"
+        sourceStatus:
+          type: object
+          properties:
+            state:
+              type: string
+              enum: [unknown, running, ok, failed]
+            lastAttemptAt:
+              type: string
+              format: date-time
+              nullable: true
+            lastSuccessAt:
+              type: string
+              format: date-time
+              nullable: true
+          required: [state, lastAttemptAt, lastSuccessAt]
+      required: [count, data, sourceStatus]
 

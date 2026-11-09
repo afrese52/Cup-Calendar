@@ -49,7 +49,7 @@ async function readWebEvents(): Promise<TournamentEvent[] | null> {
   }
 
   if (Date.now() - cache.savedAt > CACHE_TTL_MS) return [];
-  return cache.events.filter(isEvent);
+  return cache.events.filter((event) => isEvent(event) && !event.id.startsWith('preview-'));
 }
 
 export async function loadCachedEvents(): Promise<TournamentEvent[] | null> {

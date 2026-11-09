@@ -46,6 +46,7 @@ async function getDatabase(): Promise<SQLiteDatabase> {
           updated_at INTEGER NOT NULL
         );
       `);
+      await database.runAsync("DELETE FROM events WHERE id LIKE 'preview-%'");
       return database;
     })().catch((error: unknown) => {
       databasePromise = null;
@@ -83,7 +84,7 @@ export async function loadCachedEvents(): Promise<TournamentEvent[] | null> {
   if (Date.now() - metadata.updated_at > CACHE_TTL_MS) return [];
 
   const rows = await database.getAllAsync<CachedEventRow>(
-    'SELECT * FROM events ORDER BY start_time ASC',
+    "SELECT * FROM events WHERE id NOT LIKE 'preview-%' ORDER BY start_time ASC",
   );
   return rows.map(mapRow);
 }

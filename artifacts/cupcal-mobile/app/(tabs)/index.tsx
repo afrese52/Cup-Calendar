@@ -62,7 +62,7 @@ function CategoryLegend() {
 
 export default function CalendarScreen() {
   const colors = useColors();
-  const { events, bookmarkedIds, toggleBookmark, storageError } = useCupCal();
+  const { events, bookmarkedIds, toggleBookmark, eventError, isLiveData, storageError } = useCupCal();
   const [selectedDate, setSelectedDate] = useState(() => new Date());
   const [currentMonth, setCurrentMonth] = useState(
     () => new Date(new Date().getFullYear(), new Date().getMonth(), 1),
@@ -135,9 +135,23 @@ export default function CalendarScreen() {
             <View style={[styles.brandMark, { backgroundColor: colors.primary }]} />
             <Text style={[styles.brandName, { color: colors.mutedForeground }]}>CAP-CALENDAR</Text>
           </View>
-          <View style={[styles.previewBadge, { borderColor: colors.warning, backgroundColor: colors.warning + '16' }]}>
-            <Feather name="alert-triangle" size={11} color={colors.warning} />
-            <Text style={[styles.previewBadgeText, { color: colors.warning }]}>TESTDATEN · FIKTIVE TERMINE</Text>
+          <View
+            style={[
+              styles.previewBadge,
+              {
+                borderColor: eventError ? colors.warning : colors.primary,
+                backgroundColor: (eventError ? colors.warning : colors.primary) + '16',
+              },
+            ]}
+          >
+            <Feather
+              name={eventError ? 'alert-triangle' : 'wifi'}
+              size={11}
+              color={eventError ? colors.warning : colors.primary}
+            />
+            <Text style={[styles.previewBadgeText, { color: eventError ? colors.warning : colors.primary }]}>
+              {isLiveData ? 'LIVE-DATEN' : eventError ? 'QUELLE OFFLINE' : 'DATEN WERDEN GELADEN'}
+            </Text>
           </View>
         </View>
 
@@ -250,6 +264,9 @@ export default function CalendarScreen() {
         <View style={styles.dayHeading}>
           <Text style={[styles.dayTitle, { color: colors.foreground }]}>{selectedDateLabel}</Text>
           <Text style={[styles.timezone, { color: colors.mutedForeground }]}>{deviceTimezoneLabel()}</Text>
+          {eventError ? (
+            <Text style={[styles.storageError, { color: colors.warning }]}>{eventError}</Text>
+          ) : null}
         </View>
 
         {selectedDayEvents.length ? (
