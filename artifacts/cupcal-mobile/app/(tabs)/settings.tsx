@@ -1,7 +1,7 @@
 import { Feather } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import React, { useEffect, useState } from 'react';
-import { Alert, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { Session } from '@supabase/supabase-js';
 import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
@@ -63,6 +63,7 @@ export default function SettingsScreen() {
     bookmarkSyncError,
     bookmarkSyncStatus,
     clearBookmarks,
+    retryBookmarkSync,
     storageError,
   } = useCupCal();
   const [session, setSession] = useState<Session | null>(null);
@@ -345,11 +346,17 @@ export default function SettingsScreen() {
         <Text style={[styles.groupLabel, { color: colors.mutedForeground }]}>APP</Text>
         <View style={[styles.group, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <SettingRow
-            icon={bookmarkSyncStatus === 'synced' ? 'refresh-cw' : 'wifi-off'}
-            title={bookmarkSyncStatus === 'synced' ? 'Geräteübergreifend verfügbar' : 'Offline verfügbar'}
+            icon={bookmarkSyncStatus === 'syncing' || bookmarkSyncStatus === 'synced' ? 'refresh-cw' : 'wifi-off'}
+            title={
+              bookmarkSyncStatus === 'syncing'
+                ? 'Favoriten werden abgeglichen'
+                : bookmarkSyncStatus === 'synced'
+                  ? 'Geräteübergreifend verfügbar'
+                  : 'Offline verfügbar'
+            }
             subtitle={
               bookmarkSyncStatus === 'syncing'
-                ? 'Deine Merkliste wird abgeglichen.'
+                ? 'Deine Favoriten werden mit deinem Konto abgeglichen.'
                 : bookmarkSyncStatus === 'synced'
                   ? 'Mit deinem Konto synchronisiert und offline gespeichert.'
                   : bookmarkSyncStatus === 'pending'
@@ -357,6 +364,33 @@ export default function SettingsScreen() {
                     : 'Deine Merkliste wird auf diesem Gerät gespeichert.'
             }
           />
+          {session ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityState={{ disabled: bookmarkSyncStatus === 'syncing' }}
+              testID="retry-bookmark-sync-button"
+              disabled={bookmarkSyncStatus === 'syncing'}
+              onPress={() => {
+                void Haptics.selectionAsync();
+                void retryBookmarkSync();
+              }}
+              style={({ pressed }) => [
+                styles.syncButton,
+                { borderColor: colors.border },
+                pressed && bookmarkSyncStatus !== 'syncing' ? styles.pressed : null,
+                bookmarkSyncStatus === 'syncing' ? styles.disabled : null,
+              ]}
+            >
+              {bookmarkSyncStatus === 'syncing' ? (
+                <ActivityIndicator size="small" color={colors.primary} />
+              ) : (
+                <Feather name="refresh-cw" size={15} color={colors.primary} />
+              )}
+              <Text style={[styles.syncButtonText, { color: colors.foreground }]}>
+                {bookmarkSyncStatus === 'syncing' ? 'Abgleich läuft …' : 'Jetzt erneut abgleichen'}
+              </Text>
+            </Pressable>
+          ) : null}
           <SettingRow icon="bookmark" title="Gespeicherte Turniere" subtitle={`${bookmarkedIds.length} in deiner Merkliste`} />
           <SettingRow
             icon="trash-2"
@@ -410,6 +444,17 @@ const styles = StyleSheet.create({
   primaryButtonText: { fontSize: 14, fontWeight: '700' },
   secondaryButton: { minHeight: 44, borderWidth: 1, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginTop: 15 },
   secondaryButtonText: { fontSize: 13, fontWeight: '700' },
+  syncButton: {
+    minHeight: 44,
+    borderWidth: 1,
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginVertical: 10,
+  },
+  syncButtonText: { fontSize: 13, fontWeight: '700' },
   modeToggle: { minHeight: 40, alignItems: 'center', justifyContent: 'center', marginTop: 4 },
   modeToggleText: { fontSize: 12, fontWeight: '700' },
   authNotice: { fontSize: 12, lineHeight: 17, marginTop: 10 },

@@ -25,6 +25,7 @@ interface AppContextValue {
   bookmarkSyncStatus: 'local' | 'syncing' | 'synced' | 'pending';
   bookmarkSyncError: string | null;
   toggleBookmark: (eventId: string) => Promise<void>;
+  retryBookmarkSync: () => Promise<void>;
   clearBookmarks: () => Promise<void>;
 }
 
@@ -299,6 +300,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [syncBookmarks],
   );
 
+  const retryBookmarkSync = useCallback(async () => {
+    const activeUserId = currentUserId.current;
+    if (activeUserId) await syncBookmarks(activeUserId);
+  }, [syncBookmarks]);
+
   const clearBookmarks = useCallback(async () => {
     const idsToClear = [...currentBookmarkIds.current];
     const activeUserId = currentUserId.current;
@@ -324,6 +330,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       bookmarkSyncStatus,
       bookmarkSyncError,
       toggleBookmark,
+      retryBookmarkSync,
       clearBookmarks,
     }),
     [
@@ -336,6 +343,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       bookmarkSyncStatus,
       bookmarkSyncError,
       toggleBookmark,
+      retryBookmarkSync,
       clearBookmarks,
     ],
   );
