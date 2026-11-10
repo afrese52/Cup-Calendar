@@ -12,6 +12,8 @@ tags:
     description: Health operations
   - name: events
     description: Public tournament calendar
+  - name: admin-import
+    description: Admin-only upload and import of tournament schedules
 paths:
   /healthz:
     get:
@@ -68,7 +70,90 @@ paths:
           description: Invalid filters
         "503":
           description: Event data is temporarily unavailable
+  /v1/admin/import-access:
+    get:
+      operationId: getAdminImportAccess
+      tags: [admin-import]
+      summary: Check access to the schedule importer
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Import access status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminImportAccess"
+        "401":
+          description: Authentication required
+        "403":
+          description: Import access is not granted
+  /v1/admin/events/import/preview:
+    post:
+      operationId: previewMhtImport
+      tags: [admin-import]
+      summary: Preview a saved Fortnite schedule before importing
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          text/plain:
+            schema:
+              $ref: "#/components/schemas/MhtScheduleFile"
+      responses:
+        "200":
+          description: Parsed schedule and import review
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MhtImportPreview"
+        "400":
+          description: The uploaded file could not be parsed
+        "401":
+          description: Authentication required
+        "403":
+          description: Import access is not granted
+        "413":
+          description: The file is too large
+        "503":
+          description: Supabase is temporarily unavailable
+  /v1/admin/events/import:
+    post:
+      operationId: importMhtSchedule
+      tags: [admin-import]
+      summary: Import reviewed schedule entries into Supabase
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          text/plain:
+            schema:
+              $ref: "#/components/schemas/MhtScheduleFile"
+      responses:
+        "200":
+          description: Import result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MhtImportResult"
+        "400":
+          description: The uploaded file could not be imported
+        "401":
+          description: Authentication required
+        "403":
+          description: Import access is not granted
+        "413":
+          description: The file is too large
+        "503":
+          description: Supabase is temporarily unavailable
 components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
   schemas:
     HealthStatus:
       type: object
@@ -137,4 +222,78 @@ components:
               nullable: true
           required: [state, lastAttemptAt, lastSuccessAt]
       required: [count, data, sourceStatus]
+    AdminImportAccess:
+      type: object
+      properties:
+        authorized: { type: boolean }
+        reason:
+          type: ["string", "null"]
+          enum: [not_configured, not_admin, null]
+      required: [authorized, reason]
+    MhtScheduleFile:
+      type: string
+      description: UTF-8 text content of an MHT or MHTML schedule snapshot
+    MhtImportEvent:
+      type: object
+      properties:
+        id: { type: string }
+        title: { type: string }
+        startTime: { type: string, format: date-time }
+        endTime: { type: string, format: date-time }
+        gameMode:
+          type: string
+          enum: [Battle Royale, Zero Build, Reload, Community]
+        teamFormat:
+          type: string
+          enum: [Solo, Duos, Trios, Squads]
+        tournamentType:
+          type: string
+          enum: [FNCS, Cash Cup, Ranked Cup, Community]
+        category:
+          type: string
+          enum: [Turnier, Liga, Qualifikation, Trainingsrunde]
+        warnings:
+          type: array
+          items: { type: string }
+        willUpdate: { type: boolean }
+      required: [id, title, startTime, endTime, gameMode, teamFormat, tournamentType, category, warnings, willUpdate]
+    MhtImportIssue:
+      type: object
+      properties:
+        title:
+          type: ["string", "null"]
+        errors:
+          type: array
+          items: { type: string }
+      required: [title, errors]
+    MhtImportPreview:
+      type: object
+      properties:
+        sourceUrl: { type: ["string", "null"] }
+        snapshotAt: { type: ["string", "null"], format: date-time }
+        region: { type: string }
+        timeZone: { type: string }
+        cardCount: { type: integer }
+        upcomingCount: { type: integer }
+        importableCount: { type: integer }
+        warningCount: { type: integer }
+        invalidCount: { type: integer }
+        newCount: { type: integer }
+        updateCount: { type: integer }
+        events:
+          type: array
+          items: { $ref: "#/components/schemas/MhtImportEvent" }
+        issues:
+          type: array
+          items: { $ref: "#/components/schemas/MhtImportIssue" }
+      required: [sourceUrl, snapshotAt, region, timeZone, cardCount, upcomingCount, importableCount, warningCount, invalidCount, newCount, updateCount, events, issues]
+    MhtImportResult:
+      type: object
+      properties:
+        importedCount: { type: integer }
+        insertedCount: { type: integer }
+        updatedCount: { type: integer }
+        skippedWarningCount: { type: integer }
+        skippedPastCount: { type: integer }
+      required: [importedCount, insertedCount, updatedCount, skippedWarningCount, skippedPastCount]
 

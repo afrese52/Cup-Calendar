@@ -1,8 +1,25 @@
-# MHT-Terminimport im Trockenlauf
+# MHT-Terminimport
 
-Der Importer liest einen gespeicherten Fortnite-Wettkampf-Zeitplan (`.mht`) und
-prüft die erkannten Turnierkarten. Er nimmt **keine Verbindung zu Supabase auf**
-und schreibt keine Daten.
+In der CupCal-App gibt es unter **Info → Turniertermine importieren** eine
+geschützte Upload-Maske für gespeicherte Fortnite-Spielpläne (`.mht` oder
+`.mhtml`). Die Datei wird zuerst geprüft; erst nach einer ausdrücklichen
+Bestätigung werden eindeutig zugeordnete zukünftige Termine in
+`public.fortnite_events` geschrieben.
+
+Der Import ist auf Konten beschränkt, deren E-Mail-Adresse in der
+serverseitigen Umgebungsvariable `CUPCAL_IMPORT_ADMIN_EMAILS` steht. Mehrere
+Adressen werden durch Kommas getrennt. Ohne diese Freigabeliste bleibt der
+Import gesperrt. Der Supabase-Service-Schlüssel wird ausschließlich auf dem
+API-Server verwendet und nie an die App übertragen.
+
+Vergangene Termine und Datensätze mit einer unklaren Spielformat-Zuordnung
+werden in der Vorschau markiert und nicht gespeichert. Bestehende Termine mit
+derselben Epic-Kennung werden aktualisiert; persönliche Admin-Notizen und
+manuelle Hervorhebungen bleiben dabei unverändert. Neue Dateien sind weiterhin
+Momentaufnahmen, keine Live-Verbindung zu Epic.
+
+Der lokale Trockenlauf bleibt verfügbar. Er prüft die Erkennung, ohne Supabase
+zu verbinden oder Daten zu schreiben:
 
 ```sh
 pnpm --filter @workspace/api-server run dry-run:mht -- \
@@ -18,7 +35,5 @@ Tests:
 
 ```sh
 pnpm --filter @workspace/api-server run test:mht-import
+pnpm --filter @workspace/api-server run test:admin-import
 ```
-
-Die Datei ist eine Momentaufnahme der Webseite. Der Trockenlauf ist daher für
-Importprüfung und Datenmapping gedacht, nicht für automatische Aktualisierungen.

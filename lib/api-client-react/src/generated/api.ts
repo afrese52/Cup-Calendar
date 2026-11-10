@@ -6,28 +6,36 @@
  * OpenAPI spec version: 0.1.0
  */
 import {
+  useMutation,
   useQuery
 } from '@tanstack/react-query';
 import type {
   DataTag,
   DefinedInitialDataOptions,
   DefinedUseQueryResult,
+  MutationFunction,
   QueryClient,
   QueryFunction,
   QueryKey,
   UndefinedInitialDataOptions,
+  UseMutationOptions,
+  UseMutationResult,
   UseQueryOptions,
   UseQueryResult
 } from '@tanstack/react-query';
 
 import type {
+  AdminImportAccess,
   EventListResponse,
   GetEventsParams,
-  HealthStatus
+  HealthStatus,
+  MhtImportPreview,
+  MhtImportResult,
+  MhtScheduleFile
 } from './api.schemas';
 
 import { customFetch } from '../custom-fetch';
-import type { ErrorType } from '../custom-fetch';
+import type { ErrorType , BodyType } from '../custom-fetch';
 
 type AwaitedInput<T> = PromiseLike<T> | T;
 
@@ -262,4 +270,281 @@ export function useGetEvents<TData = Awaited<ReturnType<typeof getEvents>>, TErr
 
 
 
+
+export const getGetAdminImportAccessUrl = () => {
+
+
+
+
+  return `/api/v1/admin/import-access`
+}
+
+/**
+ * @summary Check access to the schedule importer
+ */
+export const getAdminImportAccess = async ( options?: Parameters<typeof customFetch>[1]): Promise<AdminImportAccess> => {
+
+  return customFetch<AdminImportAccess>(getGetAdminImportAccessUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAdminImportAccessQueryKey = () => {
+    return [
+    `/api/v1/admin/import-access`
+    ] as const;
+    }
+
+
+export const getGetAdminImportAccessQueryOptions = <TData = Awaited<ReturnType<typeof getAdminImportAccess>>, TError = ErrorType<void>>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAdminImportAccess>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAdminImportAccessQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAdminImportAccess>>> = ({ signal }) => getAdminImportAccess({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAdminImportAccess>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetAdminImportAccessQueryResult = NonNullable<Awaited<ReturnType<typeof getAdminImportAccess>>>
+export type GetAdminImportAccessQueryError = ErrorType<void>
+
+
+export function useGetAdminImportAccess<TData = Awaited<ReturnType<typeof getAdminImportAccess>>, TError = ErrorType<void>>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAdminImportAccess>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getAdminImportAccess>>,
+          TError,
+          Awaited<ReturnType<typeof getAdminImportAccess>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetAdminImportAccess<TData = Awaited<ReturnType<typeof getAdminImportAccess>>, TError = ErrorType<void>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAdminImportAccess>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getAdminImportAccess>>,
+          TError,
+          Awaited<ReturnType<typeof getAdminImportAccess>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetAdminImportAccess<TData = Awaited<ReturnType<typeof getAdminImportAccess>>, TError = ErrorType<void>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAdminImportAccess>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Check access to the schedule importer
+ */
+
+export function useGetAdminImportAccess<TData = Awaited<ReturnType<typeof getAdminImportAccess>>, TError = ErrorType<void>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAdminImportAccess>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetAdminImportAccessQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getPreviewMhtImportUrl = () => {
+
+
+
+
+  return `/api/v1/admin/events/import/preview`
+}
+
+/**
+ * @summary Preview a saved Fortnite schedule before importing
+ */
+export const previewMhtImport = async (mhtScheduleFile: MhtScheduleFile, options?: Parameters<typeof customFetch>[1]): Promise<MhtImportPreview> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<MhtImportPreview>(getPreviewMhtImportUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain', ...getHeaders(options?.headers) },
+    body: mhtScheduleFile
+  }
+);}
+
+
+
+
+
+export const getPreviewMhtImportMutationKey = () => ['previewMhtImport'] as const;
+
+export const getPreviewMhtImportMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof previewMhtImport>>, TError,PreviewMhtImportMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof previewMhtImport>>, TError,PreviewMhtImportMutationVariables, TContext> => {
+
+const mutationKey = getPreviewMhtImportMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof previewMhtImport>>, PreviewMhtImportMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  previewMhtImport(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PreviewMhtImportMutationResult = NonNullable<Awaited<ReturnType<typeof previewMhtImport>>>
+    export type PreviewMhtImportMutationBody = BodyType<MhtScheduleFile>
+    export type PreviewMhtImportMutationError = ErrorType<void>
+    export type PreviewMhtImportMutationVariables = {data: BodyType<MhtScheduleFile>}
+
+    /**
+ * @summary Preview a saved Fortnite schedule before importing
+ */
+export const usePreviewMhtImport = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof previewMhtImport>>, TError,PreviewMhtImportMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof previewMhtImport>>,
+        TError,
+        PreviewMhtImportMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPreviewMhtImportMutationOptions(options), queryClient);
+    }
+
+export const getImportMhtScheduleUrl = () => {
+
+
+
+
+  return `/api/v1/admin/events/import`
+}
+
+/**
+ * @summary Import reviewed schedule entries into Supabase
+ */
+export const importMhtSchedule = async (mhtScheduleFile: MhtScheduleFile, options?: Parameters<typeof customFetch>[1]): Promise<MhtImportResult> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<MhtImportResult>(getImportMhtScheduleUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain', ...getHeaders(options?.headers) },
+    body: mhtScheduleFile
+  }
+);}
+
+
+
+
+
+export const getImportMhtScheduleMutationKey = () => ['importMhtSchedule'] as const;
+
+export const getImportMhtScheduleMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof importMhtSchedule>>, TError,ImportMhtScheduleMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof importMhtSchedule>>, TError,ImportMhtScheduleMutationVariables, TContext> => {
+
+const mutationKey = getImportMhtScheduleMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof importMhtSchedule>>, ImportMhtScheduleMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  importMhtSchedule(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ImportMhtScheduleMutationResult = NonNullable<Awaited<ReturnType<typeof importMhtSchedule>>>
+    export type ImportMhtScheduleMutationBody = BodyType<MhtScheduleFile>
+    export type ImportMhtScheduleMutationError = ErrorType<void>
+    export type ImportMhtScheduleMutationVariables = {data: BodyType<MhtScheduleFile>}
+
+    /**
+ * @summary Import reviewed schedule entries into Supabase
+ */
+export const useImportMhtSchedule = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof importMhtSchedule>>, TError,ImportMhtScheduleMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof importMhtSchedule>>,
+        TError,
+        ImportMhtScheduleMutationVariables,
+        TContext
+      > => {
+      return useMutation(getImportMhtScheduleMutationOptions(options), queryClient);
+    }
 

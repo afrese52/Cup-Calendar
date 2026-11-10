@@ -6,6 +6,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './adminImportAccess';
+export * from './adminImportAccessReason';
 export * from './eventListResponse';
 export * from './eventListResponseSourceStatus';
 export * from './eventListResponseSourceStatusState';
@@ -14,6 +16,15 @@ export * from './getEventsParams';
 export * from './getEventsRegion';
 export * from './getEventsTournamentType';
 export * from './healthStatus';
+export * from './mhtImportEvent';
+export * from './mhtImportEventCategory';
+export * from './mhtImportEventGameMode';
+export * from './mhtImportEventTeamFormat';
+export * from './mhtImportEventTournamentType';
+export * from './mhtImportIssue';
+export * from './mhtImportPreview';
+export * from './mhtImportResult';
+export * from './mhtScheduleFile';
 export * from './tournamentEvent';
 export * from './tournamentEventCategory';
 export * from './tournamentEventGameMode';

@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { Session } from '@supabase/supabase-js';
+import { useRouter } from 'expo-router';
 import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
 import { useColors } from '@/hooks/useColors';
 import { signOutAccount, submitAccountAuth, watchAuthSession } from '@/services/accountAuth';
@@ -58,6 +59,7 @@ function SettingRow({
 
 export default function SettingsScreen() {
   const colors = useColors();
+  const router = useRouter();
   const {
     bookmarkedIds,
     bookmarkSyncError,
@@ -390,6 +392,14 @@ export default function SettingsScreen() {
                 {bookmarkSyncStatus === 'syncing' ? 'Abgleich läuft …' : 'Jetzt erneut abgleichen'}
               </Text>
             </Pressable>
+          ) : null}
+          {session ? (
+            <SettingRow
+              icon="upload-cloud"
+              title="Turniertermine importieren"
+              subtitle="Gespeicherte MHT-Datei prüfen und freigegebene Termine importieren."
+              onPress={() => router.push('/admin/import')}
+            />
           ) : null}
           <SettingRow icon="bookmark" title="Gespeicherte Turniere" subtitle={`${bookmarkedIds.length} in deiner Merkliste`} />
           <SettingRow

@@ -101,6 +101,113 @@ export interface EventListResponse {
   sourceStatus: EventListResponseSourceStatus;
 }
 
+/**
+ * @nullable
+ */
+export type AdminImportAccessReason = typeof AdminImportAccessReason[keyof typeof AdminImportAccessReason] | null;
+
+
+export const AdminImportAccessReason = {
+  not_configured: 'not_configured',
+  not_admin: 'not_admin',
+} as const;
+
+export interface AdminImportAccess {
+  authorized: boolean;
+  /** @nullable */
+  reason: AdminImportAccessReason;
+}
+
+/**
+ * UTF-8 text content of an MHT or MHTML schedule snapshot
+ */
+export type MhtScheduleFile = string;
+
+export type MhtImportEventGameMode = typeof MhtImportEventGameMode[keyof typeof MhtImportEventGameMode];
+
+
+export const MhtImportEventGameMode = {
+  Battle_Royale: 'Battle Royale',
+  Zero_Build: 'Zero Build',
+  Reload: 'Reload',
+  Community: 'Community',
+} as const;
+
+export type MhtImportEventTeamFormat = typeof MhtImportEventTeamFormat[keyof typeof MhtImportEventTeamFormat];
+
+
+export const MhtImportEventTeamFormat = {
+  Solo: 'Solo',
+  Duos: 'Duos',
+  Trios: 'Trios',
+  Squads: 'Squads',
+} as const;
+
+export type MhtImportEventTournamentType = typeof MhtImportEventTournamentType[keyof typeof MhtImportEventTournamentType];
+
+
+export const MhtImportEventTournamentType = {
+  FNCS: 'FNCS',
+  Cash_Cup: 'Cash Cup',
+  Ranked_Cup: 'Ranked Cup',
+  Community: 'Community',
+} as const;
+
+export type MhtImportEventCategory = typeof MhtImportEventCategory[keyof typeof MhtImportEventCategory];
+
+
+export const MhtImportEventCategory = {
+  Turnier: 'Turnier',
+  Liga: 'Liga',
+  Qualifikation: 'Qualifikation',
+  Trainingsrunde: 'Trainingsrunde',
+} as const;
+
+export interface MhtImportEvent {
+  id: string;
+  title: string;
+  startTime: string;
+  endTime: string;
+  gameMode: MhtImportEventGameMode;
+  teamFormat: MhtImportEventTeamFormat;
+  tournamentType: MhtImportEventTournamentType;
+  category: MhtImportEventCategory;
+  warnings: string[];
+  willUpdate: boolean;
+}
+
+export interface MhtImportIssue {
+  /** @nullable */
+  title: string | null;
+  errors: string[];
+}
+
+export interface MhtImportPreview {
+  /** @nullable */
+  sourceUrl: string | null;
+  /** @nullable */
+  snapshotAt: string | null;
+  region: string;
+  timeZone: string;
+  cardCount: number;
+  upcomingCount: number;
+  importableCount: number;
+  warningCount: number;
+  invalidCount: number;
+  newCount: number;
+  updateCount: number;
+  events: MhtImportEvent[];
+  issues: MhtImportIssue[];
+}
+
+export interface MhtImportResult {
+  importedCount: number;
+  insertedCount: number;
+  updatedCount: number;
+  skippedWarningCount: number;
+  skippedPastCount: number;
+}
+
 export type GetEventsParams = {
 region?: GetEventsRegion;
 game_mode?: GetEventsGameMode;

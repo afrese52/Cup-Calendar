@@ -1,6 +1,5 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 
 const REGION_CODES = new Set(["EU", "NAE", "NAW", "BR", "ASIA", "OCE", "ME", "GLOBAL"]);
 const MONTHS = new Map([
@@ -495,7 +494,7 @@ export function parseMhtSchedule(buffer, options = {}) {
   };
 }
 
-function parseArguments(args) {
+export function parseArguments(args) {
   const result = { file: null, timeZone: "Europe/Berlin", region: null, json: false };
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index];
@@ -509,8 +508,7 @@ function parseArguments(args) {
   }
   return result;
 }
-
-function printUsage() {
+export function printUsage() {
   console.log(
     [
       "MHT-Turnierimport im Trockenlauf (schreibt nichts nach Supabase).",
@@ -563,22 +561,4 @@ export async function runDryRun(options) {
     console.log(`  FEHLER ${issue.title || issue.anchorId}: ${issue.errors.join(" ")}`);
   }
   return result;
-}
-
-async function main() {
-  const options = parseArguments(process.argv.slice(2));
-  if (options.help) {
-    printUsage();
-    return;
-  }
-  const result = await runDryRun(options);
-  if (result.invalidCount > 0) process.exitCode = 2;
-}
-
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  main().catch((error) => {
-    console.error(error instanceof Error ? error.message : "Trockenlauf fehlgeschlagen.");
-    printUsage();
-    process.exitCode = 1;
-  });
-}
+} // Keep the shared parser free of command-line side effects.

@@ -51,3 +51,58 @@ export const GetEventsResponse = zod.object({
 })
 
 
+/**
+ * @summary Check access to the schedule importer
+ */
+export const GetAdminImportAccessResponse = zod.object({
+  "authorized": zod.boolean(),
+  "reason": zod.union([zod.literal('not_configured'),zod.literal('not_admin'),zod.literal(null)]).nullable()
+})
+
+
+/**
+ * @summary Preview a saved Fortnite schedule before importing
+ */
+export const PreviewMhtImportResponse = zod.object({
+  "sourceUrl": zod.string().nullable(),
+  "snapshotAt": zod.coerce.date().nullable(),
+  "region": zod.string(),
+  "timeZone": zod.string(),
+  "cardCount": zod.number().int(),
+  "upcomingCount": zod.number().int(),
+  "importableCount": zod.number().int(),
+  "warningCount": zod.number().int(),
+  "invalidCount": zod.number().int(),
+  "newCount": zod.number().int(),
+  "updateCount": zod.number().int(),
+  "events": zod.array(zod.object({
+  "id": zod.string(),
+  "title": zod.string(),
+  "startTime": zod.coerce.date(),
+  "endTime": zod.coerce.date(),
+  "gameMode": zod.enum(['Battle Royale', 'Zero Build', 'Reload', 'Community']),
+  "teamFormat": zod.enum(['Solo', 'Duos', 'Trios', 'Squads']),
+  "tournamentType": zod.enum(['FNCS', 'Cash Cup', 'Ranked Cup', 'Community']),
+  "category": zod.enum(['Turnier', 'Liga', 'Qualifikation', 'Trainingsrunde']),
+  "warnings": zod.array(zod.string()),
+  "willUpdate": zod.boolean()
+})),
+  "issues": zod.array(zod.object({
+  "title": zod.string().nullable(),
+  "errors": zod.array(zod.string())
+}))
+})
+
+
+/**
+ * @summary Import reviewed schedule entries into Supabase
+ */
+export const ImportMhtScheduleResponse = zod.object({
+  "importedCount": zod.number().int(),
+  "insertedCount": zod.number().int(),
+  "updatedCount": zod.number().int(),
+  "skippedWarningCount": zod.number().int(),
+  "skippedPastCount": zod.number().int()
+})
+
+

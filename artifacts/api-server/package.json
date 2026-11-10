@@ -8,8 +8,9 @@
     "build": "node ./build.mjs",
     "start": "node --enable-source-maps ./dist/index.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "dry-run:mht": "node ./scripts/dry-run-mht-import.mjs",
-    "test:mht-import": "node --test ./scripts/dry-run-mht-import.test.mjs"
+    "dry-run:mht": "node ./scripts/run-dry-run-mht-import.mjs",
+    "test:mht-import": "node --test ./scripts/dry-run-mht-import.test.mjs",
+    "test:admin-import": "node --experimental-strip-types --test ./src/services/adminImportAccess.test.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.119.0",
