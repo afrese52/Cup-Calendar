@@ -174,6 +174,7 @@ export async function submitAccountAuth(
     mode: AccountAuthMode;
     email: string;
     password: string;
+    emailConfirmationRedirectTo?: string;
     requestPasswordReset: (email: string) => Promise<void>;
   },
 ): Promise<AuthOperationResult> {
@@ -203,7 +204,19 @@ export async function submitAccountAuth(
       return { ok: true, message: 'Du bist angemeldet.' };
     }
 
-    const { data, error } = await auth.signUp({ email, password });
+    const emailConfirmationRedirectTo = options.emailConfirmationRedirectTo?.trim();
+    if (!emailConfirmationRedirectTo) {
+      return {
+        ok: false,
+        error: 'Der Bestätigungslink ist nicht konfiguriert. Bitte versuche es später erneut.',
+      };
+    }
+
+    const { data, error } = await auth.signUp({
+      email,
+      password,
+      options: { emailRedirectTo: emailConfirmationRedirectTo },
+    });
     if (error) throw error;
     return {
       ok: true,

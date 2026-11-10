@@ -9,6 +9,7 @@ import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollV
 import { useColors } from '@/hooks/useColors';
 import { friendlyAuthError, signOutAccount, submitAccountAuth, watchAuthSession } from '@/services/accountAuth';
 import {
+  getEmailConfirmationRedirectUrl,
   isSupabaseConfigured,
   requestPasswordReset,
   supabase,
@@ -114,6 +115,7 @@ export default function SettingsScreen() {
         mode: authMode,
         email: normalizedEmail,
         password,
+        emailConfirmationRedirectTo: getEmailConfirmationRedirectUrl(),
         requestPasswordReset,
       });
       if (result.ok) {

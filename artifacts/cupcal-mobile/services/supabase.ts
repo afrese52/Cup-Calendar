@@ -55,6 +55,12 @@ export function getPasswordResetRedirectUrl(): string {
   });
 }
 
+export function getEmailConfirmationRedirectUrl(): string {
+  return Linking.createURL('auth/confirm', {
+    queryParams: { flow: 'cupcal-email-confirmation' },
+  });
+}
+
 export function isPasswordRecoveryPending(): boolean {
   return passwordRecovery?.isPending() ?? false;
 }

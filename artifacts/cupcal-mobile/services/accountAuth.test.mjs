@@ -70,13 +70,25 @@ test('zeigt einen verständlichen Fehler bei abgelehnter Anmeldung', async () =>
 
 test('registriert erfolgreich mit und ohne sofortige Sitzung', async (t) => {
   await t.test('Konto wird direkt angemeldet', async () => {
-    const result = await submitAccountAuth(createAuth(), {
+    let receivedSignUpOptions;
+    const result = await submitAccountAuth(createAuth({
+      signUp: async (credentials) => {
+        receivedSignUpOptions = credentials;
+        return { data: { session: savedSession }, error: null };
+      },
+    }), {
       mode: 'sign-up',
       email: 'test@example.invalid',
       password: 'test-password',
+      emailConfirmationRedirectTo: 'cupcal-android://auth/confirm',
       requestPasswordReset: async () => {},
     });
 
+    assert.deepEqual(receivedSignUpOptions, {
+      email: 'test@example.invalid',
+      password: 'test-password',
+      options: { emailRedirectTo: 'cupcal-android://auth/confirm' },
+    });
     assert.deepEqual(result, {
       ok: true,
       message: 'Dein Konto ist erstellt und du bist angemeldet.',
@@ -91,6 +103,7 @@ test('registriert erfolgreich mit und ohne sofortige Sitzung', async (t) => {
       mode: 'sign-up',
       email: 'test@example.invalid',
       password: 'test-password',
+      emailConfirmationRedirectTo: 'cupcal-android://auth/confirm',
       requestPasswordReset: async () => {},
     });
 
@@ -109,6 +122,7 @@ test('zeigt Fehler bei abgelehnter Registrierung verständlich an', async () => 
     mode: 'sign-up',
     email: 'test@example.invalid',
     password: 'weak',
+    emailConfirmationRedirectTo: 'cupcal-android://auth/confirm',
     requestPasswordReset: async () => {},
   });
 
