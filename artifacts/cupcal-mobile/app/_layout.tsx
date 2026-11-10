@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { AppState, Platform, type AppStateStatus } from 'react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
@@ -17,6 +18,7 @@ import { StatusBar } from 'expo-status-bar';
 import { setBaseUrl } from '@workspace/api-client-react';
 import { AppProvider } from '@/state/AppContext';
 import { useColors } from '@/hooks/useColors';
+import { supabase } from '@/services/supabase';
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
@@ -53,6 +55,31 @@ export default function RootLayout() {
       SplashScreen.hideAsync();
     }
   }, [fontsLoaded, fontError]);
+
+  useEffect(() => {
+    const client = supabase;
+    if (!client || Platform.OS === 'web') return;
+
+    const syncAutoRefresh = (state: AppStateStatus) => {
+      if (state === 'active') {
+        void client.auth.startAutoRefresh();
+      } else {
+        void client.auth.stopAutoRefresh();
+      }
+    };
+
+    if (AppState.currentState === 'active') {
+      void client.auth.startAutoRefresh();
+    } else {
+      void client.auth.stopAutoRefresh();
+    }
+    const subscription = AppState.addEventListener('change', syncAutoRefresh);
+
+    return () => {
+      subscription.remove();
+      void client.auth.stopAutoRefresh();
+    };
+  }, []);
 
   if (!fontsLoaded && !fontError) return null;
 

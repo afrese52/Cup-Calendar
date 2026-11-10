@@ -55,6 +55,8 @@
     "zod-validation-error": "^3.4.0"
   },
   "dependencies": {
-    "expo-sqlite": "~58.0.15"
+    "@supabase/supabase-js": "^2.119.0",
+    "expo-sqlite": "~58.0.15",
+    "react-native-url-polyfill": "^4.0.0"
   }
 }
