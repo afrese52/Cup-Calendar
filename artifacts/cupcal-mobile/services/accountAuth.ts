@@ -25,11 +25,17 @@ export function friendlyAuthError(
     return 'Bitte prüfe deine E-Mail-Adresse.';
   }
   if (
+    code === 'invalid_credentials'
+    || message.includes('invalid login credentials')
+    || message.includes('invalid email or password')
+  ) {
+    return 'E-Mail-Adresse oder Passwort stimmen nicht. Prüfe deine Eingaben oder fordere einen neuen Passwort-Link an.';
+  }
+  if (
     code === 'user_already_exists'
     || code === 'user_already_registered'
     || code === 'email_exists'
-    ||
-    message.includes('user already registered')
+    || message.includes('user already registered')
     || message.includes('already registered')
     || message.includes('already exists')
     || message.includes('email address is already in use')
@@ -39,8 +45,7 @@ export function friendlyAuthError(
   if (
     code === 'signup_disabled'
     || code === 'email_provider_disabled'
-    ||
-    message.includes('signup is disabled')
+    || message.includes('signup is disabled')
     || message.includes('signups not allowed')
     || message.includes('sign up is disabled')
     || message.includes('email signups are disabled')
@@ -50,8 +55,7 @@ export function friendlyAuthError(
   if (
     code === 'over_email_send_rate_limit'
     || code === 'over_request_rate_limit'
-    ||
-    message.includes('email rate limit exceeded')
+    || message.includes('email rate limit exceeded')
     || message.includes('rate limit')
     || message.includes('too many requests')
   ) {
@@ -88,8 +92,7 @@ export function friendlyAuthError(
   if (
     code === 'weak_password'
     || code === 'password_too_short'
-    ||
-    message.includes('password should be at least')
+    || message.includes('password should be at least')
     || message.includes('password is too short')
     || message.includes('weak password')
   ) {

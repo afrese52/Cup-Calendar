@@ -64,7 +64,7 @@ test('zeigt einen verständlichen Fehler bei abgelehnter Anmeldung', async () =>
 
   assert.deepEqual(result, {
     ok: false,
-    error: 'Die Anmeldung ist fehlgeschlagen. Bitte versuche es erneut.',
+    error: 'E-Mail-Adresse oder Passwort stimmen nicht. Prüfe deine Eingaben oder fordere einen neuen Passwort-Link an.',
   });
 });
 
@@ -151,6 +151,16 @@ test('erklärt typische Ursachen, wenn Supabase die Registrierung ablehnt', asyn
       assert.equal(friendlyAuthError(new Error(serverMessage)), expected);
     });
   }
+});
+
+test('zeigt unbekannte Supabase-Fehler bereinigt mit Code und HTTP-Status', () => {
+  assert.equal(
+    friendlyAuthError(Object.assign(new Error('Fehler für person@example.com bei https://example.com'), {
+      code: 'unexpected_auth_error',
+      status: 500,
+    })),
+    'Supabase hat die Anfrage abgelehnt: Fehler für [E-Mail] bei [URL] · Code: unexpected_auth_error · HTTP 500',
+  );
 });
 
 test('validiert leere Anmeldedaten ohne Serveraufruf', async () => {
