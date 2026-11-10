@@ -45,7 +45,7 @@ Inoffizielle Android-first Begleit-App für Fortnite-Wettbewerbe mit Kalender, F
 
 ## User preferences
 
-- Nutzerseitige Texte und Antworten sollen auf Deutsch sein.
+- Jegliche Kommunikation, Aufgaben und Beschreibungen im Projekt erfolgen auf Deutsch.
 
 ## Gotchas
 
