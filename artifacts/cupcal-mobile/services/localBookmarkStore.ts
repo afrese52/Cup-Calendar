@@ -1,0 +1,212 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const BOOKMARKS_KEY = 'cupcal.bookmarks.v2';
+const LEGACY_BOOKMARKS_KEY = 'cupcal.bookmarks.v1';
+
+export interface PendingBookmarkChange {
+  isFavorite: boolean;
+  updatedAt: string;
+}
+
+interface AccountBookmarks {
+  eventIds: string[];
+  pending: Record<string, PendingBookmarkChange>;
+  initialized: boolean;
+}
+
+interface BookmarkStore {
+  anonymousIds: string[];
+  accounts: Record<string, AccountBookmarks>;
+}
+
+export interface RemoteBookmark {
+  event_id: string;
+  is_favorite: boolean;
+  updated_at: string;
+}
+
+const emptyStore = (): BookmarkStore => ({ anonymousIds: [], accounts: {} });
+let bookmarkWriteQueue: Promise<unknown> = Promise.resolve();
+
+function enqueueBookmarkWrite<T>(operation: () => Promise<T>): Promise<T> {
+  const result = bookmarkWriteQueue.then(operation);
+  bookmarkWriteQueue = result.catch(() => undefined);
+  return result;
+}
+
+function uniqueIds(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return [...new Set(value.filter((entry): entry is string => typeof entry === 'string'))];
+}
+
+function isPendingChange(value: unknown): value is PendingBookmarkChange {
+  if (!value || typeof value !== 'object') return false;
+  const change = value as Record<string, unknown>;
+  return typeof change.isFavorite === 'boolean' &&
+    typeof change.updatedAt === 'string' &&
+    Number.isFinite(Date.parse(change.updatedAt));
+}
+
+function parseStore(value: unknown): BookmarkStore | null {
+  if (!value || typeof value !== 'object') return null;
+  const parsed = value as Record<string, unknown>;
+  if (!parsed.accounts || typeof parsed.accounts !== 'object') return null;
+
+  const accounts: Record<string, AccountBookmarks> = {};
+  for (const [userId, rawAccount] of Object.entries(parsed.accounts)) {
+    if (!rawAccount || typeof rawAccount !== 'object') continue;
+    const account = rawAccount as Record<string, unknown>;
+    const pending: Record<string, PendingBookmarkChange> = {};
+    if (account.pending && typeof account.pending === 'object') {
+      for (const [eventId, change] of Object.entries(account.pending)) {
+        if (isPendingChange(change)) pending[eventId] = change;
+      }
+    }
+    accounts[userId] = {
+      eventIds: uniqueIds(account.eventIds),
+      pending,
+      initialized: account.initialized === true,
+    };
+  }
+
+  return { anonymousIds: uniqueIds(parsed.anonymousIds), accounts };
+}
+
+async function readStore(): Promise<BookmarkStore> {
+  const stored = await AsyncStorage.getItem(BOOKMARKS_KEY);
+  if (stored) {
+    try {
+      const parsed = parseStore(JSON.parse(stored));
+      if (parsed) return parsed;
+    } catch {
+      // Keep the existing value intact; a later write can replace malformed data.
+    }
+  }
+
+  const legacy = await AsyncStorage.getItem(LEGACY_BOOKMARKS_KEY);
+  if (!legacy) return emptyStore();
+  try {
+    const parsedLegacy: unknown = JSON.parse(legacy);
+    return { anonymousIds: uniqueIds(parsedLegacy), accounts: {} };
+  } catch {
+    return emptyStore();
+  }
+}
+
+async function writeStore(store: BookmarkStore): Promise<void> {
+  await AsyncStorage.setItem(BOOKMARKS_KEY, JSON.stringify(store));
+  await AsyncStorage.removeItem(LEGACY_BOOKMARKS_KEY);
+}
+
+function accountFor(store: BookmarkStore, userId: string): AccountBookmarks {
+  return store.accounts[userId] ?? {
+    eventIds: [...store.anonymousIds],
+    pending: {},
+    initialized: false,
+  };
+}
+
+function nextTimestamp(account: AccountBookmarks): string {
+  const newest = Object.values(account.pending).reduce(
+    (latest, change) => Math.max(latest, Date.parse(change.updatedAt)),
+    0,
+  );
+  return new Date(Math.max(Date.now(), newest + 1)).toISOString();
+}
+
+export async function loadAnonymousBookmarks(): Promise<string[]> {
+  const store = await readStore();
+  return [...store.anonymousIds];
+}
+
+export async function loadBookmarksForUser(userId: string | null): Promise<string[]> {
+  const store = await readStore();
+  return userId && store.accounts[userId]
+    ? [...store.accounts[userId].eventIds]
+    : [...store.anonymousIds];
+}
+
+export async function setBookmarksFavorite(
+  userId: string | null,
+  eventIds: string[],
+  isFavorite: boolean,
+): Promise<string[]> {
+  return enqueueBookmarkWrite(async () => {
+    const store = await readStore();
+    const ids = uniqueIds(eventIds);
+    if (!userId) {
+      const next = new Set(store.anonymousIds);
+      for (const eventId of ids) {
+        if (isFavorite) next.add(eventId);
+        else next.delete(eventId);
+      }
+      store.anonymousIds = [...next];
+    } else {
+      const account = accountFor(store, userId);
+      const next = new Set(account.eventIds);
+      for (const eventId of ids) {
+        if (isFavorite) next.add(eventId);
+        else next.delete(eventId);
+        account.pending[eventId] = {
+          isFavorite,
+          updatedAt: nextTimestamp(account),
+        };
+      }
+      account.eventIds = [...next];
+      store.accounts[userId] = account;
+    }
+    await writeStore(store);
+    return userId ? [...store.accounts[userId].eventIds] : [...store.anonymousIds];
+  });
+}
+
+export async function prepareBookmarksForSync(
+  userId: string,
+): Promise<Record<string, PendingBookmarkChange>> {
+  return enqueueBookmarkWrite(async () => {
+    const store = await readStore();
+    const account = accountFor(store, userId);
+    if (!account.initialized) {
+      for (const eventId of account.eventIds) {
+        if (!account.pending[eventId]) {
+          account.pending[eventId] = { isFavorite: true, updatedAt: nextTimestamp(account) };
+        }
+      }
+    }
+    store.accounts[userId] = account;
+    await writeStore(store);
+    return { ...account.pending };
+  });
+}
+
+export async function reconcileBookmarks(
+  userId: string,
+  remoteBookmarks: RemoteBookmark[],
+): Promise<{ eventIds: string[]; pendingCount: number }> {
+  return enqueueBookmarkWrite(async () => {
+    const store = await readStore();
+    const account = accountFor(store, userId);
+    const remoteById = new Map(remoteBookmarks.map((bookmark) => [bookmark.event_id, bookmark]));
+
+    for (const [eventId, change] of Object.entries(account.pending)) {
+      const remote = remoteById.get(eventId);
+      if (remote && Date.parse(remote.updated_at) >= Date.parse(change.updatedAt)) {
+        delete account.pending[eventId];
+      }
+    }
+
+    const favorites = new Set(
+      remoteBookmarks.filter((bookmark) => bookmark.is_favorite).map((bookmark) => bookmark.event_id),
+    );
+    for (const [eventId, change] of Object.entries(account.pending)) {
+      if (change.isFavorite) favorites.add(eventId);
+      else favorites.delete(eventId);
+    }
+
+    account.eventIds = [...favorites];
+    account.initialized = true;
+    store.accounts[userId] = account;
+    await writeStore(store);
+    return { eventIds: account.eventIds, pendingCount: Object.keys(account.pending).length };
+  });
+}

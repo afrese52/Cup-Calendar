@@ -2,6 +2,7 @@ import 'react-native-url-polyfill/auto';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient } from '@supabase/supabase-js';
 import { Platform } from 'react-native';
+import type { RemoteBookmark, PendingBookmarkChange } from '@/services/localBookmarkStore';
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL?.trim() ?? '';
 const supabasePublishableKey =
@@ -32,3 +33,28 @@ export const supabase = isSupabaseConfigured
       },
     })
   : null;
+
+export async function fetchRemoteBookmarks(userId: string): Promise<RemoteBookmark[]> {
+  if (!supabase) throw new Error('Supabase ist nicht verfügbar.');
+
+  const { data, error } = await supabase
+    .from('user_event_bookmarks')
+    .select('event_id, is_favorite, updated_at')
+    .eq('user_id', userId);
+  if (error) throw error;
+  return (data ?? []) as RemoteBookmark[];
+}
+
+export async function saveRemoteBookmark(
+  eventId: string,
+  change: PendingBookmarkChange,
+): Promise<void> {
+  if (!supabase) throw new Error('Supabase ist nicht verfügbar.');
+
+  const { error } = await supabase.rpc('sync_user_event_bookmark', {
+    p_event_id: eventId,
+    p_is_favorite: change.isFavorite,
+    p_updated_at: change.updatedAt,
+  });
+  if (error) throw error;
+}

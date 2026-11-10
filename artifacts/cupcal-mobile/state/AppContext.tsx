@@ -2,10 +2,17 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useGetEvents } from '@workspace/api-client-react';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
+import { AppState } from 'react-native';
 import type { TournamentEvent } from '@/data/events';
 import { loadCachedEvents, saveEventsToCache } from '@/services/localEventStore';
-
-const BOOKMARKS_KEY = 'cupcal.bookmarks.v1';
+import {
+  loadAnonymousBookmarks,
+  loadBookmarksForUser,
+  prepareBookmarksForSync,
+  reconcileBookmarks,
+  setBookmarksFavorite,
+} from '@/services/localBookmarkStore';
+import { fetchRemoteBookmarks, saveRemoteBookmark, supabase } from '@/services/supabase';
 
 interface AppContextValue {
   events: TournamentEvent[];
@@ -14,6 +21,8 @@ interface AppContextValue {
   isLiveData: boolean;
   eventError: string | null;
   storageError: string | null;
+  bookmarkSyncStatus: 'local' | 'syncing' | 'synced' | 'pending';
+  bookmarkSyncError: string | null;
   toggleBookmark: (eventId: string) => Promise<void>;
   clearBookmarks: () => Promise<void>;
 }
@@ -24,11 +33,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [events, setEvents] = useState<TournamentEvent[]>([]);
   const [bookmarkedIds, setBookmarkedIds] = useState<string[]>([]);
   const [bookmarksReady, setBookmarksReady] = useState(false);
+  const [authReady, setAuthReady] = useState(!supabase);
+  const [userId, setUserId] = useState<string | null>(null);
+  const [bookmarkSyncStatus, setBookmarkSyncStatus] =
+    useState<AppContextValue['bookmarkSyncStatus']>('local');
+  const [bookmarkSyncError, setBookmarkSyncError] = useState<string | null>(null);
   const [eventsReady, setEventsReady] = useState(false);
   const [isLiveData, setIsLiveData] = useState(false);
   const [eventError, setEventError] = useState<string | null>(null);
   const [storageError, setStorageError] = useState<string | null>(null);
   const hasLoadedLiveData = useRef(false);
+  const currentBookmarkIds = useRef<string[]>([]);
+  const currentUserId = useRef<string | null>(null);
+  const syncingUsers = useRef(new Set<string>());
   const eventsQuery = useGetEvents(undefined, {
     query: {
       staleTime: 5 * 60 * 1000,
@@ -40,13 +57,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let isMounted = true;
-    AsyncStorage.getItem(BOOKMARKS_KEY)
-      .then((stored) => {
-        if (!isMounted || !stored) return;
-        const parsed: unknown = JSON.parse(stored);
-        if (Array.isArray(parsed) && parsed.every((entry) => typeof entry === 'string')) {
-          setBookmarkedIds(parsed);
-        }
+    loadAnonymousBookmarks()
+      .then((ids) => {
+        if (!isMounted) return;
+        currentBookmarkIds.current = ids;
+        setBookmarkedIds(ids);
       })
       .catch(() => {
         if (isMounted) setStorageError('Favoriten konnten nicht geladen werden.');
@@ -59,6 +74,154 @@ export function AppProvider({ children }: { children: ReactNode }) {
       isMounted = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (!supabase) {
+      currentUserId.current = null;
+      setAuthReady(true);
+      return;
+    }
+
+    let isMounted = true;
+    let authEventCount = 0;
+    const setActiveUser = (nextUserId: string | null) => {
+      currentUserId.current = nextUserId;
+      setUserId(nextUserId);
+    };
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!isMounted) return;
+      authEventCount += 1;
+      setActiveUser(session?.user.id ?? null);
+      setAuthReady(true);
+    });
+    const initialAuthEventCount = authEventCount;
+
+    void supabase.auth.getSession().then(({ data, error }) => {
+      if (!isMounted) return;
+      if (!error && authEventCount === initialAuthEventCount) {
+        setActiveUser(data.session?.user.id ?? null);
+      }
+      setAuthReady(true);
+    }).catch(() => {
+      if (isMounted) setAuthReady(true);
+    });
+
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  const syncBookmarks = useCallback(async (targetUserId: string) => {
+    if (
+      !supabase ||
+      currentUserId.current !== targetUserId ||
+      syncingUsers.current.has(targetUserId)
+    ) return;
+    syncingUsers.current.add(targetUserId);
+    setBookmarkSyncStatus('syncing');
+    setBookmarkSyncError(null);
+
+    try {
+      const pending = await prepareBookmarksForSync(targetUserId);
+      let remoteBookmarks = await fetchRemoteBookmarks(targetUserId);
+      let hasWriteFailure = false;
+
+      for (const [eventId, change] of Object.entries(pending)) {
+        const remote = remoteBookmarks.find((bookmark) => bookmark.event_id === eventId);
+        if (!remote || Date.parse(change.updatedAt) > Date.parse(remote.updated_at)) {
+          try {
+            await saveRemoteBookmark(eventId, change);
+          } catch {
+            hasWriteFailure = true;
+            break;
+          }
+        }
+      }
+
+      remoteBookmarks = await fetchRemoteBookmarks(targetUserId);
+      const reconciled = await reconcileBookmarks(targetUserId, remoteBookmarks);
+      if (currentUserId.current === targetUserId) {
+        currentBookmarkIds.current = reconciled.eventIds;
+        setBookmarkedIds(reconciled.eventIds);
+        const hasPendingChanges = reconciled.pendingCount > 0 || hasWriteFailure;
+        setBookmarkSyncStatus(hasPendingChanges ? 'pending' : 'synced');
+        setBookmarkSyncError(
+          hasPendingChanges
+            ? 'Änderungen bleiben auf diesem Gerät gespeichert und werden später erneut synchronisiert.'
+            : null,
+        );
+      }
+    } catch {
+      if (currentUserId.current === targetUserId) {
+        setBookmarkSyncStatus('pending');
+        setBookmarkSyncError(
+          'Die Synchronisierung ist gerade nicht möglich. Deine Favoriten bleiben auf diesem Gerät gespeichert.',
+        );
+      }
+    } finally {
+      syncingUsers.current.delete(targetUserId);
+    }
+  }, []);
+
+  useEffect(() => {
+    const client = supabase;
+    if (!bookmarksReady || !authReady) return;
+    let isMounted = true;
+
+    void (async () => {
+      try {
+        const localIds = await loadBookmarksForUser(userId);
+        if (!isMounted || currentUserId.current !== userId) return;
+        currentBookmarkIds.current = localIds;
+        setBookmarkedIds(localIds);
+        if (!userId) {
+          setBookmarkSyncStatus('local');
+          setBookmarkSyncError(null);
+          return;
+        }
+        await syncBookmarks(userId);
+      } catch {
+        if (isMounted) setStorageError('Favoriten konnten nicht geladen werden.');
+      }
+    })();
+
+    if (!userId || !client) {
+      return () => {
+        isMounted = false;
+      };
+    }
+
+    const retrySync = () => {
+      if (AppState.currentState === 'active') void syncBookmarks(userId);
+    };
+    const appStateSubscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') retrySync();
+    });
+    const retryTimer = setInterval(retrySync, 30_000);
+    const realtimeChannel = client
+      .channel(`cupcal-bookmarks-${userId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'user_event_bookmarks',
+          filter: `user_id=eq.${userId}`,
+        },
+        retrySync,
+      )
+      .subscribe();
+
+    return () => {
+      isMounted = false;
+      appStateSubscription.remove();
+      clearInterval(retryTimer);
+      void client.removeChannel(realtimeChannel);
+    };
+  }, [bookmarksReady, authReady, userId, syncBookmarks]);
 
   useEffect(() => {
     let isMounted = true;
@@ -117,29 +280,37 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const toggleBookmark = useCallback(
     async (eventId: string) => {
-      const next = bookmarkedIds.includes(eventId)
-        ? bookmarkedIds.filter((id) => id !== eventId)
-        : [...bookmarkedIds, eventId];
+      const isFavorite = !currentBookmarkIds.current.includes(eventId);
+      const next = isFavorite
+        ? [...currentBookmarkIds.current, eventId]
+        : currentBookmarkIds.current.filter((id) => id !== eventId);
+      currentBookmarkIds.current = next;
       setBookmarkedIds(next);
       setStorageError(null);
       try {
-        await AsyncStorage.setItem(BOOKMARKS_KEY, JSON.stringify(next));
+        await setBookmarksFavorite(currentUserId.current, [eventId], isFavorite);
+        const activeUserId = currentUserId.current;
+        if (activeUserId) void syncBookmarks(activeUserId);
       } catch {
         setStorageError('Favorit konnte nicht dauerhaft gespeichert werden.');
       }
     },
-    [bookmarkedIds],
+    [syncBookmarks],
   );
 
   const clearBookmarks = useCallback(async () => {
+    const idsToClear = [...currentBookmarkIds.current];
+    const activeUserId = currentUserId.current;
+    currentBookmarkIds.current = [];
     setBookmarkedIds([]);
     setStorageError(null);
     try {
-      await AsyncStorage.removeItem(BOOKMARKS_KEY);
+      await setBookmarksFavorite(activeUserId, idsToClear, false);
+      if (activeUserId) void syncBookmarks(activeUserId);
     } catch {
       setStorageError('Favoriten konnten nicht gelöscht werden.');
     }
-  }, []);
+  }, [syncBookmarks]);
 
   const value = useMemo(
     () => ({
@@ -149,10 +320,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
       isLiveData,
       eventError,
       storageError,
+      bookmarkSyncStatus,
+      bookmarkSyncError,
       toggleBookmark,
       clearBookmarks,
     }),
-    [events, bookmarkedIds, isReady, isLiveData, eventError, storageError, toggleBookmark, clearBookmarks],
+    [
+      events,
+      bookmarkedIds,
+      isReady,
+      isLiveData,
+      eventError,
+      storageError,
+      bookmarkSyncStatus,
+      bookmarkSyncError,
+      toggleBookmark,
+      clearBookmarks,
+    ],
   );
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

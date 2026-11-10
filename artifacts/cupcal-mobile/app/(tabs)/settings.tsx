@@ -56,7 +56,13 @@ function SettingRow({
 
 export default function SettingsScreen() {
   const colors = useColors();
-  const { bookmarkedIds, clearBookmarks, storageError } = useCupCal();
+  const {
+    bookmarkedIds,
+    bookmarkSyncError,
+    bookmarkSyncStatus,
+    clearBookmarks,
+    storageError,
+  } = useCupCal();
   const [session, setSession] = useState<Session | null>(null);
   const [isCheckingSession, setIsCheckingSession] = useState(Boolean(supabase));
   const [authMode, setAuthMode] = useState<AuthMode>('sign-in');
@@ -340,7 +346,19 @@ export default function SettingsScreen() {
 
         <Text style={[styles.groupLabel, { color: colors.mutedForeground }]}>APP</Text>
         <View style={[styles.group, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <SettingRow icon="wifi-off" title="Offline verfügbar" subtitle="Deine Merkliste wird auf diesem Gerät gespeichert." />
+          <SettingRow
+            icon={bookmarkSyncStatus === 'synced' ? 'refresh-cw' : 'wifi-off'}
+            title={bookmarkSyncStatus === 'synced' ? 'Geräteübergreifend verfügbar' : 'Offline verfügbar'}
+            subtitle={
+              bookmarkSyncStatus === 'syncing'
+                ? 'Deine Merkliste wird abgeglichen.'
+                : bookmarkSyncStatus === 'synced'
+                  ? 'Mit deinem Konto synchronisiert und offline gespeichert.'
+                  : bookmarkSyncStatus === 'pending'
+                    ? 'Lokal gespeichert; Abgleich folgt bei Verbindung.'
+                    : 'Deine Merkliste wird auf diesem Gerät gespeichert.'
+            }
+          />
           <SettingRow icon="bookmark" title="Gespeicherte Turniere" subtitle={`${bookmarkedIds.length} in deiner Merkliste`} />
           <SettingRow
             icon="trash-2"
@@ -354,7 +372,11 @@ export default function SettingsScreen() {
           />
         </View>
 
-        {storageError ? <Text style={[styles.error, { color: colors.warning }]}>{storageError}</Text> : null}
+        {storageError || bookmarkSyncError ? (
+          <Text style={[styles.error, { color: colors.warning }]}>
+            {storageError ?? bookmarkSyncError}
+          </Text>
+        ) : null}
 
         <Text style={[styles.groupLabel, { color: colors.mutedForeground }]}>ÜBER CUPCAL</Text>
         <View style={[styles.about, { backgroundColor: colors.card, borderColor: colors.border }]}>
