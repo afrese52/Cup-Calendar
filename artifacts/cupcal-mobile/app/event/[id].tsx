@@ -13,13 +13,20 @@ export default function EventDetailsScreen() {
   const { events, bookmarkedIds, toggleBookmark } = useCupCal();
   const event = events.find((item) => item.id === id);
   const isBookmarked = event ? bookmarkedIds.includes(event.id) : false;
+  const handleBack = () => {
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+    router.replace('/(tabs)');
+  };
 
   if (!event) {
     return (
       <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]} edges={['top']}>
         <View style={styles.notFound}>
           <Text style={[styles.title, { color: colors.foreground }]}>Turnier nicht gefunden</Text>
-          <Pressable accessibilityRole="button" onPress={() => router.back()}>
+          <Pressable accessibilityRole="button" onPress={handleBack}>
             <Text style={[styles.backText, { color: colors.primary }]}>Zurück</Text>
           </Pressable>
         </View>
@@ -44,7 +51,7 @@ export default function EventDetailsScreen() {
             accessibilityRole="button"
             accessibilityLabel="Zurück"
             testID="event-back"
-            onPress={() => router.back()}
+            onPress={handleBack}
             style={({ pressed }) => [styles.navButton, { backgroundColor: colors.card }, pressed && styles.pressed]}
           >
             <Feather name="arrow-left" size={19} color={colors.foreground} />
