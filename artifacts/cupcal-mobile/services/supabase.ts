@@ -4,6 +4,7 @@ import { createClient } from '@supabase/supabase-js';
 import * as Linking from 'expo-linking';
 import { Platform } from 'react-native';
 import type { RemoteBookmark, PendingBookmarkChange } from '@/services/localBookmarkStore';
+export { friendlyAuthError } from './accountAuth';
 
 const passwordResetFlowMarker = 'cupcal-password-reset';
 let passwordRecoveryPending = false;
@@ -48,41 +49,6 @@ export function getPasswordResetRedirectUrl(): string {
 
 export function isPasswordRecoveryPending(): boolean {
   return passwordRecoveryPending;
-}
-
-export function friendlyAuthError(
-  error: unknown,
-  fallback = 'Das hat nicht geklappt. Bitte versuche es erneut.',
-): string {
-  const message = error instanceof Error ? error.message.toLowerCase() : '';
-
-  if (message.includes('invalid email')) {
-    return 'Bitte prüfe deine E-Mail-Adresse.';
-  }
-  if (
-    message.includes('expired')
-    || message.includes('invalid token')
-    || message.includes('otp')
-    || message.includes('email link is invalid')
-  ) {
-    return 'Der Wiederherstellungslink ist ungültig oder abgelaufen. Fordere bitte einen neuen Link an.';
-  }
-  if (
-    message.includes('password should be at least')
-    || message.includes('password is too short')
-    || message.includes('weak password')
-  ) {
-    return 'Das Passwort ist zu kurz oder zu unsicher. Bitte wähle ein stärkeres Passwort.';
-  }
-  if (
-    message.includes('network')
-    || message.includes('fetch failed')
-    || message.includes('failed to fetch')
-  ) {
-    return 'Keine Verbindung möglich. Prüfe deine Internetverbindung und versuche es erneut.';
-  }
-
-  return fallback;
 }
 
 export async function requestPasswordReset(email: string): Promise<void> {

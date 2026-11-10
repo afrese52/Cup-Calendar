@@ -6,8 +6,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import type { Session } from '@supabase/supabase-js';
 import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
 import { useColors } from '@/hooks/useColors';
+import { signOutAccount, submitAccountAuth, watchAuthSession } from '@/services/accountAuth';
 import {
-  friendlyAuthError,
   isSupabaseConfigured,
   requestPasswordReset,
   supabase,
@@ -77,30 +77,16 @@ export default function SettingsScreen() {
   useEffect(() => {
     if (!supabase) return;
 
-    let isMounted = true;
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, nextSession) => {
-      if (!isMounted) return;
-      setSession(nextSession);
-      setIsCheckingSession(false);
-      setAuthError(null);
+    return watchAuthSession(supabase.auth, {
+      onSession: (nextSession) => {
+        setSession(nextSession);
+        setAuthError(null);
+      },
+      onError: (error) => {
+        setAuthError(error instanceof Error ? error.message : 'Die Sitzung konnte nicht geladen werden.');
+      },
+      onReady: () => setIsCheckingSession(false),
     });
-
-    void supabase.auth.getSession().then(({ data, error }) => {
-      if (!isMounted) return;
-      if (error) {
-        setAuthError(error.message);
-      } else {
-        setSession(data.session);
-      }
-      setIsCheckingSession(false);
-    });
-
-    return () => {
-      isMounted = false;
-      subscription.unsubscribe();
-    };
   }, []);
 
   const submitAuth = async () => {
@@ -120,44 +106,19 @@ export default function SettingsScreen() {
     setIsSubmittingAuth(true);
     setAuthError(null);
     setAuthMessage(null);
-    try {
-      if (authMode === 'forgot-password') {
-        await requestPasswordReset(normalizedEmail);
-        setAuthMessage(
-          'Wenn zu dieser E-Mail ein CupCal-Konto besteht, erhältst du in Kürze einen Wiederherstellungslink.',
-        );
-      } else if (authMode === 'sign-in') {
-        const { error } = await supabase.auth.signInWithPassword({
-          email: normalizedEmail,
-          password,
-        });
-        if (error) throw error;
-        setAuthMessage('Du bist angemeldet.');
-      } else {
-        const { data, error } = await supabase.auth.signUp({
-          email: normalizedEmail,
-          password,
-        });
-        if (error) throw error;
-        setAuthMessage(
-          data.session
-            ? 'Dein Konto ist erstellt und du bist angemeldet.'
-            : 'Dein Konto ist erstellt. Bitte bestätige deine E-Mail-Adresse über den Link in deinem Postfach.',
-        );
-        setPassword('');
-      }
-    } catch (error) {
-      setAuthError(
-        friendlyAuthError(
-          error,
-          authMode === 'forgot-password'
-            ? 'Die E-Mail konnte nicht angefordert werden. Bitte versuche es erneut.'
-            : 'Die Anmeldung ist fehlgeschlagen. Bitte versuche es erneut.',
-        ),
-      );
-    } finally {
-      setIsSubmittingAuth(false);
+    const result = await submitAccountAuth(supabase.auth, {
+      mode: authMode,
+      email: normalizedEmail,
+      password,
+      requestPasswordReset,
+    });
+    if (result.ok) {
+      setAuthMessage(result.message);
+      if (result.clearPassword) setPassword('');
+    } else {
+      setAuthError(result.error);
     }
+    setIsSubmittingAuth(false);
   };
 
   const signOut = async () => {
@@ -166,20 +127,14 @@ export default function SettingsScreen() {
     setIsSubmittingAuth(true);
     setAuthError(null);
     setAuthMessage(null);
-    try {
-      const { error } = await supabase.auth.signOut();
-      if (error) throw error;
-      setAuthMessage('Du bist abgemeldet.');
-      setPassword('');
-    } catch (error) {
-      setAuthError(
-        error instanceof Error
-          ? error.message
-          : 'Die Abmeldung ist fehlgeschlagen. Bitte versuche es erneut.',
-      );
-    } finally {
-      setIsSubmittingAuth(false);
+    const result = await signOutAccount(supabase.auth);
+    if (result.ok) {
+      setAuthMessage(result.message);
+      if (result.clearPassword) setPassword('');
+    } else {
+      setAuthError(result.error);
     }
+    setIsSubmittingAuth(false);
   };
 
   const confirmClear = () => {
