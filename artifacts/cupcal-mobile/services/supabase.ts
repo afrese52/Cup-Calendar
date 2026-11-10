@@ -4,12 +4,8 @@ import { createClient } from '@supabase/supabase-js';
 import * as Linking from 'expo-linking';
 import { Platform } from 'react-native';
 import type { RemoteBookmark, PendingBookmarkChange } from '@/services/localBookmarkStore';
+import { createPasswordRecovery } from './passwordRecovery';
 export { friendlyAuthError } from './accountAuth';
-
-const passwordResetFlowMarker = 'cupcal-password-reset';
-let passwordRecoveryPending = false;
-let lastPasswordResetUrl: string | null = null;
-let lastPasswordResetPromise: Promise<boolean> | null = null;
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL?.trim() ?? '';
 const supabasePublishableKey =
@@ -41,14 +37,22 @@ export const supabase = isSupabaseConfigured
     })
   : null;
 
+const passwordRecovery = supabase
+  ? createPasswordRecovery(supabase.auth)
+  : null;
+
 export function getPasswordResetRedirectUrl(): string {
   return Linking.createURL('auth/reset', {
-    queryParams: { flow: passwordResetFlowMarker },
+    queryParams: { flow: 'cupcal-password-reset' },
   });
 }
 
 export function isPasswordRecoveryPending(): boolean {
-  return passwordRecoveryPending;
+  return passwordRecovery?.isPending() ?? false;
+}
+
+export function markPasswordRecoverySession(hasSession: boolean): void {
+  passwordRecovery?.markRecoverySession(hasSession);
 }
 
 export async function requestPasswordReset(email: string): Promise<void> {
@@ -60,87 +64,14 @@ export async function requestPasswordReset(email: string): Promise<void> {
   if (error) throw error;
 }
 
-function getResetUrlParams(url: string): {
-  query: URLSearchParams;
-  hash: URLSearchParams;
-} {
-  const [beforeHash, hash = ''] = url.split('#', 2);
-  const queryString = beforeHash.includes('?')
-    ? beforeHash.slice(beforeHash.indexOf('?') + 1)
-    : '';
-
-  return {
-    query: new URLSearchParams(queryString),
-    hash: new URLSearchParams(hash.replace(/^\?/, '')),
-  };
-}
-
-async function processPasswordResetUrl(url: string): Promise<boolean> {
-  if (!supabase) return false;
-
-  const { query, hash } = getResetUrlParams(url);
-  const getParameter = (key: string) => query.get(key) ?? hash.get(key);
-  if (getParameter('flow') !== passwordResetFlowMarker) return false;
-
-  const linkError = getParameter('error_description') ?? getParameter('error_code');
-  if (linkError) {
-    throw new Error('Der Wiederherstellungslink ist ungültig oder abgelaufen.');
-  }
-  const code = getParameter('code');
-  const isRecoveryType = getParameter('type') === 'recovery';
-  if (!isRecoveryType && !code) {
-    throw new Error('Dieser Link ist kein gültiger Wiederherstellungslink.');
-  }
-
-  passwordRecoveryPending = true;
-  try {
-    if (code) {
-      const { error } = await supabase.auth.exchangeCodeForSession(code);
-      if (error) throw error;
-      return true;
-    }
-
-    if (!isRecoveryType) {
-      throw new Error('Dieser Link ist kein gültiger Wiederherstellungslink.');
-    }
-
-    const accessToken = getParameter('access_token');
-    const refreshToken = getParameter('refresh_token');
-    if (!accessToken || !refreshToken) {
-      throw new Error('Der Wiederherstellungslink enthält keine gültige Sitzung.');
-    }
-
-    const { error } = await supabase.auth.setSession({
-      access_token: accessToken,
-      refresh_token: refreshToken,
-    });
-    if (error) throw error;
-    return true;
-  } catch (error) {
-    passwordRecoveryPending = false;
-    throw error;
-  }
-}
-
 export function handlePasswordResetUrl(url: string): Promise<boolean> {
-  if (lastPasswordResetUrl === url && lastPasswordResetPromise) {
-    return lastPasswordResetPromise;
-  }
-
-  lastPasswordResetUrl = url;
-  lastPasswordResetPromise = processPasswordResetUrl(url);
-  return lastPasswordResetPromise;
+  return passwordRecovery?.handlePasswordResetUrl(url) ?? Promise.resolve(false);
 }
 
 export async function saveNewPassword(password: string): Promise<void> {
   if (!supabase) throw new Error('Supabase ist nicht verfügbar.');
-  if (!passwordRecoveryPending) {
-    throw new Error('Bitte öffne zuerst einen gültigen Wiederherstellungslink.');
-  }
-
-  const { error } = await supabase.auth.updateUser({ password });
-  if (error) throw error;
-  passwordRecoveryPending = false;
+  if (!passwordRecovery) throw new Error('Supabase ist nicht verfügbar.');
+  await passwordRecovery.saveNewPassword(password);
 }
 
 export async function fetchRemoteBookmarks(userId: string): Promise<RemoteBookmark[]> {

@@ -10,6 +10,7 @@ import {
   friendlyAuthError,
   handlePasswordResetUrl,
   isPasswordRecoveryPending,
+  markPasswordRecoverySession,
   saveNewPassword,
   supabase,
 } from '@/services/supabase';
@@ -34,11 +35,13 @@ export default function ResetPasswordScreen() {
     let isMounted = true;
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((event) => {
+    } = supabase.auth.onAuthStateChange((event, session) => {
       if (!isMounted || event !== 'PASSWORD_RECOVERY') return;
-      setIsRecoveryReady(true);
+      const hasRecoverySession = Boolean(session);
+      markPasswordRecoverySession(hasRecoverySession);
+      setIsRecoveryReady(hasRecoverySession);
       setIsCheckingLink(false);
-      setErrorMessage(null);
+      setErrorMessage(hasRecoverySession ? null : 'Die Wiederherstellungssitzung ist abgelaufen oder ungültig. Fordere bitte einen neuen Link an.');
     });
 
     void (async () => {
@@ -51,7 +54,7 @@ export default function ResetPasswordScreen() {
           const isReady = isPasswordRecoveryPending() && Boolean(data.session);
           setIsRecoveryReady(isReady);
           if (!isReady) {
-            setErrorMessage('Dieser Link ist ungültig oder abgelaufen. Fordere bitte einen neuen an.');
+            setErrorMessage('Der Wiederherstellungslink ist ungültig, abgelaufen oder wurde bereits verwendet. Fordere bitte einen neuen Link an.');
           }
         }
       } catch (error) {
@@ -88,6 +91,7 @@ export default function ResetPasswordScreen() {
       setPassword('');
       setConfirmPassword('');
     } catch (error) {
+      setIsRecoveryReady(isPasswordRecoveryPending());
       setErrorMessage(friendlyAuthError(error, 'Das Passwort konnte nicht gespeichert werden.'));
     } finally {
       setIsSaving(false);
@@ -118,7 +122,7 @@ export default function ResetPasswordScreen() {
               ? 'Der Wiederherstellungslink wird geprüft …'
               : isRecoveryReady
                 ? 'Lege ein neues Passwort für dein CupCal-Konto fest.'
-                : 'Der Link kann nicht verwendet werden. Fordere in den Einstellungen einen neuen an.'}
+                : 'Der Link ist ungültig, abgelaufen oder wurde bereits verwendet. Fordere in den Einstellungen einen neuen an.'}
         </Text>
 
         {!isCheckingLink && isRecoveryReady && !isSaved ? (

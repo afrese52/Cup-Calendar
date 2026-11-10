@@ -16,10 +16,17 @@ export function friendlyAuthError(
   if (
     message.includes('expired')
     || message.includes('invalid token')
+    || message.includes('invalid grant')
+    || message.includes('already been used')
+    || message.includes('already used')
     || message.includes('otp')
     || message.includes('email link is invalid')
+    || message.includes('ungültig, abgelaufen oder wurde bereits verwendet')
+    || message.includes('wiederherstellungssitzung ist abgelaufen')
+    || message.includes('kein gültiger wiederherstellungslink')
+    || message.includes('keine gültige sitzung')
   ) {
-    return 'Der Wiederherstellungslink ist ungültig oder abgelaufen. Fordere bitte einen neuen Link an.';
+    return 'Der Wiederherstellungslink ist ungültig, abgelaufen oder wurde bereits verwendet. Fordere bitte einen neuen Link an.';
   }
   if (
     message.includes('password should be at least')
