@@ -296,7 +296,7 @@ function mapGameMode(title) {
 
 function mapTeamFormat(title) {
   const lower = title.toLowerCase();
-  if (/\bsolo\b/.test(lower)) return { value: "Solo", inferred: false };
+  if (/\bsolos?\b/.test(lower)) return { value: "Solo", inferred: false };
   if (/\bduos?\b|\bduo\b/.test(lower)) return { value: "Duos", inferred: false };
   if (/\btrios?\b|\btrio\b/.test(lower)) return { value: "Trios", inferred: false };
   if (/\bsquads?\b/.test(lower)) return { value: "Squads", inferred: false };

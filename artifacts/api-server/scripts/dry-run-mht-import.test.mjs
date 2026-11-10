@@ -66,6 +66,23 @@ test("ordnet mehrere Karten dem jeweils zuletzt gelesenen Datum zu", () => {
   assert.equal(result.events[1].team_format, "Duos");
 });
 
+test("erkennt FNCS Reload Solos als eindeutiges Solo-Format", () => {
+  const html = `
+    <html><body>
+      <h2>10. November 2026</h2>
+      <a id="schedule-event-link-fncs-solos"
+        href="/competitive/events/FNCS_Reload?round=FNCS_Reload_Solos"
+        aria-label="19:00–22:00 Uhr - FNCS Reload Solos – Runden">
+        <span>FNCS Reload Solos – Runden</span>
+      </a>
+    </body></html>`;
+  const result = parseMhtSchedule(makeMht(html));
+
+  assert.equal(result.validCount, 1);
+  assert.equal(result.events[0].team_format, "Solo");
+  assert.deepEqual(result.events[0].review_warnings, []);
+});
+
 test("meldet unvollständige Karten, statt sie als importierbar auszugeben", () => {
   const html = `
     <html><body>
