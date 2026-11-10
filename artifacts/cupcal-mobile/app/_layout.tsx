@@ -14,11 +14,12 @@ import {
 } from '@expo-google-fonts/inter';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
+import * as Linking from 'expo-linking';
 import { StatusBar } from 'expo-status-bar';
 import { setBaseUrl } from '@workspace/api-client-react';
 import { AppProvider } from '@/state/AppContext';
 import { useColors } from '@/hooks/useColors';
-import { supabase } from '@/services/supabase';
+import { handlePasswordResetUrl, supabase } from '@/services/supabase';
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
@@ -79,6 +80,25 @@ export default function RootLayout() {
       subscription.remove();
       void client.auth.stopAutoRefresh();
     };
+  }, []);
+
+  useEffect(() => {
+    void Linking.getInitialURL()
+      .then((url) => {
+        if (url) return handlePasswordResetUrl(url);
+        return false;
+      })
+      .catch(() => {
+        // Die Wiederherstellungsseite zeigt den Fehler in verständlicher Form an.
+      });
+
+    const subscription = Linking.addEventListener('url', ({ url }) => {
+      void handlePasswordResetUrl(url).catch(() => {
+        // Die Wiederherstellungsseite zeigt den Fehler in verständlicher Form an.
+      });
+    });
+
+    return () => subscription.remove();
   }, []);
 
   if (!fontsLoaded && !fontError) return null;

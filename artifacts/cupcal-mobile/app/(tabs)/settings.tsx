@@ -7,7 +7,9 @@ import type { Session } from '@supabase/supabase-js';
 import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
 import { useColors } from '@/hooks/useColors';
 import {
+  friendlyAuthError,
   isSupabaseConfigured,
+  requestPasswordReset,
   supabase,
   supabaseConfigurationMessage,
 } from '@/services/supabase';
@@ -16,7 +18,7 @@ import { useCupCal } from '@/state/AppContext';
 const DISCLAIMER =
   'Teile der verwendeten Materialien sind Marken und/oder urheberrechtlich geschützte Werke von Epic Games, Inc. Alle Rechte vorbehalten. Dieses Material ist inoffiziell und wird nicht von Epic Games unterstützt.';
 
-type AuthMode = 'sign-in' | 'sign-up';
+type AuthMode = 'sign-in' | 'sign-up' | 'forgot-password';
 
 function SettingRow({
   icon,
@@ -105,8 +107,12 @@ export default function SettingsScreen() {
     if (!supabase) return;
 
     const normalizedEmail = email.trim();
-    if (!normalizedEmail || !password) {
-      setAuthError('Bitte gib E-Mail-Adresse und Passwort ein.');
+    if (!normalizedEmail || (authMode !== 'forgot-password' && !password)) {
+      setAuthError(
+        authMode === 'forgot-password'
+          ? 'Bitte gib deine E-Mail-Adresse ein.'
+          : 'Bitte gib E-Mail-Adresse und Passwort ein.',
+      );
       setAuthMessage(null);
       return;
     }
@@ -115,7 +121,12 @@ export default function SettingsScreen() {
     setAuthError(null);
     setAuthMessage(null);
     try {
-      if (authMode === 'sign-in') {
+      if (authMode === 'forgot-password') {
+        await requestPasswordReset(normalizedEmail);
+        setAuthMessage(
+          'Wenn zu dieser E-Mail ein CupCal-Konto besteht, erhältst du in Kürze einen Wiederherstellungslink.',
+        );
+      } else if (authMode === 'sign-in') {
         const { error } = await supabase.auth.signInWithPassword({
           email: normalizedEmail,
           password,
@@ -137,9 +148,12 @@ export default function SettingsScreen() {
       }
     } catch (error) {
       setAuthError(
-        error instanceof Error
-          ? error.message
-          : 'Die Anmeldung ist fehlgeschlagen. Bitte versuche es erneut.',
+        friendlyAuthError(
+          error,
+          authMode === 'forgot-password'
+            ? 'Die E-Mail konnte nicht angefordert werden. Bitte versuche es erneut.'
+            : 'Die Anmeldung ist fehlgeschlagen. Bitte versuche es erneut.',
+        ),
       );
     } finally {
       setIsSubmittingAuth(false);
@@ -245,12 +259,18 @@ export default function SettingsScreen() {
           ) : (
             <>
               <Text style={[styles.accountTitle, { color: colors.foreground }]}>
-                {authMode === 'sign-in' ? 'Bei CupCal anmelden' : 'Konto erstellen'}
+                {authMode === 'sign-in'
+                  ? 'Bei CupCal anmelden'
+                  : authMode === 'sign-up'
+                    ? 'Konto erstellen'
+                    : 'Passwort zurücksetzen'}
               </Text>
               <Text style={[styles.accountSubtitle, { color: colors.mutedForeground }]}>
                 {authMode === 'sign-in'
                   ? 'Melde dich mit deinem CupCal-Konto an.'
-                  : 'Erstelle ein Konto mit deiner E-Mail-Adresse.'}
+                  : authMode === 'sign-up'
+                    ? 'Erstelle ein Konto mit deiner E-Mail-Adresse.'
+                    : 'Wir schicken dir einen Link, mit dem du ein neues Passwort festlegen kannst.'}
               </Text>
               <TextInput
                 accessibilityLabel="E-Mail-Adresse"
@@ -271,25 +291,27 @@ export default function SettingsScreen() {
                   { backgroundColor: colors.input, borderColor: colors.border, color: colors.foreground },
                 ]}
               />
-              <TextInput
-                accessibilityLabel="Passwort"
-                testID="auth-password-input"
-                autoCapitalize="none"
-                autoComplete={authMode === 'sign-in' ? 'current-password' : 'new-password'}
-                placeholder="Passwort"
-                placeholderTextColor={colors.mutedForeground}
-                returnKeyType="done"
-                secureTextEntry
-                selectionColor={colors.primary}
-                textContentType={authMode === 'sign-in' ? 'password' : 'newPassword'}
-                value={password}
-                onChangeText={setPassword}
-                onSubmitEditing={() => void submitAuth()}
-                style={[
-                  styles.input,
-                  { backgroundColor: colors.input, borderColor: colors.border, color: colors.foreground },
-                ]}
-              />
+              {authMode !== 'forgot-password' ? (
+                <TextInput
+                  accessibilityLabel="Passwort"
+                  testID="auth-password-input"
+                  autoCapitalize="none"
+                  autoComplete={authMode === 'sign-in' ? 'current-password' : 'new-password'}
+                  placeholder="Passwort"
+                  placeholderTextColor={colors.mutedForeground}
+                  returnKeyType="done"
+                  secureTextEntry
+                  selectionColor={colors.primary}
+                  textContentType={authMode === 'sign-in' ? 'password' : 'newPassword'}
+                  value={password}
+                  onChangeText={setPassword}
+                  onSubmitEditing={() => void submitAuth()}
+                  style={[
+                    styles.input,
+                    { backgroundColor: colors.input, borderColor: colors.border, color: colors.foreground },
+                  ]}
+                />
+              ) : null}
               {authError ? (
                 <Text accessibilityRole="alert" style={[styles.authNotice, { color: colors.destructive }]}>
                   {authError}
@@ -310,24 +332,45 @@ export default function SettingsScreen() {
                 <Text style={[styles.primaryButtonText, { color: colors.primaryForeground }]}>
                   {isSubmittingAuth
                     ? 'Einen Moment …'
-                    : authMode === 'sign-in'
-                      ? 'Anmelden'
-                      : 'Konto erstellen'}
+                    : authMode === 'forgot-password'
+                      ? 'Link anfordern'
+                      : authMode === 'sign-in'
+                        ? 'Anmelden'
+                        : 'Konto erstellen'}
                 </Text>
               </Pressable>
+              {authMode === 'sign-in' ? (
+                <Pressable
+                  accessibilityRole="button"
+                  testID="forgot-password-button"
+                  disabled={isSubmittingAuth}
+                  onPress={() => {
+                    setAuthMode('forgot-password');
+                    setAuthError(null);
+                    setAuthMessage(null);
+                  }}
+                  style={styles.modeToggle}
+                >
+                  <Text style={[styles.modeToggleText, { color: colors.primary }]}>Passwort vergessen?</Text>
+                </Pressable>
+              ) : null}
               <Pressable
                 accessibilityRole="button"
                 testID="auth-mode-toggle"
                 disabled={isSubmittingAuth}
                 onPress={() => {
-                  setAuthMode(authMode === 'sign-in' ? 'sign-up' : 'sign-in');
+                  setAuthMode(authMode === 'forgot-password' || authMode === 'sign-up' ? 'sign-in' : 'sign-up');
                   setAuthError(null);
                   setAuthMessage(null);
                 }}
                 style={styles.modeToggle}
               >
                 <Text style={[styles.modeToggleText, { color: colors.primary }]}>
-                  {authMode === 'sign-in' ? 'Noch kein Konto? Registrieren' : 'Schon ein Konto? Anmelden'}
+                  {authMode === 'sign-in'
+                    ? 'Noch kein Konto? Registrieren'
+                    : authMode === 'sign-up'
+                      ? 'Schon ein Konto? Anmelden'
+                      : 'Zurück zur Anmeldung'}
                 </Text>
               </Pressable>
             </>
