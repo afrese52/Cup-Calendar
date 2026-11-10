@@ -1,7 +1,7 @@
 import { Feather } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { Session } from '@supabase/supabase-js';
 import { useRouter } from 'expo-router';
@@ -61,14 +61,7 @@ function SettingRow({
 export default function SettingsScreen() {
   const colors = useColors();
   const router = useRouter();
-  const {
-    bookmarkedIds,
-    bookmarkSyncError,
-    bookmarkSyncStatus,
-    clearBookmarks,
-    retryBookmarkSync,
-    storageError,
-  } = useCupCal();
+  const { storageError } = useCupCal();
   const [session, setSession] = useState<Session | null>(null);
   const [isCheckingSession, setIsCheckingSession] = useState(Boolean(supabase));
   const [authMode, setAuthMode] = useState<AuthMode>('sign-in');
@@ -145,21 +138,6 @@ export default function SettingsScreen() {
       setAuthError(result.error);
     }
     setIsSubmittingAuth(false);
-  };
-
-  const confirmClear = () => {
-    Alert.alert(
-      'Favoriten löschen?',
-      'Alle lokal gespeicherten Turniere werden aus deiner Merkliste entfernt.',
-      [
-        { text: 'Abbrechen', style: 'cancel' },
-        {
-          text: 'Löschen',
-          style: 'destructive',
-          onPress: () => void clearBookmarks(),
-        },
-      ],
-    );
   };
 
   return (
@@ -352,80 +330,21 @@ export default function SettingsScreen() {
           ) : null}
         </View>
 
-        <Text style={[styles.groupLabel, { color: colors.mutedForeground }]}>APP</Text>
-        <View style={[styles.group, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <SettingRow
-            icon={bookmarkSyncStatus === 'syncing' || bookmarkSyncStatus === 'synced' ? 'refresh-cw' : 'wifi-off'}
-            title={
-              bookmarkSyncStatus === 'syncing'
-                ? 'Favoriten werden abgeglichen'
-                : bookmarkSyncStatus === 'synced'
-                  ? 'Geräteübergreifend verfügbar'
-                  : 'Offline verfügbar'
-            }
-            subtitle={
-              bookmarkSyncStatus === 'syncing'
-                ? 'Deine Favoriten werden mit deinem Konto abgeglichen.'
-                : bookmarkSyncStatus === 'synced'
-                  ? 'Mit deinem Konto synchronisiert und offline gespeichert.'
-                  : bookmarkSyncStatus === 'pending'
-                    ? 'Lokal gespeichert; Abgleich folgt bei Verbindung.'
-                    : 'Deine Merkliste wird auf diesem Gerät gespeichert.'
-            }
-          />
-          {session ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityState={{ disabled: bookmarkSyncStatus === 'syncing' }}
-              testID="retry-bookmark-sync-button"
-              disabled={bookmarkSyncStatus === 'syncing'}
-              onPress={() => {
-                void Haptics.selectionAsync();
-                void retryBookmarkSync();
-              }}
-              style={({ pressed }) => [
-                styles.syncButton,
-                { borderColor: colors.border },
-                pressed && bookmarkSyncStatus !== 'syncing' ? styles.pressed : null,
-                bookmarkSyncStatus === 'syncing' ? styles.disabled : null,
-              ]}
-            >
-              {bookmarkSyncStatus === 'syncing' ? (
-                <ActivityIndicator size="small" color={colors.primary} />
-              ) : (
-                <Feather name="refresh-cw" size={15} color={colors.primary} />
-              )}
-              <Text style={[styles.syncButtonText, { color: colors.foreground }]}>
-                {bookmarkSyncStatus === 'syncing' ? 'Abgleich läuft …' : 'Jetzt erneut abgleichen'}
-              </Text>
-            </Pressable>
-          ) : null}
-          {session ? (
-            <SettingRow
-              icon="upload-cloud"
-              title="Turniertermine importieren"
-              subtitle="Gespeicherte MHT-Datei prüfen und freigegebene Termine importieren."
-              onPress={() => router.push('/admin/import')}
-            />
-          ) : null}
-          <SettingRow icon="bookmark" title="Gespeicherte Turniere" subtitle={`${bookmarkedIds.length} in deiner Merkliste`} />
-          <SettingRow
-            icon="trash-2"
-            title="Favoriten löschen"
-            subtitle="Entfernt alle lokal gespeicherten Favoriten."
-            onPress={() => {
-              void Haptics.selectionAsync();
-              confirmClear();
-            }}
-            destructive
-          />
-        </View>
-
-        {storageError || bookmarkSyncError ? (
-          <Text style={[styles.error, { color: colors.warning }]}>
-            {storageError ?? bookmarkSyncError}
-          </Text>
+        {session ? (
+          <>
+            <Text style={[styles.groupLabel, { color: colors.mutedForeground }]}>APP</Text>
+            <View style={[styles.group, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <SettingRow
+                icon="upload-cloud"
+                title="Turniertermine importieren"
+                subtitle="Gespeicherte MHT-Datei prüfen und freigegebene Termine importieren."
+                onPress={() => router.push('/admin/import')}
+              />
+            </View>
+          </>
         ) : null}
+
+        {storageError ? <Text style={[styles.error, { color: colors.warning }]}>{storageError}</Text> : null}
 
         <Text style={[styles.groupLabel, { color: colors.mutedForeground }]}>ÜBER CUPCAL</Text>
         <View style={[styles.about, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -461,17 +380,6 @@ const styles = StyleSheet.create({
   primaryButtonText: { fontSize: 14, fontWeight: '700' },
   secondaryButton: { minHeight: 44, borderWidth: 1, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginTop: 15 },
   secondaryButtonText: { fontSize: 13, fontWeight: '700' },
-  syncButton: {
-    minHeight: 44,
-    borderWidth: 1,
-    borderRadius: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    marginVertical: 10,
-  },
-  syncButtonText: { fontSize: 13, fontWeight: '700' },
   modeToggle: { minHeight: 40, alignItems: 'center', justifyContent: 'center', marginTop: 4 },
   modeToggleText: { fontSize: 12, fontWeight: '700' },
   authNotice: { fontSize: 12, lineHeight: 17, marginTop: 10 },

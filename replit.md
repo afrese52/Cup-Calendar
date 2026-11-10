@@ -1,6 +1,6 @@
 # CupCal: Kalender für FN
 
-Inoffizielle Android-first Begleit-App für Fortnite-Wettbewerbe mit Kalender, Filtern, Turnierdetails und lokal gespeicherten Favoriten.
+Inoffizielle Android-first Begleit-App für Fortnite-Wettbewerbe mit Kalender, Filtern, Turnierdetails und kontogebundener Merkliste.
 
 ## Run & Operate
 
@@ -32,16 +32,17 @@ Inoffizielle Android-first Begleit-App für Fortnite-Wettbewerbe mit Kalender, F
 ## Architecture decisions
 
 - Android-first Paket-ID gemäß Feinkonzept: `com.cupcal.android`; nach dem ersten nativen Build nicht mehr ändern.
-- Favoriten werden zunächst lokal mit AsyncStorage gespeichert; es gibt noch keine Konto- oder Cloud-Synchronisierung.
+- Termine dürfen nur mit aktivem Benutzerkonto gespeichert oder aus der Merkliste entfernt werden; Änderungen werden lokal zwischengespeichert und mit Supabase synchronisiert.
+- Merkliste und Speichern-Schaltflächen gehören zum Kalender und zur Agenda, nicht zu Fortnite-Inhalten oder zum Infobereich. Nicht angemeldete Benutzer erhalten beim Tippen eine Anmeldeaufforderung.
 - Beispieltermine dürfen nicht als echte oder live synchronisierte Turnierdaten dargestellt werden.
 
 ## Product
 
 - Monatskalender mit Monatsnavigation, markiertem Tag, Kategorie-Filtern und passender Tagesagenda.
-- Agenda-Liste mit gespeicherten Favoriten und Turnierdetails.
-- Veranstaltungen lokal in der Merkliste speichern oder entfernen.
+- Agenda-Liste mit kontogebundenen gespeicherten Turnieren und Turnierdetails.
+- Speichern und Entfernen ist nur nach Anmeldung möglich; Gast-Benutzer werden beim Tippen zum Anmelden aufgefordert.
 - Der Einstellungsbereich enthält den Hinweis zum inoffiziellen Fanprojekt.
-- Supabase, Live-Datenimport, Push-Nachrichten, Konten und Pro-Käufe sind noch nicht verbunden.
+- Supabase-Konten und Favoriten-Synchronisierung sind verbunden; Push-Nachrichten und Pro-Käufe sind noch nicht verbunden.
 
 ## User preferences
 

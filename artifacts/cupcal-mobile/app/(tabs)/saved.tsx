@@ -1,14 +1,28 @@
 import { Feather } from '@expo/vector-icons';
 import React, { useMemo, useState } from 'react';
-import { FlatList, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, FlatList, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { router } from 'expo-router';
+import * as Haptics from 'expo-haptics';
 import { EventCard } from '@/components/EventCard';
 import { useColors } from '@/hooks/useColors';
 import { useCupCal } from '@/state/AppContext';
 
 export default function SavedScreen() {
   const colors = useColors();
-  const { events, bookmarkedIds, toggleBookmark, isReady } = useCupCal();
+  const {
+    events,
+    bookmarkedIds,
+    toggleBookmark,
+    isReady,
+    authReady,
+    isAuthenticated,
+    bookmarkSyncError,
+    bookmarkSyncStatus,
+    clearBookmarks,
+    retryBookmarkSync,
+    storageError,
+  } = useCupCal();
   const [savedOnly, setSavedOnly] = useState(false);
   const agendaEvents = useMemo(
     () =>
@@ -17,11 +31,23 @@ export default function SavedScreen() {
         .sort((a, b) => a.startTime.localeCompare(b.startTime)),
     [events, bookmarkedIds, savedOnly],
   );
+  const visibleEvents = savedOnly && (!authReady || !isAuthenticated) ? [] : agendaEvents;
+
+  const confirmClear = () => {
+    Alert.alert(
+      'Merkliste leeren?',
+      'Alle gespeicherten Turniere dieses Kontos werden aus deiner Merkliste entfernt.',
+      [
+        { text: 'Abbrechen', style: 'cancel' },
+        { text: 'Leeren', style: 'destructive', onPress: () => void clearBookmarks() },
+      ],
+    );
+  };
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]} edges={['top']}>
       <FlatList
-        data={agendaEvents}
+        data={visibleEvents}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
           <EventCard event={item} isBookmarked onBookmarkToggle={(id) => void toggleBookmark(id)} />
@@ -57,10 +83,86 @@ export default function SavedScreen() {
                 </Text>
               </Pressable>
             </View>
+            {savedOnly && !authReady ? (
+              <View style={styles.loadingNotice}>
+                <ActivityIndicator size="small" color={colors.primary} />
+                <Text style={[styles.authText, { color: colors.mutedForeground }]}>Sitzung wird geprüft …</Text>
+              </View>
+            ) : savedOnly && !isAuthenticated ? (
+              <View style={[styles.authNotice, { borderColor: colors.border, backgroundColor: colors.card }]}>
+                <Feather name="lock" size={18} color={colors.primary} />
+                <View style={styles.authCopy}>
+                  <Text style={[styles.authTitle, { color: colors.foreground }]}>Anmeldung erforderlich</Text>
+                  <Text style={[styles.authText, { color: colors.mutedForeground }]}>
+                    Termine kannst du nach der Anmeldung in deiner Merkliste speichern.
+                  </Text>
+                  <Pressable
+                    accessibilityRole="button"
+                    testID="agenda-sign-in"
+                    onPress={() => router.push('/(tabs)/settings')}
+                    style={({ pressed }) => [styles.signInButton, { backgroundColor: colors.primary }, pressed && styles.pressed]}
+                  >
+                    <Text style={[styles.signInText, { color: colors.primaryForeground }]}>Zum Konto</Text>
+                  </Pressable>
+                </View>
+              </View>
+            ) : null}
+            {savedOnly && isAuthenticated ? (
+              <View style={[styles.syncCard, { borderColor: colors.border, backgroundColor: colors.card }]}>
+                <View style={styles.syncStatus}>
+                  {bookmarkSyncStatus === 'syncing' ? (
+                    <ActivityIndicator size="small" color={colors.primary} />
+                  ) : (
+                    <Feather
+                      name={bookmarkSyncStatus === 'synced' ? 'cloud' : 'smartphone'}
+                      size={16}
+                      color={colors.primary}
+                    />
+                  )}
+                  <Text style={[styles.syncText, { color: colors.mutedForeground }]}>
+                    {bookmarkSyncStatus === 'syncing'
+                      ? 'Merkliste wird abgeglichen …'
+                      : bookmarkSyncStatus === 'synced'
+                        ? 'Auf diesem Gerät und mit deinem Konto gespeichert.'
+                        : bookmarkSyncStatus === 'pending'
+                          ? 'Offline gespeichert; Abgleich folgt.'
+                          : 'Lokal auf diesem Gerät gespeichert.'}
+                  </Text>
+                </View>
+                {bookmarkSyncStatus !== 'syncing' ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    testID="agenda-retry-sync"
+                    onPress={() => {
+                      void Haptics.selectionAsync();
+                      void retryBookmarkSync();
+                    }}
+                    style={({ pressed }) => [styles.textAction, pressed && styles.pressed]}
+                  >
+                    <Feather name="refresh-cw" size={14} color={colors.primary} />
+                    <Text style={[styles.textActionLabel, { color: colors.primary }]}>Abgleich wiederholen</Text>
+                  </Pressable>
+                ) : null}
+                {bookmarkedIds.length ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    testID="agenda-clear-bookmarks"
+                    onPress={confirmClear}
+                    style={({ pressed }) => [styles.textAction, pressed && styles.pressed]}
+                  >
+                    <Feather name="trash-2" size={14} color={colors.destructive} />
+                    <Text style={[styles.textActionLabel, { color: colors.destructive }]}>Merkliste leeren</Text>
+                  </Pressable>
+                ) : null}
+                {storageError || bookmarkSyncError ? (
+                  <Text style={[styles.error, { color: colors.warning }]}>{storageError ?? bookmarkSyncError}</Text>
+                ) : null}
+              </View>
+            ) : null}
           </View>
         }
         ListEmptyComponent={
-          isReady ? (
+          savedOnly && (!authReady || !isAuthenticated) ? <View /> : isReady ? (
             <View style={styles.empty}>
               <View style={[styles.emptyIcon, { backgroundColor: colors.accent }]}>
                 <Feather name="bookmark" size={22} color={colors.accentForeground} />
@@ -96,6 +198,20 @@ const styles = StyleSheet.create({
   segment: { borderWidth: 1, borderRadius: 13, padding: 4, flexDirection: 'row', gap: 4, marginTop: 19 },
   segmentButton: { flex: 1, minHeight: 36, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
   segmentText: { fontSize: 12, fontWeight: '700' },
+  authNotice: { borderWidth: 1, borderRadius: 16, padding: 14, marginTop: 14, flexDirection: 'row', gap: 12 },
+  authCopy: { flex: 1 },
+  authTitle: { fontSize: 14, fontWeight: '700' },
+  authText: { fontSize: 12, lineHeight: 18, marginTop: 4 },
+  loadingNotice: { minHeight: 50, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 9, marginTop: 14 },
+  signInButton: { minHeight: 40, borderRadius: 11, alignItems: 'center', justifyContent: 'center', marginTop: 12 },
+  signInText: { fontSize: 12, fontWeight: '700' },
+  syncCard: { borderWidth: 1, borderRadius: 16, padding: 13, marginTop: 14, gap: 11 },
+  syncStatus: { flexDirection: 'row', alignItems: 'center', gap: 9 },
+  syncText: { flex: 1, fontSize: 12, lineHeight: 18 },
+  textAction: { minHeight: 34, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  textActionLabel: { fontSize: 12, fontWeight: '700' },
+  error: { fontSize: 12, lineHeight: 18 },
+  pressed: { opacity: 0.75 },
   empty: { alignItems: 'center', justifyContent: 'center', paddingHorizontal: 40, paddingTop: 70, gap: 10 },
   emptyIcon: { width: 56, height: 56, borderRadius: 18, alignItems: 'center', justifyContent: 'center', marginBottom: 5 },
   emptyTitle: { fontSize: 17, fontWeight: '700' },

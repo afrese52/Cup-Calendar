@@ -56,6 +56,14 @@ test('sichert Offline-Favoriten und -Entfernungen bis zur Bestätigung', async (
   assert.equal(afterServerAcknowledgesRemoval.pendingCount, 0);
 });
 
+test('verweigert das Speichern ohne angemeldetes Konto', async () => {
+  await assert.rejects(
+    setBookmarksFavorite(null, ['turnier-ohne-konto'], true),
+    /angemeldet sein/,
+  );
+  assert.deepEqual(await loadAnonymousBookmarks(), []);
+});
+
 test('migriert alte anonyme Einträge nur in das erste angemeldete Konto', async () => {
   localStorage.setItem('cupcal.bookmarks.v1', JSON.stringify(['turnier-alt']));
 

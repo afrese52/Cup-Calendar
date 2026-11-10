@@ -5,6 +5,8 @@ import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useColors } from '@/hooks/useColors';
 import type { TournamentEvent } from '@/data/events';
+import { promptAccountSignIn } from '@/services/accountSignInPrompt';
+import { useCupCal } from '@/state/AppContext';
 
 interface EventCardProps {
   event: TournamentEvent;
@@ -14,6 +16,7 @@ interface EventCardProps {
 
 export function EventCard({ event, isBookmarked, onBookmarkToggle }: EventCardProps) {
   const colors = useColors();
+  const { authReady, isAuthenticated } = useCupCal();
   const start = new Date(event.startTime);
   const dateLabel = new Intl.DateTimeFormat('de-DE', {
     weekday: 'short',
@@ -61,23 +64,37 @@ export function EventCard({ event, isBookmarked, onBookmarkToggle }: EventCardPr
       </Pressable>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={isBookmarked ? 'Aus Merkliste entfernen' : 'In Merkliste speichern'}
+        accessibilityLabel={
+          !authReady
+            ? 'Anmeldung wird geprüft'
+            : isAuthenticated
+              ? isBookmarked ? 'Aus Merkliste entfernen' : 'In Merkliste speichern'
+              : 'Zum Speichern anmelden'
+        }
         testID={`bookmark-${event.id}`}
         onPress={() => {
+          if (!authReady) return;
+          if (!isAuthenticated) {
+            promptAccountSignIn();
+            return;
+          }
           void Haptics.selectionAsync();
           onBookmarkToggle(event.id);
         }}
         style={({ pressed }) => [
           styles.bookmark,
-          { borderColor: colors.border, backgroundColor: isBookmarked ? colors.accent : colors.surfaceRaised },
+          {
+            borderColor: colors.border,
+            backgroundColor: isBookmarked && isAuthenticated ? colors.accent : colors.surfaceRaised,
+          },
           pressed && styles.pressed,
         ]}
         hitSlop={8}
       >
         <Feather
-          name={isBookmarked ? 'bookmark' : 'bookmark'}
+          name={authReady && !isAuthenticated ? 'lock' : 'bookmark'}
           size={17}
-          color={isBookmarked ? colors.accentForeground : colors.mutedForeground}
+          color={isBookmarked && isAuthenticated ? colors.accentForeground : colors.mutedForeground}
         />
       </Pressable>
     </View>

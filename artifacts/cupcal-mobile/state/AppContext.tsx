@@ -6,7 +6,6 @@ import { AppState } from 'react-native';
 import type { TournamentEvent } from '@/data/events';
 import { loadCachedEvents, saveEventsToCache } from '@/services/localEventStore';
 import {
-  loadAnonymousBookmarks,
   loadBookmarksForUser,
   prepareBookmarksForSync,
   reconcileBookmarks,
@@ -19,6 +18,8 @@ interface AppContextValue {
   events: TournamentEvent[];
   bookmarkedIds: string[];
   isReady: boolean;
+  authReady: boolean;
+  isAuthenticated: boolean;
   isLiveData: boolean;
   eventError: string | null;
   storageError: string | null;
@@ -34,7 +35,6 @@ const AppContext = createContext<AppContextValue | null>(null);
 export function AppProvider({ children }: { children: ReactNode }) {
   const [events, setEvents] = useState<TournamentEvent[]>([]);
   const [bookmarkedIds, setBookmarkedIds] = useState<string[]>([]);
-  const [bookmarksReady, setBookmarksReady] = useState(false);
   const [authReady, setAuthReady] = useState(!supabase);
   const [userId, setUserId] = useState<string | null>(null);
   const [bookmarkSyncStatus, setBookmarkSyncStatus] =
@@ -55,27 +55,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       refetchOnWindowFocus: false,
     },
   });
-  const isReady = bookmarksReady && eventsReady;
-
-  useEffect(() => {
-    let isMounted = true;
-    loadAnonymousBookmarks()
-      .then((ids) => {
-        if (!isMounted) return;
-        currentBookmarkIds.current = ids;
-        setBookmarkedIds(ids);
-      })
-      .catch(() => {
-        if (isMounted) setStorageError('Favoriten konnten nicht geladen werden.');
-      })
-      .finally(() => {
-        if (isMounted) setBookmarksReady(true);
-      });
-
-    return () => {
-      isMounted = false;
-    };
-  }, []);
+  const isReady = authReady && eventsReady;
+  const isAuthenticated = Boolean(userId);
 
   useEffect(() => {
     if (!supabase) {
@@ -87,6 +68,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     let isMounted = true;
     let authEventCount = 0;
     const setActiveUser = (nextUserId: string | null) => {
+      if (currentUserId.current !== nextUserId) {
+        currentBookmarkIds.current = [];
+        setBookmarkedIds([]);
+        setBookmarkSyncStatus('local');
+        setBookmarkSyncError(null);
+      }
       currentUserId.current = nextUserId;
       setUserId(nextUserId);
     };
@@ -170,12 +157,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const client = supabase;
-    if (!bookmarksReady || !authReady) return;
+    if (!authReady) return;
     let isMounted = true;
 
     void (async () => {
       try {
-        const localIds = await loadBookmarksForUser(userId);
+        const localIds = userId ? await loadBookmarksForUser(userId) : [];
         if (!isMounted || currentUserId.current !== userId) return;
         currentBookmarkIds.current = localIds;
         setBookmarkedIds(localIds);
@@ -223,7 +210,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       clearInterval(retryTimer);
       void client.removeChannel(realtimeChannel);
     };
-  }, [bookmarksReady, authReady, userId, syncBookmarks]);
+  }, [authReady, userId, syncBookmarks]);
 
   useEffect(() => {
     let isMounted = true;
@@ -282,6 +269,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const toggleBookmark = useCallback(
     async (eventId: string) => {
+      if (!currentUserId.current) return;
       const isFavorite = !currentBookmarkIds.current.includes(eventId);
       const next = isFavorite
         ? [...currentBookmarkIds.current, eventId]
@@ -306,6 +294,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [syncBookmarks]);
 
   const clearBookmarks = useCallback(async () => {
+    if (!currentUserId.current) return;
     const idsToClear = [...currentBookmarkIds.current];
     const activeUserId = currentUserId.current;
     currentBookmarkIds.current = [];
@@ -324,6 +313,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       events,
       bookmarkedIds,
       isReady,
+      authReady,
+      isAuthenticated,
       isLiveData,
       eventError,
       storageError,
@@ -337,6 +328,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       events,
       bookmarkedIds,
       isReady,
+      authReady,
+      isAuthenticated,
       isLiveData,
       eventError,
       storageError,

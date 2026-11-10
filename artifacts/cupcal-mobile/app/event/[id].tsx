@@ -5,16 +5,33 @@ import React from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useColors } from '@/hooks/useColors';
+import { promptAccountSignIn } from '@/services/accountSignInPrompt';
 import { useCupCal } from '@/state/AppContext';
 
 export default function EventDetailsScreen() {
   const colors = useColors();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { events, bookmarkedIds, toggleBookmark } = useCupCal();
+  const {
+    events,
+    bookmarkedIds,
+    toggleBookmark,
+    authReady,
+    isAuthenticated,
+  } = useCupCal();
   const event = events.find((item) => item.id === id);
   const isBookmarked = event ? bookmarkedIds.includes(event.id) : false;
   const handleBack = () => {
     router.replace('/(tabs)');
+  };
+  const handleBookmark = () => {
+    if (!authReady) return;
+    if (!isAuthenticated) {
+      promptAccountSignIn();
+      return;
+    }
+    if (!event) return;
+    void Haptics.selectionAsync();
+    void toggleBookmark(event.id);
   };
 
   if (!event) {
@@ -55,15 +72,22 @@ export default function EventDetailsScreen() {
           <Text style={[styles.navLabel, { color: colors.mutedForeground }]}>TURNIERDETAILS</Text>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={isBookmarked ? 'Aus Merkliste entfernen' : 'In Merkliste speichern'}
+            accessibilityLabel={
+              isAuthenticated
+                ? isBookmarked ? 'Aus Merkliste entfernen' : 'In Merkliste speichern'
+                : 'Zum Speichern anmelden'
+            }
+            accessibilityState={{ disabled: !authReady }}
             testID="event-detail-bookmark"
-            onPress={() => {
-              void Haptics.selectionAsync();
-              void toggleBookmark(event.id);
-            }}
+            disabled={!authReady}
+            onPress={handleBookmark}
             style={({ pressed }) => [styles.navButton, { backgroundColor: colors.card }, pressed && styles.pressed]}
           >
-            <Feather name="bookmark" size={18} color={isBookmarked ? colors.primary : colors.foreground} />
+            <Feather
+              name={authReady && !isAuthenticated ? 'lock' : 'bookmark'}
+              size={18}
+              color={isBookmarked ? colors.primary : colors.foreground}
+            />
           </Pressable>
         </View>
 
@@ -93,11 +117,15 @@ export default function EventDetailsScreen() {
 
         <Pressable
           accessibilityRole="button"
+          accessibilityLabel={
+            isAuthenticated
+              ? isBookmarked ? 'Aus Merkliste entfernen' : 'In Merkliste speichern'
+              : 'Zum Speichern anmelden'
+          }
+          accessibilityState={{ disabled: !authReady }}
           testID="event-save-button"
-          onPress={() => {
-            void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            void toggleBookmark(event.id);
-          }}
+          disabled={!authReady}
+          onPress={handleBookmark}
           style={({ pressed }) => [
             styles.saveButton,
             { backgroundColor: isBookmarked ? colors.secondary : colors.primary },
@@ -105,12 +133,12 @@ export default function EventDetailsScreen() {
           ]}
         >
           <Feather
-            name={isBookmarked ? 'check' : 'bookmark'}
+            name={!authReady || !isAuthenticated ? 'lock' : isBookmarked ? 'check' : 'bookmark'}
             size={17}
             color={isBookmarked ? colors.secondaryForeground : colors.primaryForeground}
           />
           <Text style={[styles.saveText, { color: isBookmarked ? colors.secondaryForeground : colors.primaryForeground }]}>
-            {isBookmarked ? 'In deiner Merkliste' : 'In Merkliste speichern'}
+            {isBookmarked ? 'In deiner Merkliste' : isAuthenticated ? 'In Merkliste speichern' : 'Zum Speichern anmelden'}
           </Text>
         </Pressable>
       </ScrollView>

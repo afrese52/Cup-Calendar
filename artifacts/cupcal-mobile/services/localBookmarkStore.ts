@@ -164,6 +164,9 @@ export async function setBookmarksFavorite(
   isFavorite: boolean,
 ): Promise<string[]> {
   return enqueueBookmarkWrite(async () => {
+    if (!userId && isFavorite) {
+      throw new Error('Zum Speichern von Terminen musst du angemeldet sein.');
+    }
     const store = await readStore();
     const ids = uniqueIds(eventIds);
     if (!userId) {
