@@ -7,7 +7,7 @@ import type { Session } from '@supabase/supabase-js';
 import { useRouter } from 'expo-router';
 import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
 import { useColors } from '@/hooks/useColors';
-import { signOutAccount, submitAccountAuth, watchAuthSession } from '@/services/accountAuth';
+import { friendlyAuthError, signOutAccount, submitAccountAuth, watchAuthSession } from '@/services/accountAuth';
 import {
   isSupabaseConfigured,
   requestPasswordReset,
@@ -109,19 +109,24 @@ export default function SettingsScreen() {
     setIsSubmittingAuth(true);
     setAuthError(null);
     setAuthMessage(null);
-    const result = await submitAccountAuth(supabase.auth, {
-      mode: authMode,
-      email: normalizedEmail,
-      password,
-      requestPasswordReset,
-    });
-    if (result.ok) {
-      setAuthMessage(result.message);
-      if (result.clearPassword) setPassword('');
-    } else {
-      setAuthError(result.error);
+    try {
+      const result = await submitAccountAuth(supabase.auth, {
+        mode: authMode,
+        email: normalizedEmail,
+        password,
+        requestPasswordReset,
+      });
+      if (result.ok) {
+        setAuthMessage(result.message);
+        if (result.clearPassword) setPassword('');
+      } else {
+        setAuthError(result.error);
+      }
+    } catch (error) {
+      setAuthError(friendlyAuthError(error, 'Die Registrierung oder Anmeldung ist fehlgeschlagen. Bitte versuche es erneut.'));
+    } finally {
+      setIsSubmittingAuth(false);
     }
-    setIsSubmittingAuth(false);
   };
 
   const signOut = async () => {

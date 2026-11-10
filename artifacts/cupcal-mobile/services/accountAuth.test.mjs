@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  friendlyAuthError,
   signOutAccount,
   submitAccountAuth,
   watchAuthSession,
@@ -115,6 +116,41 @@ test('zeigt Fehler bei abgelehnter Registrierung verständlich an', async () => 
     ok: false,
     error: 'Das Passwort ist zu kurz oder zu unsicher. Bitte wähle ein stärkeres Passwort.',
   });
+});
+
+test('erklärt typische Ursachen, wenn Supabase die Registrierung ablehnt', async (t) => {
+  const cases = [
+    [
+      'User already registered',
+      'Für diese E-Mail-Adresse gibt es bereits ein Konto. Melde dich an oder fordere einen neuen Passwort-Link an.',
+    ],
+    [
+      'Signups not allowed for this instance',
+      'Neue Registrierungen sind im Supabase-Projekt deaktiviert. Aktiviere E-Mail-Anmeldungen in den Auth-Einstellungen.',
+    ],
+    [
+      'Email rate limit exceeded',
+      'Zu viele Versuche in kurzer Zeit. Warte bitte einige Minuten und versuche es dann erneut.',
+    ],
+    [
+      'Database error saving new user',
+      'Supabase konnte das Konto nicht in der Datenbank anlegen. Prüfe die Auth-Datenbanktrigger und die Supabase-Protokolle.',
+    ],
+    [
+      'Invalid API key',
+      'Die Supabase-Verbindung wird abgelehnt. Prüfe die Projekt-URL und den öffentlichen Supabase-Schlüssel in den Replit-Secrets.',
+    ],
+    [
+      'Password should be at least 10 characters',
+      'Das Passwort muss mindestens 10 Zeichen lang sein.',
+    ],
+  ];
+
+  for (const [serverMessage, expected] of cases) {
+    await t.test(serverMessage, () => {
+      assert.equal(friendlyAuthError(new Error(serverMessage)), expected);
+    });
+  }
 });
 
 test('validiert leere Anmeldedaten ohne Serveraufruf', async () => {

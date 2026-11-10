@@ -8,10 +8,47 @@ export function friendlyAuthError(
   error: unknown,
   fallback = 'Das hat nicht geklappt. Bitte versuche es erneut.',
 ): string {
-  const message = error instanceof Error ? error.message.toLowerCase() : '';
+  const rawMessage = error instanceof Error ? error.message : '';
+  const message = rawMessage.toLowerCase();
 
   if (message.includes('invalid email')) {
     return 'Bitte prüfe deine E-Mail-Adresse.';
+  }
+  if (
+    message.includes('user already registered')
+    || message.includes('already registered')
+    || message.includes('already exists')
+    || message.includes('email address is already in use')
+  ) {
+    return 'Für diese E-Mail-Adresse gibt es bereits ein Konto. Melde dich an oder fordere einen neuen Passwort-Link an.';
+  }
+  if (
+    message.includes('signup is disabled')
+    || message.includes('signups not allowed')
+    || message.includes('sign up is disabled')
+    || message.includes('email signups are disabled')
+  ) {
+    return 'Neue Registrierungen sind im Supabase-Projekt deaktiviert. Aktiviere E-Mail-Anmeldungen in den Auth-Einstellungen.';
+  }
+  if (
+    message.includes('email rate limit exceeded')
+    || message.includes('rate limit')
+    || message.includes('too many requests')
+  ) {
+    return 'Zu viele Versuche in kurzer Zeit. Warte bitte einige Minuten und versuche es dann erneut.';
+  }
+  if (
+    message.includes('database error saving new user')
+    || message.includes('error creating user')
+  ) {
+    return 'Supabase konnte das Konto nicht in der Datenbank anlegen. Prüfe die Auth-Datenbanktrigger und die Supabase-Protokolle.';
+  }
+  if (
+    message.includes('invalid api key')
+    || message.includes('no api key')
+    || message.includes('project not found')
+  ) {
+    return 'Die Supabase-Verbindung wird abgelehnt. Prüfe die Projekt-URL und den öffentlichen Supabase-Schlüssel in den Replit-Secrets.';
   }
   if (
     message.includes('expired')
@@ -33,7 +70,10 @@ export function friendlyAuthError(
     || message.includes('password is too short')
     || message.includes('weak password')
   ) {
-    return 'Das Passwort ist zu kurz oder zu unsicher. Bitte wähle ein stärkeres Passwort.';
+    const minimumLength = rawMessage.match(/(?:at least|minimum(?: of)?)\s+(\d+)\s+characters?/i)?.[1];
+    return minimumLength
+      ? `Das Passwort muss mindestens ${minimumLength} Zeichen lang sein.`
+      : 'Das Passwort ist zu kurz oder zu unsicher. Bitte wähle ein stärkeres Passwort.';
   }
   if (
     message.includes('network')
