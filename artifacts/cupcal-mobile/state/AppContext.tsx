@@ -11,6 +11,7 @@ import {
   prepareBookmarksForSync,
   reconcileBookmarks,
   setBookmarksFavorite,
+  shouldUploadBookmarkChange,
 } from '@/services/localBookmarkStore';
 import { fetchRemoteBookmarks, saveRemoteBookmark, supabase } from '@/services/supabase';
 
@@ -131,7 +132,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
       for (const [eventId, change] of Object.entries(pending)) {
         const remote = remoteBookmarks.find((bookmark) => bookmark.event_id === eventId);
-        if (!remote || Date.parse(change.updatedAt) > Date.parse(remote.updated_at)) {
+        if (shouldUploadBookmarkChange(change, remote)) {
           try {
             await saveRemoteBookmark(eventId, change);
           } catch {

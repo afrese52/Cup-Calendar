@@ -1,5 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+const storage = (AsyncStorage as typeof AsyncStorage & { default?: typeof AsyncStorage }).default
+  ?? AsyncStorage;
 const BOOKMARKS_KEY = 'cupcal.bookmarks.v2';
 const LEGACY_BOOKMARKS_KEY = 'cupcal.bookmarks.v1';
 
@@ -73,7 +75,7 @@ function parseStore(value: unknown): BookmarkStore | null {
 }
 
 async function readStore(): Promise<BookmarkStore> {
-  const stored = await AsyncStorage.getItem(BOOKMARKS_KEY);
+  const stored = await storage.getItem(BOOKMARKS_KEY);
   if (stored) {
     try {
       const parsed = parseStore(JSON.parse(stored));
@@ -83,7 +85,7 @@ async function readStore(): Promise<BookmarkStore> {
     }
   }
 
-  const legacy = await AsyncStorage.getItem(LEGACY_BOOKMARKS_KEY);
+  const legacy = await storage.getItem(LEGACY_BOOKMARKS_KEY);
   if (!legacy) return emptyStore();
   try {
     const parsedLegacy: unknown = JSON.parse(legacy);
@@ -94,16 +96,23 @@ async function readStore(): Promise<BookmarkStore> {
 }
 
 async function writeStore(store: BookmarkStore): Promise<void> {
-  await AsyncStorage.setItem(BOOKMARKS_KEY, JSON.stringify(store));
-  await AsyncStorage.removeItem(LEGACY_BOOKMARKS_KEY);
+  await storage.setItem(BOOKMARKS_KEY, JSON.stringify(store));
+  await storage.removeItem(LEGACY_BOOKMARKS_KEY);
 }
 
 function accountFor(store: BookmarkStore, userId: string): AccountBookmarks {
-  return store.accounts[userId] ?? {
+  const existing = store.accounts[userId];
+  if (existing) return existing;
+
+  const account: AccountBookmarks = {
     eventIds: [...store.anonymousIds],
     pending: {},
     initialized: false,
   };
+  // Anonymous bookmarks are a one-time migration, not a template for every
+  // account that signs in on this device.
+  store.anonymousIds = [];
+  return account;
 }
 
 function nextTimestamp(account: AccountBookmarks): string {
@@ -112,6 +121,29 @@ function nextTimestamp(account: AccountBookmarks): string {
     0,
   );
   return new Date(Math.max(Date.now(), newest + 1)).toISOString();
+}
+
+function remoteAcknowledgesChange(
+  remote: RemoteBookmark,
+  change: PendingBookmarkChange,
+): boolean {
+  const remoteTimestamp = Date.parse(remote.updated_at);
+  const localTimestamp = Date.parse(change.updatedAt);
+  return remoteTimestamp > localTimestamp ||
+    (remoteTimestamp === localTimestamp &&
+      (!remote.is_favorite || remote.is_favorite === change.isFavorite));
+}
+
+export function shouldUploadBookmarkChange(
+  change: PendingBookmarkChange,
+  remote: RemoteBookmark | undefined,
+): boolean {
+  if (!remote) return true;
+
+  const localTimestamp = Date.parse(change.updatedAt);
+  const remoteTimestamp = Date.parse(remote.updated_at);
+  return localTimestamp > remoteTimestamp ||
+    (localTimestamp === remoteTimestamp && !change.isFavorite && remote.is_favorite);
 }
 
 export async function loadAnonymousBookmarks(): Promise<string[]> {
@@ -190,7 +222,7 @@ export async function reconcileBookmarks(
 
     for (const [eventId, change] of Object.entries(account.pending)) {
       const remote = remoteById.get(eventId);
-      if (remote && Date.parse(remote.updated_at) >= Date.parse(change.updatedAt)) {
+      if (remote && remoteAcknowledgesChange(remote, change)) {
         delete account.pending[eventId];
       }
     }

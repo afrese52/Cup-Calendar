@@ -93,7 +93,12 @@ BEGIN
     ON CONFLICT (user_id, event_id) DO UPDATE
     SET is_favorite = EXCLUDED.is_favorite,
         updated_at = EXCLUDED.updated_at
-    WHERE EXCLUDED.updated_at > public.user_event_bookmarks.updated_at;
+    WHERE EXCLUDED.updated_at > public.user_event_bookmarks.updated_at
+       OR (
+           EXCLUDED.updated_at = public.user_event_bookmarks.updated_at
+           AND EXCLUDED.is_favorite = FALSE
+           AND public.user_event_bookmarks.is_favorite = TRUE
+       );
 END;
 $$;
 

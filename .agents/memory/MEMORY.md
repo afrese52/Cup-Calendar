@@ -1,3 +1,4 @@
 - [Expo-Vorschau-Timing](expo-preview-timing.md) — Screenshots direkt nach einem Expo-Neustart können vor dem ersten Web-Bundle leer sein.
 - [Expo-SQLite-Web-Fallback](expo-sqlite-web-fallback.md) — Ein Laufzeit-Platform-Check verhindert nicht, dass Metro SQLite-WASM fürs Web bündelt.
 - [FortniteAPI.io-Erreichbarkeit](fortniteapi-host-availability.md) — Vor Änderungen an der CupCal-Datenquelle zuerst den aktuellen DNS- und API-Status prüfen.
+- [AsyncStorage in Node-Tests](async-storage-node-tests.md) — Node-Tests für den Expo-Speicher brauchen eine Browser-Speicherattrappe und ggf. Default-Export-Auflösung.
