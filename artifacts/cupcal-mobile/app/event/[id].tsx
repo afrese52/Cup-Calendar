@@ -14,10 +14,6 @@ export default function EventDetailsScreen() {
   const event = events.find((item) => item.id === id);
   const isBookmarked = event ? bookmarkedIds.includes(event.id) : false;
   const handleBack = () => {
-    if (router.canGoBack()) {
-      router.back();
-      return;
-    }
     router.replace('/(tabs)');
   };
 
