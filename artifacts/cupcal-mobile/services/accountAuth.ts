@@ -71,8 +71,9 @@ export function friendlyAuthError(
     message.includes('invalid api key')
     || message.includes('no api key')
     || message.includes('project not found')
+    || message.includes('invalid path specified in request url')
   ) {
-    return 'Die Supabase-Verbindung wird abgelehnt. Prüfe die Projekt-URL und den öffentlichen Supabase-Schlüssel in den Replit-Secrets.';
+    return 'Die Supabase-Verbindung wird abgelehnt. Die Projekt-URL muss auf die Projektbasis zeigen und darf keinen Endpfad wie /auth/v1 oder /rest/v1 enthalten. Prüfe außerdem den öffentlichen Schlüssel.';
   }
   if (
     message.includes('expired')

@@ -5,9 +5,11 @@ import * as Linking from 'expo-linking';
 import { Platform } from 'react-native';
 import type { RemoteBookmark, PendingBookmarkChange } from '@/services/localBookmarkStore';
 import { createPasswordRecovery } from './passwordRecovery';
+import { normalizeSupabaseBaseUrl } from './supabaseUrl';
 export { friendlyAuthError } from './accountAuth';
 
-const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL?.trim() ?? '';
+const configuredSupabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL?.trim() ?? '';
+const supabaseUrl = normalizeSupabaseBaseUrl(configuredSupabaseUrl);
 const supabasePublishableKey =
   process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY?.trim() ?? '';
 
@@ -23,6 +25,12 @@ export const supabaseConfigurationMessage = isSupabaseConfigured
 
 if (supabaseConfigurationMessage) {
   console.warn(`[CupCal] ${supabaseConfigurationMessage}`);
+}
+
+if (configuredSupabaseUrl && supabaseUrl !== configuredSupabaseUrl.replace(/\/+$/, '')) {
+  console.warn(
+    '[CupCal] Die Supabase-URL enthielt einen API-Pfad. CupCal verwendet jetzt automatisch die Projektbasis.',
+  );
 }
 
 export const supabase = isSupabaseConfigured

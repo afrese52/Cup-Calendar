@@ -138,7 +138,11 @@ test('erklärt typische Ursachen, wenn Supabase die Registrierung ablehnt', asyn
     ],
     [
       'Invalid API key',
-      'Die Supabase-Verbindung wird abgelehnt. Prüfe die Projekt-URL und den öffentlichen Supabase-Schlüssel in den Replit-Secrets.',
+      'Die Supabase-Verbindung wird abgelehnt. Die Projekt-URL muss auf die Projektbasis zeigen und darf keinen Endpfad wie /auth/v1 oder /rest/v1 enthalten. Prüfe außerdem den öffentlichen Schlüssel.',
+    ],
+    [
+      'Invalid path specified in request URL',
+      'Die Supabase-Verbindung wird abgelehnt. Die Projekt-URL muss auf die Projektbasis zeigen und darf keinen Endpfad wie /auth/v1 oder /rest/v1 enthalten. Prüfe außerdem den öffentlichen Schlüssel.',
     ],
     [
       'Password should be at least 10 characters',
