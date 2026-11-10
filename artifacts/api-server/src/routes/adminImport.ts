@@ -224,7 +224,6 @@ router.post(
           game_mode: event.game_mode,
           team_format: event.team_format,
           tournament_type: event.tournament_type,
-          category: event.category,
           start_time: event.start_time,
           end_time: event.end_time,
           is_featured: event.is_featured,
@@ -246,7 +245,6 @@ router.post(
             game_mode: event.game_mode,
             team_format: event.team_format,
             tournament_type: event.tournament_type,
-            category: event.category,
             start_time: event.start_time,
             end_time: event.end_time,
           })
