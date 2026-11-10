@@ -25,7 +25,18 @@ async function resolveSignedInUser(req: Request): Promise<
 
   try {
     const { data, error } = await getSupabaseAdmin().auth.getUser(token);
-    if (error || !data.user) return { error: "unauthenticated" };
+    if (error) {
+      req.log.warn(
+        { authStatus: error.status, authCode: error.code },
+        "Supabase rejected the admin importer session",
+      );
+      return {
+        error: error.status === 401 || error.code === "bad_jwt"
+          ? "unauthenticated"
+          : "unavailable",
+      };
+    }
+    if (!data.user) return { error: "unauthenticated" };
     return { email: data.user.email ?? null };
   } catch (error) {
     req.log.error({ err: error }, "Could not verify admin importer session");

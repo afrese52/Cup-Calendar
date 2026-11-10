@@ -4,11 +4,12 @@ import type { MhtImportPreview, MhtImportResult } from '@workspace/api-client-re
 import { File as ExpoFile } from 'expo-file-system';
 import * as DocumentPicker from 'expo-document-picker';
 import { Stack, useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useQueryClient } from '@tanstack/react-query';
 import { useColors } from '@/hooks/useColors';
+import { watchAuthSession } from '@/services/accountAuth';
 import { supabase } from '@/services/supabase';
 
 const MAX_FILE_BYTES = 6 * 1024 * 1024;
@@ -32,11 +33,33 @@ export default function AdminImportScreen() {
   const colors = useColors();
   const router = useRouter();
   const queryClient = useQueryClient();
+  const [accessToken, setAccessToken] = useState<string | null>(null);
+  const [isCheckingSession, setIsCheckingSession] = useState(Boolean(supabase));
+  const [sessionCheckError, setSessionCheckError] = useState<string | null>(null);
+  useEffect(() => {
+    if (!supabase) return;
+
+    return watchAuthSession(supabase.auth, {
+      onSession: (session) => {
+        setAccessToken(session?.access_token ?? null);
+        setSessionCheckError(null);
+      },
+      onError: () => {
+        setSessionCheckError('Die Sitzung konnte nicht geladen werden. Bitte melde dich erneut an.');
+      },
+      onReady: () => setIsCheckingSession(false),
+    });
+  }, []);
+
+  const authRequest = accessToken
+    ? { headers: { Authorization: `Bearer ${accessToken}` } }
+    : undefined;
   const accessQuery = useGetAdminImportAccess({
-    query: { enabled: Boolean(supabase), retry: false },
+    query: { enabled: Boolean(supabase && accessToken && !isCheckingSession), retry: false },
+    request: authRequest,
   });
-  const previewMutation = usePreviewMhtImport();
-  const importMutation = useImportMhtSchedule();
+  const previewMutation = usePreviewMhtImport({ request: authRequest });
+  const importMutation = useImportMhtSchedule({ request: authRequest });
   const [pickedFile, setPickedFile] = useState<{ name: string; content: string } | null>(null);
   const [preview, setPreview] = useState<MhtImportPreview | null>(null);
   const [importResult, setImportResult] = useState<MhtImportResult | null>(null);
@@ -122,6 +145,7 @@ export default function AdminImportScreen() {
 
   const isAuthorized = accessQuery.data?.authorized === true;
   const busy = previewMutation.isPending || importMutation.isPending;
+  const isCheckingAccess = isCheckingSession || (Boolean(accessToken) && accessQuery.isLoading);
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]} edges={['top']}>
@@ -153,16 +177,28 @@ export default function AdminImportScreen() {
           Lade einen gespeicherten Fortnite-Spielplan als MHT-Datei hoch. Vor dem Speichern siehst du, welche Einträge neu sind, aktualisiert werden oder wegen unklarer Zuordnung ausgelassen werden.
         </Text>
 
-        {accessQuery.isLoading ? (
+        {isCheckingAccess ? (
           <View style={[styles.notice, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <ActivityIndicator color={colors.primary} />
             <Text style={[styles.noticeText, { color: colors.mutedForeground }]}>Importfreigabe wird geprüft …</Text>
+          </View>
+        ) : !supabase ? (
+          <View style={[styles.notice, styles.errorNotice, { backgroundColor: colors.card, borderColor: colors.destructive }]}>
+            <Feather name="lock" size={18} color={colors.destructive} />
+            <Text style={[styles.noticeText, { color: colors.foreground }]}>Supabase ist nicht konfiguriert. Eine Anmeldung ist für den Import erforderlich.</Text>
+          </View>
+        ) : !accessToken ? (
+          <View style={[styles.notice, styles.errorNotice, { backgroundColor: colors.card, borderColor: colors.destructive }]}>
+            <Feather name="lock" size={18} color={colors.destructive} />
+            <Text style={[styles.noticeText, { color: colors.foreground }]}>
+              {sessionCheckError ?? 'Bitte melde dich zuerst in CupCal an und öffne den Import anschließend erneut.'}
+            </Text>
           </View>
         ) : accessQuery.isError ? (
           <View style={[styles.notice, styles.errorNotice, { backgroundColor: colors.card, borderColor: colors.destructive }]}>
             <Feather name="lock" size={18} color={colors.destructive} />
             <Text style={[styles.noticeText, { color: colors.foreground }]}>
-              {supabase ? 'Die Sitzung konnte nicht für den Import geprüft werden. Bitte melde dich erneut an und versuche es noch einmal.' : 'Supabase ist nicht konfiguriert. Eine Anmeldung ist für den Import erforderlich.'}
+              Die Sitzung konnte nicht für den Import geprüft werden. Bitte melde dich erneut an und versuche es noch einmal.
             </Text>
           </View>
         ) : !isAuthorized ? (
