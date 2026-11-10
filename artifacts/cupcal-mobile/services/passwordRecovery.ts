@@ -22,6 +22,18 @@ function getResetUrlParams(url: string): {
   };
 }
 
+function isPasswordResetRoute(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    const routePath = parsed.protocol === 'http:' || parsed.protocol === 'https:'
+      ? parsed.pathname
+      : `/${parsed.hostname}${parsed.pathname}`;
+    return routePath.replace(/\/+$/, '').endsWith('/auth/reset');
+  } catch {
+    return false;
+  }
+}
+
 function isUnusableRecoveryError(error: unknown): boolean {
   const message = error instanceof Error ? error.message.toLowerCase() : '';
   return (
@@ -44,15 +56,16 @@ export function createPasswordRecovery(auth: PasswordRecoveryAuth) {
     recoverySessionPending = false;
     const { query, hash } = getResetUrlParams(url);
     const getParameter = (key: string) => query.get(key) ?? hash.get(key);
-    if (getParameter('flow') !== passwordResetFlowMarker) return false;
+    const isRecoveryType = getParameter('type') === 'recovery';
+    const code = getParameter('code');
+    const isCupCalReset = getParameter('flow') === passwordResetFlowMarker;
+    if (!isCupCalReset && !isRecoveryType && !(code && isPasswordResetRoute(url))) return false;
 
     const linkError = getParameter('error_description') ?? getParameter('error_code');
     if (linkError) {
       throw new Error('Der Wiederherstellungslink ist ungültig, abgelaufen oder wurde bereits verwendet.');
     }
 
-    const code = getParameter('code');
-    const isRecoveryType = getParameter('type') === 'recovery';
     if (!isRecoveryType && !code) {
       throw new Error('Dieser Link ist kein gültiger Wiederherstellungslink.');
     }

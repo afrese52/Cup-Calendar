@@ -124,3 +124,79 @@ test('erlaubt nur den einmaligen Passwortwechsel mit aktueller Sitzung', async (
   assert.equal(recovery.isPending(), false);
   await assert.rejects(recovery.saveNewPassword('another-password'), /gültigen Wiederherstellungslink/i);
 });
+
+test('verarbeitet Supabase-Recovery-Links ohne CupCal-Flow-Parameter', async () => {
+  let exchangedCode;
+  const recovery = createPasswordRecovery(createAuth({
+    exchangeCodeForSession: async (code) => {
+      exchangedCode = code;
+      return { error: null };
+    },
+  }));
+
+  assert.equal(
+    await recovery.handlePasswordResetUrl(
+      'cupcal-android://auth/reset?code=recovery-code&type=recovery',
+    ),
+    true,
+  );
+  assert.equal(exchangedCode, 'recovery-code');
+  assert.equal(recovery.isPending(), true);
+});
+
+test('verarbeitet ältere Reset-Links mit Code im auth/reset-Pfad', async () => {
+  let exchangedCode;
+  const recovery = createPasswordRecovery(createAuth({
+    exchangeCodeForSession: async (code) => {
+      exchangedCode = code;
+      return { error: null };
+    },
+  }));
+
+  assert.equal(
+    await recovery.handlePasswordResetUrl(
+      'cupcal-android://auth/reset?code=legacy-recovery-code',
+    ),
+    true,
+  );
+  assert.equal(exchangedCode, 'legacy-recovery-code');
+  assert.equal(recovery.isPending(), true);
+});
+
+test('ignoriert Codes auf anderen Deep-Link-Routen', async () => {
+  let exchangeCalled = false;
+  const recovery = createPasswordRecovery(createAuth({
+    exchangeCodeForSession: async () => {
+      exchangeCalled = true;
+      return { error: null };
+    },
+  }));
+
+  assert.equal(
+    await recovery.handlePasswordResetUrl('cupcal-android://auth/confirm?code=confirmation-code'),
+    false,
+  );
+  assert.equal(exchangeCalled, false);
+});
+
+test('verarbeitet Supabase-Recovery-Sitzungen in URL-Fragmenten ohne CupCal-Flow-Parameter', async () => {
+  let receivedSession;
+  const recovery = createPasswordRecovery(createAuth({
+    setSession: async (session) => {
+      receivedSession = session;
+      return { error: null };
+    },
+  }));
+
+  assert.equal(
+    await recovery.handlePasswordResetUrl(
+      'cupcal-android://auth/reset#access_token=recovery-access&refresh_token=recovery-refresh&type=recovery',
+    ),
+    true,
+  );
+  assert.deepEqual(receivedSession, {
+    access_token: 'recovery-access',
+    refresh_token: 'recovery-refresh',
+  });
+  assert.equal(recovery.isPending(), true);
+});
