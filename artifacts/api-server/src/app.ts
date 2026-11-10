@@ -3,6 +3,7 @@ import cors from "cors";
 import pinoHttp from "pino-http";
 import router from "./routes";
 import { logger } from "./lib/logger";
+import { MAX_MHT_UPLOAD_BYTES } from "./lib/uploadLimits";
 
 const app: Express = express();
 
@@ -35,7 +36,9 @@ app.use((error: unknown, _req: express.Request, res: express.Response, _next: ex
     ? Number((error as { status?: unknown }).status)
     : 500;
   if (status === 413) {
-    res.status(413).json({ error: "Die Datei ist zu groß. Bitte lade eine Datei unter 6 MB hoch." });
+    res.status(413).json({
+      error: `Die Datei ist zu groß. Bitte lade eine Datei unter ${MAX_MHT_UPLOAD_BYTES / (1024 * 1024)} MB hoch.`,
+    });
     return;
   }
   logger.error({ err: error }, "Unhandled API request error");

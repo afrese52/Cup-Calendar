@@ -3,10 +3,11 @@ import { z } from "zod";
 import { parseMhtSchedule } from "../../scripts/dry-run-mht-import.mjs";
 import { getAdminImportAccess, getSafeUpcomingEvents, parseAdminEmailAllowlist } from "../services/adminImportAccess";
 import { getSupabaseAdmin } from "../services/supabase";
+import { MAX_MHT_UPLOAD_BYTES } from "../lib/uploadLimits";
 
 const router: IRouter = Router();
-const uploadText = express.text({ type: "text/plain", limit: "6mb" });
-const requestBodySchema = z.string().min(1, "Die Datei ist leer.").max(6 * 1024 * 1024);
+const uploadText = express.text({ type: "text/plain", limit: MAX_MHT_UPLOAD_BYTES });
+const requestBodySchema = z.string().min(1, "Die Datei ist leer.").max(MAX_MHT_UPLOAD_BYTES);
 
 class ExistingEventsQueryError extends Error {
   constructor(cause: unknown) {

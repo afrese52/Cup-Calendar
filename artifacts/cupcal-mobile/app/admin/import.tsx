@@ -12,7 +12,7 @@ import { useColors } from '@/hooks/useColors';
 import { watchAuthSession } from '@/services/accountAuth';
 import { supabase } from '@/services/supabase';
 
-const MAX_FILE_BYTES = 6 * 1024 * 1024;
+const MAX_FILE_BYTES = 25 * 1024 * 1024;
 
 function formatImportTime(value: string, timeZone: string) {
   return new Intl.DateTimeFormat('de-DE', {
@@ -87,7 +87,7 @@ export default function AdminImportScreen() {
         return;
       }
       if (asset.size != null && asset.size > MAX_FILE_BYTES) {
-        setError('Die Datei ist größer als 6 MB.');
+        setError('Die Datei ist größer als 25 MB.');
         return;
       }
 
@@ -226,7 +226,7 @@ export default function AdminImportScreen() {
               </View>
               <Text style={[styles.cardTitle, { color: colors.foreground }]}>Spielplan-Datei</Text>
               <Text style={[styles.cardCopy, { color: colors.mutedForeground }]}>
-                MHT oder MHTML · maximal 6 MB · Zeitzone Europe/Berlin
+                MHT oder MHTML · maximal 25 MB · Zeitzone Europe/Berlin
               </Text>
               <Pressable
                 accessibilityRole="button"
