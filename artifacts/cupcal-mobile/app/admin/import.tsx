@@ -91,7 +91,12 @@ export default function AdminImportScreen() {
         return;
       }
 
-      const content = await new ExpoFile(asset.uri).text();
+      const content = Platform.OS === 'web'
+        ? await asset.file?.text()
+        : await new ExpoFile(asset.uri).text();
+      if (content === undefined) {
+        throw new Error('Der Browser konnte den Inhalt der ausgewählten Datei nicht lesen. Bitte wähle sie erneut aus.');
+      }
       if (!content.trim()) {
         setError('Die ausgewählte Datei ist leer.');
         return;
