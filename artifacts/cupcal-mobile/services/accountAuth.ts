@@ -8,13 +8,27 @@ export function friendlyAuthError(
   error: unknown,
   fallback = 'Das hat nicht geklappt. Bitte versuche es erneut.',
 ): string {
-  const rawMessage = error instanceof Error ? error.message : '';
+  const errorDetails =
+    typeof error === 'object' && error !== null
+      ? (error as { message?: unknown; code?: unknown; status?: unknown })
+      : {};
+  const rawMessage =
+    error instanceof Error
+      ? error.message
+      : typeof errorDetails.message === 'string'
+        ? errorDetails.message
+        : '';
   const message = rawMessage.toLowerCase();
+  const code = typeof errorDetails.code === 'string' ? errorDetails.code.toLowerCase() : '';
 
-  if (message.includes('invalid email')) {
+  if (code === 'email_address_invalid' || message.includes('invalid email')) {
     return 'Bitte prüfe deine E-Mail-Adresse.';
   }
   if (
+    code === 'user_already_exists'
+    || code === 'user_already_registered'
+    || code === 'email_exists'
+    ||
     message.includes('user already registered')
     || message.includes('already registered')
     || message.includes('already exists')
@@ -23,6 +37,9 @@ export function friendlyAuthError(
     return 'Für diese E-Mail-Adresse gibt es bereits ein Konto. Melde dich an oder fordere einen neuen Passwort-Link an.';
   }
   if (
+    code === 'signup_disabled'
+    || code === 'email_provider_disabled'
+    ||
     message.includes('signup is disabled')
     || message.includes('signups not allowed')
     || message.includes('sign up is disabled')
@@ -31,6 +48,9 @@ export function friendlyAuthError(
     return 'Neue Registrierungen sind im Supabase-Projekt deaktiviert. Aktiviere E-Mail-Anmeldungen in den Auth-Einstellungen.';
   }
   if (
+    code === 'over_email_send_rate_limit'
+    || code === 'over_request_rate_limit'
+    ||
     message.includes('email rate limit exceeded')
     || message.includes('rate limit')
     || message.includes('too many requests')
@@ -66,6 +86,9 @@ export function friendlyAuthError(
     return 'Der Wiederherstellungslink ist ungültig, abgelaufen oder wurde bereits verwendet. Fordere bitte einen neuen Link an.';
   }
   if (
+    code === 'weak_password'
+    || code === 'password_too_short'
+    ||
     message.includes('password should be at least')
     || message.includes('password is too short')
     || message.includes('weak password')
@@ -81,6 +104,19 @@ export function friendlyAuthError(
     || message.includes('failed to fetch')
   ) {
     return 'Keine Verbindung möglich. Prüfe deine Internetverbindung und versuche es erneut.';
+  }
+
+  if (rawMessage || code || typeof errorDetails.status === 'number') {
+    const safeMessage = rawMessage
+      .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, '[E-Mail]')
+      .replace(/https?:\/\/\S+/gi, '[URL]')
+      .replace(/\beyJ[A-Za-z0-9._-]{20,}\b/g, '[Schlüssel]');
+    const details = [
+      safeMessage,
+      code ? `Code: ${code}` : '',
+      typeof errorDetails.status === 'number' ? `HTTP ${errorDetails.status}` : '',
+    ].filter(Boolean).join(' · ');
+    return `Supabase hat die Anfrage abgelehnt: ${details || fallback}`;
   }
 
   return fallback;
@@ -179,7 +215,9 @@ export async function submitAccountAuth(
         error,
         mode === 'forgot-password'
           ? 'Die E-Mail konnte nicht angefordert werden. Bitte versuche es erneut.'
-          : 'Die Anmeldung ist fehlgeschlagen. Bitte versuche es erneut.',
+          : mode === 'sign-up'
+            ? 'Die Registrierung ist fehlgeschlagen. Bitte versuche es erneut.'
+            : 'Die Anmeldung ist fehlgeschlagen. Bitte versuche es erneut.',
       ),
     };
   }
