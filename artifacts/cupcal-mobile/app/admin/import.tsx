@@ -137,7 +137,10 @@ export default function AdminImportScreen() {
           accessibilityRole="button"
           accessibilityLabel="Zurück"
           testID="import-back-button"
-          onPress={() => router.back()}
+          onPress={() => {
+            if (router.canGoBack()) router.back();
+            else router.replace('/(tabs)/settings');
+          }}
           style={styles.backButton}
         >
           <Feather name="arrow-left" size={19} color={colors.foreground} />
