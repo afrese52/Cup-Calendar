@@ -187,6 +187,15 @@ test('meldet über die Einstellungsseite ab und zeigt den Erfolg', async () => {
   expect(view.getByText('Bei CupCal anmelden')).toBeTruthy();
 });
 
+test('zeigt nach Wiederherstellung einer gespeicherten Sitzung das angemeldete Konto', async () => {
+  auth.getSession.mockResolvedValue({ data: { session: testSession }, error: null });
+  const view = await render(<SettingsScreen />);
+
+  expect(await view.findByText('Angemeldet')).toBeTruthy();
+  expect(view.getByText('test@example.invalid')).toBeTruthy();
+  expect(view.getByTestId('sign-out-button')).toBeTruthy();
+});
+
 test('zeigt einen Abmeldefehler sichtbar an', async () => {
   auth.getSession.mockResolvedValue({ data: { session: testSession }, error: null });
   auth.signOut.mockResolvedValue({ error: new Error('Abmeldung fehlgeschlagen') });

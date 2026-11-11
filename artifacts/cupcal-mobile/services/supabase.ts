@@ -1,9 +1,9 @@
 import 'react-native-url-polyfill/auto';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { createClient } from '@supabase/supabase-js';
 import * as Linking from 'expo-linking';
 import { Platform } from 'react-native';
 import type { RemoteBookmark, PendingBookmarkChange } from '@/services/localBookmarkStore';
+import { createCupCalSupabaseClient } from './createSupabaseClient';
 import { createPasswordRecovery } from './passwordRecovery';
 import { createPasswordResetRedirectUrl } from './authRedirectUrl';
 import { normalizeSupabaseBaseUrl } from './supabaseUrl';
@@ -36,14 +36,7 @@ if (configuredSupabaseUrl && supabaseUrl !== configuredSupabaseUrl.replace(/\/+$
 
 export const supabase = isSupabaseConfigured
   && (Platform.OS !== 'web' || typeof window !== 'undefined')
-  ? createClient(supabaseUrl, supabasePublishableKey, {
-      auth: {
-        storage: AsyncStorage,
-        autoRefreshToken: true,
-        persistSession: true,
-        detectSessionInUrl: false,
-      },
-    })
+  ? createCupCalSupabaseClient(supabaseUrl, supabasePublishableKey, AsyncStorage)
   : null;
 
 const passwordRecovery = supabase
