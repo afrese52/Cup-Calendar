@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildMhtEventUpsertRows, upsertMhtEvents } from "./supabase.ts";
+import {
+  buildMhtEventUpsertRows,
+  listRecentMhtImports,
+  recordMhtImportHistory,
+  upsertMhtEvents,
+} from "./supabase.ts";
 
 function event(overrides = {}) {
   return {
@@ -79,4 +84,113 @@ test("hides database error details from the caller", async () => {
       return true;
     },
   );
+});
+
+test("records only approved import metadata and never stores uploaded content", async () => {
+  let inserted;
+  const admin = {
+    from(table) {
+      assert.equal(table, "admin_import_history");
+      return {
+        async insert(row) {
+          inserted = row;
+          return { error: null };
+        },
+      };
+    },
+  };
+
+  await recordMhtImportHistory({
+    adminUserId: "2d81b842-8d9c-4de3-8411-6787a91e68e9",
+    adminEmail: "admin@example.org",
+    sourceHint: "fortnite.com",
+    insertedCount: 2,
+    updatedCount: 1,
+    skippedCount: 4,
+  }, admin);
+
+  assert.deepEqual(inserted, {
+    admin_user_id: "2d81b842-8d9c-4de3-8411-6787a91e68e9",
+    admin_email: "admin@example.org",
+    source_hint: "fortnite.com",
+    inserted_count: 2,
+    updated_count: 1,
+    skipped_count: 4,
+  });
+  assert.equal("file_content" in inserted, false);
+  assert.equal("service_role_key" in inserted, false);
+});
+
+test("marks an import-history write failure without exposing database details", async () => {
+  const admin = {
+    from() {
+      return {
+        async insert() {
+          return { error: new Error("secret-looking-key=must-not-escape") };
+        },
+      };
+    },
+  };
+
+  await assert.rejects(
+    recordMhtImportHistory({
+      adminUserId: "2d81b842-8d9c-4de3-8411-6787a91e68e9",
+      adminEmail: "admin@example.org",
+      sourceHint: "fortnite.com",
+      insertedCount: 2,
+      updatedCount: 1,
+      skippedCount: 4,
+    }, admin),
+    (error) => {
+      assert.equal(error.name, "ImportHistoryWriteError");
+      assert.equal(error.message, "Der Import wurde gespeichert, aber die Historie konnte nicht geschrieben werden.");
+      assert.equal(error.cause, undefined);
+      return true;
+    },
+  );
+});
+
+test("lists recent imports without returning unselected database fields", async () => {
+  const result = [{
+    id: 1,
+    imported_at: "2026-11-11T12:00:00.000Z",
+    admin_user_id: "2d81b842-8d9c-4de3-8411-6787a91e68e9",
+    admin_email: "admin@example.org",
+    source_hint: "fortnite.com",
+    inserted_count: 2,
+    updated_count: 1,
+    skipped_count: 4,
+  }];
+  let selected;
+  let ordered;
+  let limited;
+  const admin = {
+    from(table) {
+      assert.equal(table, "admin_import_history");
+      return {
+        select(columns) {
+          selected = columns;
+          return {
+            order(column, options) {
+              ordered = { column, options };
+              return {
+                async limit(value) {
+                  limited = value;
+                  return { data: result, error: null };
+                },
+              };
+            },
+          };
+        },
+      };
+    },
+  };
+
+  const entries = await listRecentMhtImports(20, admin);
+
+  assert.deepEqual(entries, result);
+  assert.equal(selected.includes("file_content"), false);
+  assert.equal(selected.includes("service_role_key"), false);
+  assert.deepEqual(ordered, { column: "imported_at", options: { ascending: false } });
+  assert.equal(limited, 20);
 });

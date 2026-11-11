@@ -19,6 +19,8 @@ export * from './mhtImportEventCategory';
 export * from './mhtImportEventGameMode';
 export * from './mhtImportEventTeamFormat';
 export * from './mhtImportEventTournamentType';
+export * from './mhtImportHistoryEntry';
+export * from './mhtImportHistoryResponse';
 export * from './mhtImportIssue';
 export * from './mhtImportPreview';
 export * from './mhtImportResult';

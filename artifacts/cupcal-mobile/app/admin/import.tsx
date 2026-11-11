@@ -1,5 +1,12 @@
 import { Feather } from '@expo/vector-icons';
-import { getGetEventsQueryKey, useGetAdminImportAccess, useImportMhtSchedule, usePreviewMhtImport } from '@workspace/api-client-react';
+import {
+  getGetAdminImportHistoryQueryKey,
+  getGetEventsQueryKey,
+  useGetAdminImportAccess,
+  useGetAdminImportHistory,
+  useImportMhtSchedule,
+  usePreviewMhtImport,
+} from '@workspace/api-client-react';
 import type { MhtImportPreview, MhtImportResult } from '@workspace/api-client-react';
 import { File as ExpoFile } from 'expo-file-system';
 import * as DocumentPicker from 'expo-document-picker';
@@ -91,6 +98,13 @@ export default function AdminImportScreen() {
     : undefined;
   const accessQuery = useGetAdminImportAccess({
     query: { enabled: Boolean(supabase && accessToken && !isCheckingSession), retry: false },
+    request: authRequest,
+  });
+  const historyQuery = useGetAdminImportHistory({
+    query: {
+      enabled: Boolean(supabase && accessToken && !isCheckingSession && accessQuery.data?.authorized),
+      retry: false,
+    },
     request: authRequest,
   });
   const previewMutation = usePreviewMhtImport({ request: authRequest });
@@ -208,6 +222,7 @@ export default function AdminImportScreen() {
       setPreview(null);
       setPickedFile(null);
       await queryClient.invalidateQueries({ queryKey: getGetEventsQueryKey() });
+      await queryClient.invalidateQueries({ queryKey: getGetAdminImportHistoryQueryKey() });
     } catch (importError) {
       setError(importError instanceof Error ? importError.message : 'Der Import ist fehlgeschlagen.');
     }
@@ -480,6 +495,54 @@ export default function AdminImportScreen() {
                 <Text accessibilityRole="alert" style={[styles.messageText, { color: colors.foreground }]}>{resultCopy(importResult)}</Text>
               </View>
             ) : null}
+
+            <View
+              testID="admin-import-history"
+              style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}
+            >
+              <View style={styles.historyHeader}>
+                <View style={styles.historyHeading}>
+                  <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Letzte Importe</Text>
+                  <Text style={[styles.cardCopy, { color: colors.mutedForeground }]}>
+                    Nach Zeitpunkt sortiert · höchstens 20 Einträge
+                  </Text>
+                </View>
+                <Feather name="clock" size={18} color={colors.mutedForeground} />
+              </View>
+              {historyQuery.isLoading ? (
+                <View style={styles.historyState}>
+                  <ActivityIndicator color={colors.primary} />
+                  <Text style={[styles.detailCopy, { color: colors.mutedForeground }]}>Historie wird geladen …</Text>
+                </View>
+              ) : historyQuery.isError ? (
+                <Text accessibilityRole="alert" style={[styles.detailCopy, { color: colors.destructive }]}>
+                  Die Importhistorie konnte nicht geladen werden. Bitte versuche es später erneut.
+                </Text>
+              ) : historyQuery.data?.entries.length ? (
+                historyQuery.data.entries.map((entry) => (
+                  <View key={entry.id} style={[styles.historyRow, { borderBottomColor: colors.border }]}>
+                    <View style={styles.historyRowHeader}>
+                      <Text style={[styles.historyDate, { color: colors.foreground }]}>
+                        {formatImportTime(entry.importedAt, 'Europe/Berlin')}
+                      </Text>
+                      <Text numberOfLines={1} style={[styles.historySource, { color: colors.mutedForeground }]}>
+                        {entry.sourceHint ?? 'Quelle nicht angegeben'}
+                      </Text>
+                    </View>
+                    <Text style={[styles.historyAdmin, { color: colors.mutedForeground }]}>
+                      Admin: {entry.adminEmail}
+                    </Text>
+                    <Text style={[styles.historyCounts, { color: colors.foreground }]}>
+                      {entry.insertedCount} neu · {entry.updatedCount} aktualisiert · {entry.skippedCount} übersprungen
+                    </Text>
+                  </View>
+                ))
+              ) : (
+                <Text style={[styles.detailCopy, { color: colors.mutedForeground }]}>
+                  Bisher wurde noch kein Dateiimport gespeichert.
+                </Text>
+              )}
+            </View>
           </>
         )}
       </ScrollView>
@@ -525,6 +588,15 @@ const styles = StyleSheet.create({
   noticeTitle: { fontSize: 14, fontWeight: '700', marginBottom: 4 },
   noticeText: { flex: 1, fontSize: 12, lineHeight: 18 },
   sectionTitle: { fontSize: 16, fontWeight: '700' },
+  historyHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 },
+  historyHeading: { flex: 1 },
+  historyState: { minHeight: 54, flexDirection: 'row', alignItems: 'center', gap: 9 },
+  historyRow: { borderBottomWidth: StyleSheet.hairlineWidth, paddingVertical: 12, gap: 5 },
+  historyRowHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  historyDate: { fontSize: 12, fontWeight: '700', flexShrink: 0 },
+  historySource: { fontSize: 10, flex: 1, textAlign: 'right' },
+  historyAdmin: { fontSize: 10 },
+  historyCounts: { fontSize: 11, lineHeight: 16, fontWeight: '600' },
   stats: { flexDirection: 'row', gap: 8, marginTop: 18, marginBottom: 10 },
   stat: { flex: 1, minWidth: 0, paddingVertical: 10, paddingHorizontal: 7, borderRadius: 12, alignItems: 'center' },
   statValue: { fontSize: 19, fontWeight: '800' },

@@ -2,12 +2,23 @@ import express, { Router, type IRouter, type Request, type Response, type NextFu
 import { z } from "zod";
 import { parseMhtSchedule } from "../../scripts/dry-run-mht-import.mjs";
 import { getAdminImportAccess, getSafeUpcomingEvents, parseAdminEmailAllowlist } from "../services/adminImportAccess";
-import { getSupabaseAdmin, upsertMhtEvents } from "../services/supabase";
+import {
+  getSupabaseAdmin,
+  ImportHistoryWriteError,
+  listRecentMhtImports,
+  recordMhtImportHistory,
+  upsertMhtEvents,
+} from "../services/supabase";
 import { MAX_MHT_UPLOAD_BYTES } from "../lib/uploadLimits";
 
 const router: IRouter = Router();
 const uploadText = express.text({ type: "text/plain", limit: MAX_MHT_UPLOAD_BYTES });
 const requestBodySchema = z.string().min(1, "Die Datei ist leer.").max(MAX_MHT_UPLOAD_BYTES);
+const IMPORT_HISTORY_LIMIT = 20;
+
+type ImportAdminRequest = Request & {
+  importAdminUser?: { id: string; email: string | null };
+};
 
 class ExistingEventsQueryError extends Error {
   constructor(cause: unknown) {
@@ -17,7 +28,7 @@ class ExistingEventsQueryError extends Error {
 }
 
 async function resolveSignedInUser(req: Request): Promise<
-  | { email: string | null }
+  | { id: string; email: string | null }
   | { error: "unauthenticated" | "unavailable" }
 > {
   const authorization = req.header("authorization") ?? "";
@@ -38,7 +49,7 @@ async function resolveSignedInUser(req: Request): Promise<
       };
     }
     if (!data.user) return { error: "unauthenticated" };
-    return { email: data.user.email ?? null };
+    return { id: data.user.id, email: data.user.email ?? null };
   } catch (error) {
     req.log.error({ err: error }, "Could not verify admin importer session");
     return { error: "unavailable" };
@@ -72,7 +83,19 @@ async function requireImportAdmin(
     });
     return;
   }
+  (req as ImportAdminRequest).importAdminUser = user;
   next();
+}
+
+function getSourceHint(sourceUrl: string | null): string | null {
+  if (!sourceUrl) return null;
+  try {
+    const url = new URL(sourceUrl);
+    if (url.protocol !== "https:" && url.protocol !== "http:") return null;
+    return url.hostname.slice(0, 255);
+  } catch {
+    return null;
+  }
 }
 
 function parseUploadBody(req: Request, res: Response): string | null {
@@ -215,6 +238,19 @@ router.post(
       await upsertMhtEvents(preview.importableEvents);
       const insertedCount = preview.importableEvents.filter((event) => !existingIds.has(event.id)).length;
       const updatedCount = preview.importableEvents.length - insertedCount;
+      const adminUser = (req as ImportAdminRequest).importAdminUser;
+      if (!adminUser?.email) {
+        throw new Error("Die Admin-Anmeldung enthält keine Konto-E-Mail-Adresse.");
+      }
+      const skippedCount = preview.warningCount + preview.skippedPastCount;
+      await recordMhtImportHistory({
+        adminUserId: adminUser.id,
+        adminEmail: adminUser.email,
+        sourceHint: getSourceHint(preview.sourceUrl),
+        insertedCount,
+        updatedCount,
+        skippedCount,
+      });
 
       res.json({
         importedCount: preview.importableEvents.length,
@@ -222,14 +258,32 @@ router.post(
         updatedCount,
         skippedWarningCount: preview.warningCount,
         skippedPastCount: preview.skippedPastCount,
+        skippedCount,
       });
     } catch (error) {
       req.log.error("MHT schedule import failed");
+      if (error instanceof ImportHistoryWriteError) {
+        res.status(503).json({
+          error: "Die Termine wurden gespeichert, aber der Historieneintrag fehlt. Bitte wende dich an die Administration, bevor du erneut importierst.",
+        });
+        return;
+      }
       res.status(503).json({
         error: "Der Import konnte nicht vollständig abgeschlossen werden. Prüfe die Termine und starte den Import bei Bedarf erneut.",
       });
     }
   },
 );
+
+router.get("/v1/admin/events/import/history", requireImportAdmin, async (req, res): Promise<void> => {
+  try {
+    const entries = await listRecentMhtImports(IMPORT_HISTORY_LIMIT);
+    res.setHeader("Cache-Control", "no-store");
+    res.json({ entries });
+  } catch (error) {
+    req.log.error({ err: error }, "Could not load admin MHT import history");
+    res.status(503).json({ error: "Die Importhistorie kann gerade nicht geladen werden." });
+  }
+});
 
 export default router;

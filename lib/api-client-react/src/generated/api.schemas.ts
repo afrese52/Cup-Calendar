@@ -187,6 +187,23 @@ export interface MhtImportResult {
   updatedCount: number;
   skippedWarningCount: number;
   skippedPastCount: number;
+  skippedCount: number;
+}
+
+export interface MhtImportHistoryEntry {
+  id: number;
+  importedAt: string;
+  adminUserId: string;
+  adminEmail: string;
+  /** @nullable */
+  sourceHint: string | null;
+  insertedCount: number;
+  updatedCount: number;
+  skippedCount: number;
+}
+
+export interface MhtImportHistoryResponse {
+  entries: MhtImportHistoryEntry[];
 }
 
 export type GetEventsParams = {

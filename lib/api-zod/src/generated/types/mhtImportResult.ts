@@ -12,4 +12,5 @@ export interface MhtImportResult {
   updatedCount: number;
   skippedWarningCount: number;
   skippedPastCount: number;
+  skippedCount: number;
 }

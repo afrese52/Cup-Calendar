@@ -29,6 +29,7 @@ import type {
   EventListResponse,
   GetEventsParams,
   HealthStatus,
+  MhtImportHistoryResponse,
   MhtImportPreview,
   MhtImportResult,
   MhtScheduleFile
@@ -156,11 +157,6 @@ export function useHealthCheck<TData = Awaited<ReturnType<typeof healthCheck>>, 
 
   return withQueryKey(query, queryOptions.queryKey);
 }
-
-
-
-
-
 
 
 export const getGetEventsUrl = (params?: GetEventsParams,) => {
@@ -547,4 +543,99 @@ export const useImportMhtSchedule = <TError = ErrorType<void>,
       > => {
       return useMutation(getImportMhtScheduleMutationOptions(options), queryClient);
     }
+
+export const getGetAdminImportHistoryUrl = () => {
+
+
+
+
+  return `/api/v1/admin/events/import/history`
+}
+
+/**
+ * @summary List recent imported schedule records
+ */
+export const getAdminImportHistory = async ( options?: Parameters<typeof customFetch>[1]): Promise<MhtImportHistoryResponse> => {
+
+  return customFetch<MhtImportHistoryResponse>(getGetAdminImportHistoryUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAdminImportHistoryQueryKey = () => {
+    return [
+    `/api/v1/admin/events/import/history`
+    ] as const;
+    }
+
+
+export const getGetAdminImportHistoryQueryOptions = <TData = Awaited<ReturnType<typeof getAdminImportHistory>>, TError = ErrorType<void>>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAdminImportHistory>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAdminImportHistoryQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAdminImportHistory>>> = ({ signal }) => getAdminImportHistory({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAdminImportHistory>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetAdminImportHistoryQueryResult = NonNullable<Awaited<ReturnType<typeof getAdminImportHistory>>>
+export type GetAdminImportHistoryQueryError = ErrorType<void>
+
+
+export function useGetAdminImportHistory<TData = Awaited<ReturnType<typeof getAdminImportHistory>>, TError = ErrorType<void>>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAdminImportHistory>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getAdminImportHistory>>,
+          TError,
+          Awaited<ReturnType<typeof getAdminImportHistory>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetAdminImportHistory<TData = Awaited<ReturnType<typeof getAdminImportHistory>>, TError = ErrorType<void>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAdminImportHistory>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getAdminImportHistory>>,
+          TError,
+          Awaited<ReturnType<typeof getAdminImportHistory>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetAdminImportHistory<TData = Awaited<ReturnType<typeof getAdminImportHistory>>, TError = ErrorType<void>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAdminImportHistory>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary List recent imported schedule records
+ */
+
+export function useGetAdminImportHistory<TData = Awaited<ReturnType<typeof getAdminImportHistory>>, TError = ErrorType<void>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAdminImportHistory>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetAdminImportHistoryQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
 

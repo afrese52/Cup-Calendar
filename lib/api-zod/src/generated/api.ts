@@ -97,7 +97,25 @@ export const ImportMhtScheduleResponse = zod.object({
   "insertedCount": zod.number().int(),
   "updatedCount": zod.number().int(),
   "skippedWarningCount": zod.number().int(),
-  "skippedPastCount": zod.number().int()
+  "skippedPastCount": zod.number().int(),
+  "skippedCount": zod.number().int()
+})
+
+
+/**
+ * @summary List recent imported schedule records
+ */
+export const GetAdminImportHistoryResponse = zod.object({
+  "entries": zod.array(zod.object({
+  "id": zod.number().int(),
+  "importedAt": zod.coerce.date(),
+  "adminUserId": zod.string().uuid(),
+  "adminEmail": zod.string().email(),
+  "sourceHint": zod.string().nullable(),
+  "insertedCount": zod.number().int(),
+  "updatedCount": zod.number().int(),
+  "skippedCount": zod.number().int()
+}))
 })
 
 

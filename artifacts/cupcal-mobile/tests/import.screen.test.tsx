@@ -7,6 +7,7 @@ import AdminImportScreen from '../app/admin/import';
 const mockGetDocumentAsync = jest.fn<(...args: any[]) => Promise<any>>();
 const mockReadFile = jest.fn<(...args: any[]) => Promise<string>>();
 const mockPreviewImport = jest.fn<(...args: any[]) => Promise<any>>();
+const mockImportHistory = jest.fn<() => any>();
 let mockNativeFileSize: number | null = null;
 const originalPlatformOS = Platform.OS;
 
@@ -39,6 +40,8 @@ jest.mock('@workspace/api-client-react', () => ({
     isLoading: false,
     isError: false,
   }),
+  getGetAdminImportHistoryQueryKey: () => ['admin-import-history'],
+  useGetAdminImportHistory: () => mockImportHistory(),
   usePreviewMhtImport: () => ({ mutateAsync: mockPreviewImport, isPending: false }),
   useImportMhtSchedule: () => ({ mutateAsync: jest.fn(), isPending: false }),
 }));
@@ -128,6 +131,11 @@ beforeEach(() => {
   mockGetDocumentAsync.mockReset();
   mockReadFile.mockReset().mockResolvedValue('MIME-Version: 1.0\n');
   mockPreviewImport.mockReset().mockResolvedValue(preview);
+  mockImportHistory.mockReset().mockReturnValue({
+    data: { entries: [] },
+    isLoading: false,
+    isError: false,
+  });
 });
 
 afterAll(() => setPlatformOS(originalPlatformOS));
@@ -243,4 +251,29 @@ test('meldet eine leere Dateiauswahl, ohne den Bildschirm zu blockieren', async 
     'Es wurde keine Datei bereitgestellt. Bitte wähle sie erneut aus.',
   )).toBeTruthy();
   expect(screen.getByTestId('choose-import-file-button').props.accessibilityState.disabled).not.toBe(true);
+});
+
+test('zeigt Admins die gespeicherte Importhistorie mit Konto, Quelle und Zählern', async () => {
+  mockImportHistory.mockReturnValue({
+    data: {
+      entries: [{
+        id: 19,
+        importedAt: '2026-11-11T12:00:00.000Z',
+        adminUserId: '2d81b842-8d9c-4de3-8411-6787a91e68e9',
+        adminEmail: 'admin@example.org',
+        sourceHint: 'fortnite.com',
+        insertedCount: 2,
+        updatedCount: 1,
+        skippedCount: 4,
+      }],
+    },
+    isLoading: false,
+    isError: false,
+  });
+  const screen = await openImportScreen();
+
+  expect(screen.getByTestId('admin-import-history')).toBeTruthy();
+  expect(screen.getByText('Admin: admin@example.org')).toBeTruthy();
+  expect(screen.getByText('fortnite.com')).toBeTruthy();
+  expect(screen.getByText('2 neu · 1 aktualisiert · 4 übersprungen')).toBeTruthy();
 });

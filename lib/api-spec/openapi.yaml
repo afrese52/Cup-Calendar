@@ -148,6 +148,26 @@ paths:
           description: The file is too large
         "503":
           description: Supabase is temporarily unavailable
+  /v1/admin/events/import/history:
+    get:
+      operationId: getAdminImportHistory
+      tags: [admin-import]
+      summary: List recent imported schedule records
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Recent imports
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MhtImportHistoryResponse"
+        "401":
+          description: Authentication required
+        "403":
+          description: Import access is not granted
+        "503":
+          description: Supabase is temporarily unavailable
 components:
   securitySchemes:
     BearerAuth:
@@ -280,5 +300,25 @@ components:
         updatedCount: { type: integer }
         skippedWarningCount: { type: integer }
         skippedPastCount: { type: integer }
-      required: [importedCount, insertedCount, updatedCount, skippedWarningCount, skippedPastCount]
+        skippedCount: { type: integer }
+      required: [importedCount, insertedCount, updatedCount, skippedWarningCount, skippedPastCount, skippedCount]
+    MhtImportHistoryEntry:
+      type: object
+      properties:
+        id: { type: integer }
+        importedAt: { type: string, format: date-time }
+        adminUserId: { type: string, format: uuid }
+        adminEmail: { type: string, format: email }
+        sourceHint: { type: ["string", "null"] }
+        insertedCount: { type: integer }
+        updatedCount: { type: integer }
+        skippedCount: { type: integer }
+      required: [id, importedAt, adminUserId, adminEmail, sourceHint, insertedCount, updatedCount, skippedCount]
+    MhtImportHistoryResponse:
+      type: object
+      properties:
+        entries:
+          type: array
+          items: { $ref: "#/components/schemas/MhtImportHistoryEntry" }
+      required: [entries]
 

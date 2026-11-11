@@ -18,6 +18,33 @@ export interface MhtImportEvent {
   review_warnings: string[];
 }
 
+export interface MhtImportHistoryEntry {
+  id: number;
+  imported_at: string;
+  admin_user_id: string;
+  admin_email: string;
+  source_hint: string | null;
+  inserted_count: number;
+  updated_count: number;
+  skipped_count: number;
+}
+
+export interface MhtImportHistoryInput {
+  adminUserId: string;
+  adminEmail: string;
+  sourceHint: string | null;
+  insertedCount: number;
+  updatedCount: number;
+  skippedCount: number;
+}
+
+export class ImportHistoryWriteError extends Error {
+  constructor() {
+    super("Der Import wurde gespeichert, aber die Historie konnte nicht geschrieben werden.");
+    this.name = "ImportHistoryWriteError";
+  }
+}
+
 const SUPABASE_API_PATH_SUFFIX = /\/(?:auth|rest|storage|functions)\/v1$/i;
 
 export function normalizeSupabaseBaseUrl(value: string): string {
@@ -72,4 +99,38 @@ export async function upsertMhtEvents(
     // Do not expose provider error payloads, which may contain sensitive values.
     throw new Error("Die geprüften Termine konnten nicht gespeichert werden.");
   }
+}
+
+export async function recordMhtImportHistory(
+  input: MhtImportHistoryInput,
+  admin: SupabaseClient = getSupabaseAdmin(),
+): Promise<void> {
+  const { error } = await admin
+    .from("admin_import_history")
+    .insert({
+      admin_user_id: input.adminUserId,
+      admin_email: input.adminEmail,
+      source_hint: input.sourceHint,
+      inserted_count: input.insertedCount,
+      updated_count: input.updatedCount,
+      skipped_count: input.skippedCount,
+    });
+  if (error) {
+    throw new ImportHistoryWriteError();
+  }
+}
+
+export async function listRecentMhtImports(
+  limit = 20,
+  admin: SupabaseClient = getSupabaseAdmin(),
+): Promise<MhtImportHistoryEntry[]> {
+  const { data, error } = await admin
+    .from("admin_import_history")
+    .select("id, imported_at, admin_user_id, admin_email, source_hint, inserted_count, updated_count, skipped_count")
+    .order("imported_at", { ascending: false })
+    .limit(limit);
+  if (error) {
+    throw new Error("Die Importhistorie konnte nicht geladen werden.");
+  }
+  return (data ?? []) as MhtImportHistoryEntry[];
 }
