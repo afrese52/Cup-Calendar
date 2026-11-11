@@ -5,12 +5,14 @@ CREATE TABLE IF NOT EXISTS public.user_event_bookmarks (
     event_id TEXT NOT NULL,
     is_favorite BOOLEAN NOT NULL DEFAULT TRUE,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    revision BIGINT NOT NULL DEFAULT 0,
     PRIMARY KEY (user_id, event_id)
 );
 
 ALTER TABLE public.user_event_bookmarks
     ADD COLUMN IF NOT EXISTS is_favorite BOOLEAN NOT NULL DEFAULT TRUE,
-    ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT now();
+    ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    ADD COLUMN IF NOT EXISTS revision BIGINT NOT NULL DEFAULT 0;
 
 -- Earlier schemas linked bookmarks to user_profiles and fortnite_events.
 -- Authentication is based on auth.users, and offline event IDs must remain
@@ -88,17 +90,14 @@ BEGIN
         RAISE EXCEPTION 'Authentication is required to sync bookmarks';
     END IF;
 
-    INSERT INTO public.user_event_bookmarks (user_id, event_id, is_favorite, updated_at)
-    VALUES ((select auth.uid()), p_event_id, p_is_favorite, p_updated_at)
+    -- p_updated_at is retained for RPC compatibility, but client clocks are
+    -- not an ordering source. The server assigns a monotonic revision instead.
+    INSERT INTO public.user_event_bookmarks (user_id, event_id, is_favorite, updated_at, revision)
+    VALUES ((select auth.uid()), p_event_id, p_is_favorite, clock_timestamp(), 1)
     ON CONFLICT (user_id, event_id) DO UPDATE
     SET is_favorite = EXCLUDED.is_favorite,
-        updated_at = EXCLUDED.updated_at
-    WHERE EXCLUDED.updated_at > public.user_event_bookmarks.updated_at
-       OR (
-           EXCLUDED.updated_at = public.user_event_bookmarks.updated_at
-           AND EXCLUDED.is_favorite = FALSE
-           AND public.user_event_bookmarks.is_favorite = TRUE
-       );
+        updated_at = clock_timestamp(),
+        revision = public.user_event_bookmarks.revision + 1;
 END;
 $$;
 

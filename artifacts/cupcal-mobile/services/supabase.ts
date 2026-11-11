@@ -95,7 +95,7 @@ export async function fetchRemoteBookmarks(userId: string): Promise<RemoteBookma
 
   const { data, error } = await supabase
     .from('user_event_bookmarks')
-    .select('event_id, is_favorite, updated_at')
+    .select('event_id, is_favorite, updated_at, revision')
     .eq('user_id', userId);
   if (error) throw error;
   return (data ?? []) as RemoteBookmark[];

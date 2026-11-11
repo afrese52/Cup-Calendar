@@ -82,7 +82,7 @@ test('migriert alte anonyme Einträge nur in das erste angemeldete Konto', async
   assert.deepEqual(await loadBookmarksForUser('konto-b'), []);
 });
 
-test('löst gleichzeitige Zeitstempel deterministisch zugunsten einer Entfernung', async () => {
+test('gleiche Zeitstempel entscheiden nicht über die lokal gespeicherte Absicht', async () => {
   const eventId = 'turnier-a';
   await setBookmarksFavorite('konto-a', [eventId], false);
   const removal = (await prepareBookmarksForSync('konto-a'))[eventId];
@@ -97,16 +97,52 @@ test('löst gleichzeitige Zeitstempel deterministisch zugunsten einer Entfernung
   assert.deepEqual(unresolved.eventIds, []);
   assert.equal(unresolved.pendingCount, 1);
 
-  assert.equal(shouldUploadBookmarkChange({
-    isFavorite: true,
-    updatedAt: removal.updatedAt,
-  }, { ...simultaneousFavorite, is_favorite: false }), false);
-  const resolved = await reconcileBookmarks('konto-a', [{
+  await setBookmarksFavorite('konto-a', [eventId], true);
+  const laterFavorite = (await prepareBookmarksForSync('konto-a'))[eventId];
+  const remoteRemoval = {
     ...simultaneousFavorite,
     is_favorite: false,
+  };
+  assert.equal(shouldUploadBookmarkChange(laterFavorite, remoteRemoval), true);
+  const stillPending = await reconcileBookmarks('konto-a', [remoteRemoval]);
+  assert.deepEqual(stillPending.eventIds, [eventId]);
+  assert.equal(stillPending.pendingCount, 1);
+
+  const resolved = await reconcileBookmarks('konto-a', [{
+    ...simultaneousFavorite,
+    is_favorite: true,
   }]);
-  assert.deepEqual(resolved.eventIds, []);
+  assert.deepEqual(resolved.eventIds, [eventId]);
   assert.equal(resolved.pendingCount, 0);
+});
+
+test('synchronisiert Änderungen trotz vor- oder nachgehender Geräteuhr', async () => {
+  const realNow = Date.now;
+  const cases = [
+    { userId: 'uhr-geht-nach', deviceTime: 1_000, remoteTime: '2099-01-01T00:00:00.000Z' },
+    { userId: 'uhr-geht-vor', deviceTime: 4_102_444_800_000, remoteTime: '2000-01-01T00:00:00.000Z' },
+  ];
+
+  try {
+    for (const { userId, deviceTime, remoteTime } of cases) {
+      Date.now = () => deviceTime;
+      const eventId = `turnier-${userId}`;
+      await setBookmarksFavorite(userId, [eventId], true);
+      const change = (await prepareBookmarksForSync(userId))[eventId];
+      const remote = {
+        event_id: eventId,
+        is_favorite: false,
+        updated_at: remoteTime,
+      };
+
+      assert.equal(shouldUploadBookmarkChange(change, remote), true);
+      const reconciled = await reconcileBookmarks(userId, [remote]);
+      assert.deepEqual(reconciled.eventIds, [eventId]);
+      assert.equal(reconciled.pendingCount, 1);
+    }
+  } finally {
+    Date.now = realNow;
+  }
 });
 
 test('hält Favoriten und ausstehende Änderungen pro Konto getrennt', async () => {

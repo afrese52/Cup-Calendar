@@ -4,3 +4,4 @@
 - [AsyncStorage in Node-Tests](async-storage-node-tests.md) — Node-Tests für den Expo-Speicher brauchen eine Browser-Speicherattrappe und ggf. Default-Export-Auflösung.
 - [Asynchrone Expo-Bildschirmtests](async-expo-screen-tests.md) — React-Native-Testing-Library-14-Renderings und Interaktionen immer awaiten, bevor der Zustand geprüft wird.
 - [Supabase-Projekt-URL](supabase-base-url.md) — Supabase-Clients brauchen die Projektbasis; API-Endpfade können Auth-Fehler wie 401 oder 404 auslösen.
+- [Bookmark-Zeitordnung](bookmark-clock-ordering.md) — Favoritenänderungen anhand serverseitiger Revisionen statt Gerätezeitstempeln ordnen.

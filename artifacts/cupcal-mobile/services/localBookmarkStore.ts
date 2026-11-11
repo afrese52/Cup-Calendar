@@ -25,6 +25,7 @@ export interface RemoteBookmark {
   event_id: string;
   is_favorite: boolean;
   updated_at: string;
+  revision: number;
 }
 
 const emptyStore = (): BookmarkStore => ({ anonymousIds: [], accounts: {} });
@@ -127,23 +128,19 @@ function remoteAcknowledgesChange(
   remote: RemoteBookmark,
   change: PendingBookmarkChange,
 ): boolean {
-  const remoteTimestamp = Date.parse(remote.updated_at);
-  const localTimestamp = Date.parse(change.updatedAt);
-  return remoteTimestamp > localTimestamp ||
-    (remoteTimestamp === localTimestamp &&
-      (!remote.is_favorite || remote.is_favorite === change.isFavorite));
+  // The device timestamp is only diagnostic metadata. A matching value already
+  // on the server means this desired state has been reached, regardless of
+  // which device's clock was ahead.
+  return remote.is_favorite === change.isFavorite;
 }
 
 export function shouldUploadBookmarkChange(
   change: PendingBookmarkChange,
   remote: RemoteBookmark | undefined,
 ): boolean {
-  if (!remote) return true;
-
-  const localTimestamp = Date.parse(change.updatedAt);
-  const remoteTimestamp = Date.parse(remote.updated_at);
-  return localTimestamp > remoteTimestamp ||
-    (localTimestamp === remoteTimestamp && !change.isFavorite && remote.is_favorite);
+  // Server revisions are allocated by the RPC in arrival order. Never use a
+  // device clock to reject a still-pending change.
+  return !remote || remote.is_favorite !== change.isFavorite;
 }
 
 export async function loadAnonymousBookmarks(): Promise<string[]> {
