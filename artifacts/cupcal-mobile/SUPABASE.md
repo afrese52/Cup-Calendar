@@ -11,6 +11,15 @@ Beide Werte werden in den nativen und Web-Client eingebettet und sind öffentlic
 
 Der Client speichert Auth-Sitzungen über AsyncStorage, erneuert sie im Web automatisch und startet beziehungsweise pausiert die Erneuerung auf nativen Geräten passend zum App-Status.
 
+## Rücksprung nach Passwort-Reset
+
+Im Browser verwendet CupCal die HTTPS-Adresse der gerade geöffneten App-Vorschau
+mit dem Pfad `/auth/reset`. Diese vollständige Adresse muss in Supabase unter
+**Authentication → URL Configuration → Redirect URLs** freigegeben sein. Für
+native Builds bleibt zusätzlich `cupcal-android://auth/reset` als Redirect-URL
+eingetragen. Die native URI funktioniert nicht als Ziel in einem normalen
+Browser.
+
 Für die kontobasierte Merkliste muss außerdem die Migration
 `artifacts/api-server/supabase/migrations/0002_user_event_bookmarks.sql` auf
 dem Supabase-Projekt ausgeführt werden. Sie richtet die Favoritentabelle,
