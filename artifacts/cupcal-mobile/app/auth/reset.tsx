@@ -33,9 +33,31 @@ export default function ResetPasswordScreen() {
     }
 
     let isMounted = true;
+    const client = supabase;
+    const refreshRecoverySession = async () => {
+      const { data, error } = await client.auth.getSession();
+      if (error) throw error;
+      if (!isMounted) return;
+
+      const isReady = isPasswordRecoveryPending() && Boolean(data.session);
+      setIsRecoveryReady(isReady);
+      setErrorMessage(isReady
+        ? null
+        : 'Der Wiederherstellungslink ist ungültig, abgelaufen oder wurde bereits verwendet. Fordere bitte einen neuen Link an.');
+    };
+    const processRecoveryUrl = async (url: string) => {
+      try {
+        const wasRecoveryUrl = await handlePasswordResetUrl(url);
+        if (wasRecoveryUrl) await refreshRecoverySession();
+      } catch (error) {
+        if (!isMounted) return;
+        setIsRecoveryReady(false);
+        setErrorMessage(friendlyAuthError(error, 'Der Wiederherstellungslink konnte nicht geprüft werden.'));
+      }
+    };
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
+    } = client.auth.onAuthStateChange((event, session) => {
       if (!isMounted || event !== 'PASSWORD_RECOVERY') return;
       const hasRecoverySession = Boolean(session);
       markPasswordRecoverySession(hasRecoverySession);
@@ -44,19 +66,15 @@ export default function ResetPasswordScreen() {
       setErrorMessage(hasRecoverySession ? null : 'Die Wiederherstellungssitzung ist abgelaufen oder ungültig. Fordere bitte einen neuen Link an.');
     });
 
+    const linkSubscription = Linking.addEventListener('url', ({ url }) => {
+      void processRecoveryUrl(url);
+    });
+
     void (async () => {
       try {
         const initialUrl = await Linking.getInitialURL();
-        if (initialUrl) await handlePasswordResetUrl(initialUrl);
-        const { data, error } = await supabase.auth.getSession();
-        if (error) throw error;
-        if (isMounted) {
-          const isReady = isPasswordRecoveryPending() && Boolean(data.session);
-          setIsRecoveryReady(isReady);
-          if (!isReady) {
-            setErrorMessage('Der Wiederherstellungslink ist ungültig, abgelaufen oder wurde bereits verwendet. Fordere bitte einen neuen Link an.');
-          }
-        }
+        if (initialUrl) await processRecoveryUrl(initialUrl);
+        await refreshRecoverySession();
       } catch (error) {
         if (isMounted) {
           setIsRecoveryReady(false);
@@ -70,6 +88,7 @@ export default function ResetPasswordScreen() {
     return () => {
       isMounted = false;
       subscription.unsubscribe();
+      linkSubscription.remove();
     };
   }, []);
 

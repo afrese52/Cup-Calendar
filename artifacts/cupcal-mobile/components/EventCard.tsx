@@ -1,12 +1,13 @@
 import { Feather } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useColors } from '@/hooks/useColors';
 import type { TournamentEvent } from '@/data/events';
 import { promptAccountSignIn } from '@/services/accountSignInPrompt';
 import { useCupCal } from '@/state/AppContext';
+import { getEventCountdownLabel } from '@/data/eventCountdown';
 
 interface EventCardProps {
   event: TournamentEvent;
@@ -17,6 +18,7 @@ interface EventCardProps {
 export function EventCard({ event, isBookmarked, onBookmarkToggle }: EventCardProps) {
   const colors = useColors();
   const { authReady, isAuthenticated } = useCupCal();
+  const [now, setNow] = useState(() => Date.now());
   const start = new Date(event.startTime);
   const dateLabel = new Intl.DateTimeFormat('de-DE', {
     weekday: 'short',
@@ -27,8 +29,12 @@ export function EventCard({ event, isBookmarked, onBookmarkToggle }: EventCardPr
     hour: '2-digit',
     minute: '2-digit',
   }).format(start);
-  const hoursToStart = Math.max(1, Math.ceil((start.getTime() - Date.now()) / 3_600_000));
-  const countdown = hoursToStart < 24 ? `in ${hoursToStart} Std.` : `in ${Math.ceil(hoursToStart / 24)} Tagen`;
+  const countdown = getEventCountdownLabel(event.startTime, event.endTime, now);
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(timer);
+  }, []);
 
   return (
     <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
