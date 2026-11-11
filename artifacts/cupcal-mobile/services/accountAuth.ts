@@ -45,6 +45,9 @@ export function friendlyAuthError(
   ) {
     return 'Für diese E-Mail-Adresse gibt es bereits ein Konto. Melde dich an oder fordere einen neuen Passwort-Link an.';
   }
+  if (code === 'email_already_confirmed' || message.includes('already confirmed')) {
+    return 'Diese E-Mail-Adresse ist bereits bestätigt. Du kannst dich mit deinem Konto anmelden.';
+  }
   if (
     code === 'signup_disabled'
     || code === 'email_provider_disabled'
@@ -238,6 +241,40 @@ export async function submitAccountAuth(
           : mode === 'sign-up'
             ? 'Die Registrierung ist fehlgeschlagen. Bitte versuche es erneut.'
             : 'Die Anmeldung ist fehlgeschlagen. Bitte versuche es erneut.',
+      ),
+    };
+  }
+}
+
+export async function resendAccountConfirmation(options: {
+  email: string;
+  emailConfirmationRedirectTo?: string;
+  requestEmailConfirmation: (email: string, emailRedirectTo: string) => Promise<void>;
+}): Promise<AuthOperationResult> {
+  const email = options.email.trim();
+  const emailRedirectTo = options.emailConfirmationRedirectTo?.trim();
+  if (!email) {
+    return { ok: false, error: 'Bitte gib deine E-Mail-Adresse ein.' };
+  }
+  if (!emailRedirectTo) {
+    return {
+      ok: false,
+      error: 'Der Bestätigungslink ist nicht konfiguriert. Bitte versuche es später erneut.',
+    };
+  }
+
+  try {
+    await options.requestEmailConfirmation(email, emailRedirectTo);
+    return {
+      ok: true,
+      message: 'Wenn dein Konto noch nicht bestätigt ist, erhältst du in Kürze einen neuen Bestätigungslink.',
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: friendlyAuthError(
+        error,
+        'Der Bestätigungslink konnte nicht angefordert werden. Bitte versuche es erneut.',
       ),
     };
   }

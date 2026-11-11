@@ -63,6 +63,17 @@ export function getEmailConfirmationRedirectUrl(): string {
   });
 }
 
+export async function requestEmailConfirmation(email: string, emailRedirectTo: string): Promise<void> {
+  if (!supabase) throw new Error('Supabase ist nicht verfügbar.');
+
+  const { error } = await supabase.auth.resend({
+    type: 'signup',
+    email: email.trim(),
+    options: { emailRedirectTo },
+  });
+  if (error) throw error;
+}
+
 export function isPasswordRecoveryPending(): boolean {
   return passwordRecovery?.isPending() ?? false;
 }

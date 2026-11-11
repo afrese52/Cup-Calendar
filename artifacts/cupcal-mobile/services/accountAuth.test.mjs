@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   friendlyAuthError,
+  resendAccountConfirmation,
   signOutAccount,
   submitAccountAuth,
   watchAuthSession,
@@ -230,6 +231,63 @@ test('fordert einen Wiederherstellungslink an und zeigt Fehler an', async (t) =>
     assert.deepEqual(result, {
       ok: false,
       error: 'Keine Verbindung möglich. Prüfe deine Internetverbindung und versuche es erneut.',
+    });
+  });
+});
+
+test('fordert einen Bestätigungslink mit der CupCal-Rücksprungadresse erneut an', async (t) => {
+  await t.test('E-Mail und Weiterleitung werden bereinigt und übergeben', async () => {
+    let request;
+    const result = await resendAccountConfirmation({
+      email: ' test@example.invalid ',
+      emailConfirmationRedirectTo: ' cupcal-android://auth/confirm ',
+      requestEmailConfirmation: async (email, emailRedirectTo) => {
+        request = { email, emailRedirectTo };
+      },
+    });
+
+    assert.deepEqual(request, {
+      email: 'test@example.invalid',
+      emailRedirectTo: 'cupcal-android://auth/confirm',
+    });
+    assert.deepEqual(result, {
+      ok: true,
+      message: 'Wenn dein Konto noch nicht bestätigt ist, erhältst du in Kürze einen neuen Bestätigungslink.',
+    });
+  });
+
+  await t.test('leere E-Mail oder fehlende Weiterleitung löst keine Anfrage aus', async () => {
+    let called = false;
+    const requestEmailConfirmation = async () => { called = true; };
+
+    assert.deepEqual(await resendAccountConfirmation({
+      email: ' ',
+      emailConfirmationRedirectTo: 'cupcal-android://auth/confirm',
+      requestEmailConfirmation,
+    }), {
+      ok: false,
+      error: 'Bitte gib deine E-Mail-Adresse ein.',
+    });
+    assert.deepEqual(await resendAccountConfirmation({
+      email: 'test@example.invalid',
+      requestEmailConfirmation,
+    }), {
+      ok: false,
+      error: 'Der Bestätigungslink ist nicht konfiguriert. Bitte versuche es später erneut.',
+    });
+    assert.equal(called, false);
+  });
+
+  await t.test('zeigt Versandfehler verständlich an', async () => {
+    const result = await resendAccountConfirmation({
+      email: 'test@example.invalid',
+      emailConfirmationRedirectTo: 'cupcal-android://auth/confirm',
+      requestEmailConfirmation: async () => { throw new Error('Email rate limit exceeded'); },
+    });
+
+    assert.deepEqual(result, {
+      ok: false,
+      error: 'Zu viele Versuche in kurzer Zeit. Warte bitte einige Minuten und versuche es dann erneut.',
     });
   });
 });

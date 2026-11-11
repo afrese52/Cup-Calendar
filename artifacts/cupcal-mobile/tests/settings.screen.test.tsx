@@ -43,6 +43,7 @@ jest.mock('@/services/supabase', () => {
   const auth = {
     signInWithPassword: jest.fn(async () => ({ error: null })),
     signUp: jest.fn(async () => ({ data: { session: null }, error: null })),
+    resend: jest.fn(async () => ({ error: null })),
     signOut: jest.fn(async () => {
       listener?.('SIGNED_OUT', null);
       return { error: null };
@@ -59,6 +60,7 @@ jest.mock('@/services/supabase', () => {
     isSupabaseConfigured: true,
     supabaseConfigurationMessage: null,
     getEmailConfirmationRedirectUrl: () => 'cupcal-test://auth/confirm',
+    requestEmailConfirmation: jest.fn(async () => {}),
     requestPasswordReset: jest.fn(),
     __emitAuthStateChange: (event: string, nextSession: unknown) => listener?.(event, nextSession),
   };
@@ -82,6 +84,10 @@ function restoreAuthMocks() {
     return { error: null };
   });
   auth.signUp.mockReset().mockImplementation(async () => ({ data: { session: null }, error: null }));
+  const mockedSupabase = jest.requireMock('@/services/supabase') as {
+    requestEmailConfirmation: jest.Mock;
+  };
+  mockedSupabase.requestEmailConfirmation.mockReset().mockImplementation(async () => {});
   auth.signOut.mockReset().mockImplementation(async () => {
     mockSupabase.__emitAuthStateChange('SIGNED_OUT', null);
     return { error: null };
@@ -173,6 +179,41 @@ test('zeigt einen Registrierungsfehler sichtbar an', async () => {
 
   expect(await view.findByText(
     'Das Passwort ist zu kurz oder zu unsicher. Bitte wähle ein stärkeres Passwort.',
+  )).toBeTruthy();
+});
+
+test('fordert im Kontobereich einen neuen Bestätigungslink an', async () => {
+  const mockedSupabase = jest.requireMock('@/services/supabase') as {
+    requestEmailConfirmation: jest.Mock;
+  };
+  const view = await openSettings();
+  await fireEvent.changeText(view.getByTestId('auth-email-input'), ' test@example.invalid ');
+
+  await fireEvent.press(view.getByTestId('resend-confirmation-button'));
+
+  expect(mockedSupabase.requestEmailConfirmation).toHaveBeenCalledWith(
+    'test@example.invalid',
+    'cupcal-test://auth/confirm',
+  );
+  expect(await view.findByText(
+    'Wenn dein Konto noch nicht bestätigt ist, erhältst du in Kürze einen neuen Bestätigungslink.',
+  )).toBeTruthy();
+});
+
+test('zeigt einen Fehler beim erneuten Anfordern des Bestätigungslinks', async () => {
+  const mockedSupabase = jest.requireMock('@/services/supabase') as {
+    requestEmailConfirmation: jest.Mock;
+  };
+  mockedSupabase.requestEmailConfirmation.mockImplementation(async () => {
+    throw new Error('Email rate limit exceeded');
+  });
+  const view = await openSettings();
+  await fireEvent.changeText(view.getByTestId('auth-email-input'), 'test@example.invalid');
+
+  await fireEvent.press(view.getByTestId('resend-confirmation-button'));
+
+  expect(await view.findByText(
+    'Zu viele Versuche in kurzer Zeit. Warte bitte einige Minuten und versuche es dann erneut.',
   )).toBeTruthy();
 });
 

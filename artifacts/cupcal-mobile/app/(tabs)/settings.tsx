@@ -7,10 +7,17 @@ import type { Session } from '@supabase/supabase-js';
 import { useRouter } from 'expo-router';
 import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
 import { useColors } from '@/hooks/useColors';
-import { friendlyAuthError, signOutAccount, submitAccountAuth, watchAuthSession } from '@/services/accountAuth';
+import {
+  friendlyAuthError,
+  resendAccountConfirmation,
+  signOutAccount,
+  submitAccountAuth,
+  watchAuthSession,
+} from '@/services/accountAuth';
 import {
   getEmailConfirmationRedirectUrl,
   isSupabaseConfigured,
+  requestEmailConfirmation,
   requestPasswordReset,
   supabase,
   supabaseConfigurationMessage,
@@ -122,6 +129,22 @@ export default function SettingsScreen() {
     } finally {
       setIsSubmittingAuth(false);
     }
+  };
+
+  const resendConfirmation = async () => {
+    if (!supabase) return;
+
+    setIsSubmittingAuth(true);
+    setAuthError(null);
+    setAuthMessage(null);
+    const result = await resendAccountConfirmation({
+      email,
+      emailConfirmationRedirectTo: getEmailConfirmationRedirectUrl(),
+      requestEmailConfirmation,
+    });
+    if (result.ok) setAuthMessage(result.message);
+    else setAuthError(result.error);
+    setIsSubmittingAuth(false);
   };
 
   const signOut = async () => {
@@ -295,6 +318,23 @@ export default function SettingsScreen() {
                   style={styles.modeToggle}
                 >
                   <Text style={[styles.modeToggleText, { color: colors.primary }]}>Passwort vergessen?</Text>
+                </Pressable>
+              ) : null}
+              {authMode === 'sign-in' ? (
+                <Pressable
+                  accessibilityRole="button"
+                  testID="resend-confirmation-button"
+                  disabled={isSubmittingAuth}
+                  onPress={() => void resendConfirmation()}
+                  style={({ pressed }) => [
+                    styles.modeToggle,
+                    pressed && !isSubmittingAuth ? styles.pressed : null,
+                    isSubmittingAuth ? styles.disabled : null,
+                  ]}
+                >
+                  <Text style={[styles.modeToggleText, { color: colors.primary }]}>
+                    Bestätigungslink erneut senden
+                  </Text>
                 </Pressable>
               ) : null}
               <Pressable
