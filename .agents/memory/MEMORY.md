@@ -1,4 +1,5 @@
 - [Expo-Vorschau-Timing](expo-preview-timing.md) — Screenshots direkt nach einem Expo-Neustart können vor dem ersten Web-Bundle leer sein.
+- [Expo-Go-Dateiauswahl](expo-go-file-picker.md) — Android braucht den DocumentPicker-Anzeigenamen; Legacy-Reader unterstützen nicht alle Dokumentanbieter-URIs.
 - [Expo-SQLite-Web-Fallback](expo-sqlite-web-fallback.md) — Ein Laufzeit-Platform-Check verhindert nicht, dass Metro SQLite-WASM fürs Web bündelt.
 - [Manueller CupCal-Terminimport](cupcal-manual-event-import.md) — Der Kalender erhält Termine über den freigegebenen MHT/MHTML-Import, nicht über FortniteAPI.io.
 - [AsyncStorage in Node-Tests](async-storage-node-tests.md) — Node-Tests für den Expo-Speicher brauchen eine Browser-Speicherattrappe und ggf. Default-Export-Auflösung.

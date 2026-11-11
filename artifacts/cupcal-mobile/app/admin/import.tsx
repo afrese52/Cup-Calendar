@@ -14,6 +14,23 @@ import { supabase } from '@/services/supabase';
 
 const MAX_FILE_BYTES = 25 * 1024 * 1024;
 
+type PickedImportSource = {
+  name: string;
+  uri: string;
+  size: number | null | undefined;
+  readText: () => Promise<string | undefined>;
+};
+
+function getUtf8ByteLength(value: string) {
+  let byteLength = 0;
+  for (const character of value) {
+    const codePoint = character.codePointAt(0) ?? 0;
+    byteLength += codePoint <= 0x7f ? 1 : codePoint <= 0x7ff ? 2 : codePoint <= 0xffff ? 3 : 4;
+    if (byteLength > MAX_FILE_BYTES) return byteLength;
+  }
+  return byteLength;
+}
+
 function formatImportTime(value: string, timeZone: string) {
   return new Intl.DateTimeFormat('de-DE', {
     day: '2-digit',
@@ -85,43 +102,88 @@ export default function AdminImportScreen() {
 
   const chooseFile = async () => {
     setError(null);
-    setPreview(null);
-    setImportResult(null);
     try {
-      const selection = await DocumentPicker.getDocumentAsync({
+      let selection: PickedImportSource | null = null;
+      let canceled = false;
+
+      const picked = await DocumentPicker.getDocumentAsync({
         type: '*/*',
-        copyToCacheDirectory: true,
+        copyToCacheDirectory: Platform.OS !== 'android',
         multiple: false,
       });
-      if (selection.canceled) return;
+      canceled = picked.canceled;
+      const asset = picked.canceled ? null : picked.assets[0];
+      if (asset) {
+        selection = {
+          name: asset.name,
+          uri: asset.uri,
+          size: asset.size
+            ?? (Platform.OS === 'web'
+              ? asset.file?.size
+              : Platform.OS === 'ios'
+                ? new ExpoFile(asset.uri).size
+                : undefined),
+          readText: () => {
+            if (Platform.OS === 'web') return asset.file?.text() ?? Promise.resolve(undefined);
+            return new ExpoFile(asset.uri).text();
+          },
+        };
+      }
 
-      const asset = selection.assets[0];
-      if (!asset) {
-        setError('Es wurde keine Datei ausgewählt.');
+      if (canceled) {
+        setError(pickedFile
+          ? 'Dateiauswahl abgebrochen. Die zuvor ausgewählte Datei bleibt erhalten.'
+          : 'Dateiauswahl abgebrochen. Du kannst jederzeit erneut eine Datei auswählen.');
         return;
       }
-      if (!/\.(mht|mhtml)$/i.test(asset.name)) {
+
+      if (!selection) {
+        setPickedFile(null);
+        setPreview(null);
+        setError('Es wurde keine Datei bereitgestellt. Bitte wähle sie erneut aus.');
+        return;
+      }
+      if (!/\.(mht|mhtml)$/i.test(selection.name)) {
+        setPickedFile(null);
+        setPreview(null);
         setError('Bitte wähle eine MHT- oder MHTML-Datei aus.');
         return;
       }
-      if (asset.size != null && asset.size > MAX_FILE_BYTES) {
-        setError('Die Datei ist größer als 25 MB.');
+      if (!selection.uri) {
+        setPickedFile(null);
+        setPreview(null);
+        setError('Die Datei ist nicht mehr verfügbar. Bitte wähle sie erneut aus.');
+        return;
+      }
+      const fileSize = selection.size;
+      if (fileSize != null && fileSize > MAX_FILE_BYTES) {
+        setPickedFile(null);
+        setPreview(null);
+        setError('Die Datei ist größer als 25 MB. Bitte wähle eine kleinere Datei aus.');
         return;
       }
 
-      const content = Platform.OS === 'web'
-        ? await asset.file?.text()
-        : await new ExpoFile(asset.uri).text();
+      const content = await selection.readText();
       if (content === undefined) {
-        throw new Error('Der Browser konnte den Inhalt der ausgewählten Datei nicht lesen. Bitte wähle sie erneut aus.');
+        throw new Error('Die Datei konnte nicht gelesen werden.');
+      }
+      if (fileSize == null && getUtf8ByteLength(content) > MAX_FILE_BYTES) {
+        setPickedFile(null);
+        setPreview(null);
+        setError('Die Datei ist größer als 25 MB. Bitte wähle eine kleinere Datei aus.');
+        return;
       }
       if (!content.trim()) {
+        setPickedFile(null);
+        setPreview(null);
         setError('Die ausgewählte Datei ist leer.');
         return;
       }
-      setPickedFile({ name: asset.name, content });
+      setPickedFile({ name: selection.name, content });
+      setPreview(null);
+      setImportResult(null);
     } catch (pickError) {
-      setError(pickError instanceof Error ? pickError.message : 'Die Datei konnte nicht geöffnet werden.');
+      setError('Die Datei konnte nicht gelesen werden. Bitte prüfe, ob sie noch verfügbar ist, und wähle sie erneut aus.');
     }
   };
 
