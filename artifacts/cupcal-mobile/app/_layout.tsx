@@ -41,7 +41,6 @@ function RootLayoutNav() {
       <StatusBar style="light" />
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }}>
         <Stack.Screen name="(tabs)" />
-        <Stack.Screen name="auth/reset" />
         <Stack.Screen name="event/[id]" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="admin/import" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="auth/reset" options={{ animation: 'fade' }} />

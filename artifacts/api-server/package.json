@@ -10,6 +10,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "dry-run:mht": "node ./scripts/run-dry-run-mht-import.mjs",
     "test:mht-import": "node --test ./scripts/dry-run-mht-import.test.mjs",
+    "test:bookmark-isolation": "node --test ./scripts/bookmark-account-isolation.test.mjs",
     "test:admin-import": "node --experimental-strip-types --test ./src/services/*.test.mjs"
   },
   "dependencies": {

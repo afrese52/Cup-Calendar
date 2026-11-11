@@ -77,28 +77,9 @@ export interface TournamentEvent {
   featured: boolean;
 }
 
-export type EventListResponseSourceStatusState = typeof EventListResponseSourceStatusState[keyof typeof EventListResponseSourceStatusState];
-
-
-export const EventListResponseSourceStatusState = {
-  unknown: 'unknown',
-  running: 'running',
-  ok: 'ok',
-  failed: 'failed',
-} as const;
-
-export type EventListResponseSourceStatus = {
-  state: EventListResponseSourceStatusState;
-  /** @nullable */
-  lastAttemptAt: string | null;
-  /** @nullable */
-  lastSuccessAt: string | null;
-};
-
 export interface EventListResponse {
   count: number;
   data: TournamentEvent[];
-  sourceStatus: EventListResponseSourceStatus;
 }
 
 /**

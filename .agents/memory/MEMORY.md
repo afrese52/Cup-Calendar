@@ -1,7 +1,10 @@
 - [Expo-Vorschau-Timing](expo-preview-timing.md) — Screenshots direkt nach einem Expo-Neustart können vor dem ersten Web-Bundle leer sein.
 - [Expo-SQLite-Web-Fallback](expo-sqlite-web-fallback.md) — Ein Laufzeit-Platform-Check verhindert nicht, dass Metro SQLite-WASM fürs Web bündelt.
-- [FortniteAPI.io-Erreichbarkeit](fortniteapi-host-availability.md) — Vor Änderungen an der CupCal-Datenquelle zuerst den aktuellen DNS- und API-Status prüfen.
+- [Manueller CupCal-Terminimport](cupcal-manual-event-import.md) — Der Kalender erhält Termine über den freigegebenen MHT/MHTML-Import, nicht über FortniteAPI.io.
 - [AsyncStorage in Node-Tests](async-storage-node-tests.md) — Node-Tests für den Expo-Speicher brauchen eine Browser-Speicherattrappe und ggf. Default-Export-Auflösung.
 - [Asynchrone Expo-Bildschirmtests](async-expo-screen-tests.md) — React-Native-Testing-Library-14-Renderings und Interaktionen immer awaiten, bevor der Zustand geprüft wird.
+- [Expo-Router-Testdateien](expo-router-test-placement.md) — Bildschirmtests außerhalb von `app/` ablegen, damit Expo sie nicht als Routen bündelt.
 - [Supabase-Projekt-URL](supabase-base-url.md) — Supabase-Clients brauchen die Projektbasis; API-Endpfade können Auth-Fehler wie 401 oder 404 auslösen.
+- [Supabase-Migrationen für Live-Tests](supabase-live-migrations.md) — Vor Konto-Isolationstests muss das Live-Schema die lokalen Favoritenmigrationen enthalten.
 - [Bookmark-Zeitordnung](bookmark-clock-ordering.md) — Favoritenänderungen anhand serverseitiger Revisionen statt Gerätezeitstempeln ordnen.
+- [Favoriten über Geräte hinweg](cross-device-bookmarks.md) — Favoriten gehören zum angemeldeten Konto und sollen auf all seinen Geräten erscheinen.

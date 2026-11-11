@@ -1,7 +1,7 @@
 import React from 'react';
 import { beforeEach, expect, jest, test } from '@jest/globals';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
-import SettingsScreen from './settings';
+import SettingsScreen from '../app/(tabs)/settings';
 import { supabase } from '@/services/supabase';
 
 type AuthListener = (event: string, session: unknown) => void;

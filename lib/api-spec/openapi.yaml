@@ -206,22 +206,7 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/TournamentEvent"
-        sourceStatus:
-          type: object
-          properties:
-            state:
-              type: string
-              enum: [unknown, running, ok, failed]
-            lastAttemptAt:
-              type: string
-              format: date-time
-              nullable: true
-            lastSuccessAt:
-              type: string
-              format: date-time
-              nullable: true
-          required: [state, lastAttemptAt, lastSuccessAt]
-      required: [count, data, sourceStatus]
+      required: [count, data]
     AdminImportAccess:
       type: object
       properties:

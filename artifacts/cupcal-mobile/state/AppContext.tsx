@@ -12,6 +12,7 @@ import {
   setBookmarksFavorite,
   shouldUploadBookmarkChange,
 } from '@/services/localBookmarkStore';
+import { getBookmarkSyncErrorMessage } from '@/services/bookmarkSyncErrors';
 import { fetchRemoteBookmarks, saveRemoteBookmark, supabase } from '@/services/supabase';
 
 interface AppContextValue {
@@ -20,7 +21,6 @@ interface AppContextValue {
   isReady: boolean;
   authReady: boolean;
   isAuthenticated: boolean;
-  isLiveData: boolean;
   eventError: string | null;
   storageError: string | null;
   bookmarkSyncStatus: 'local' | 'syncing' | 'synced' | 'pending';
@@ -41,13 +41,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     useState<AppContextValue['bookmarkSyncStatus']>('local');
   const [bookmarkSyncError, setBookmarkSyncError] = useState<string | null>(null);
   const [eventsReady, setEventsReady] = useState(false);
-  const [isLiveData, setIsLiveData] = useState(false);
   const [eventError, setEventError] = useState<string | null>(null);
   const [storageError, setStorageError] = useState<string | null>(null);
-  const hasLoadedLiveData = useRef(false);
+  const hasLoadedServerEvents = useRef(false);
   const currentBookmarkIds = useRef<string[]>([]);
   const currentUserId = useRef<string | null>(null);
   const syncingUsers = useRef(new Set<string>());
+  const queuedSyncUsers = useRef(new Set<string>());
   const eventsQuery = useGetEvents(undefined, {
     query: {
       staleTime: 5 * 60 * 1000,
@@ -106,52 +106,68 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const syncBookmarks = useCallback(async (targetUserId: string) => {
     if (
       !supabase ||
-      currentUserId.current !== targetUserId ||
-      syncingUsers.current.has(targetUserId)
+      currentUserId.current !== targetUserId
     ) return;
+    if (syncingUsers.current.has(targetUserId)) {
+      queuedSyncUsers.current.add(targetUserId);
+      return;
+    }
+
     syncingUsers.current.add(targetUserId);
-    setBookmarkSyncStatus('syncing');
-    setBookmarkSyncError(null);
 
     try {
-      const pending = await prepareBookmarksForSync(targetUserId);
-      let remoteBookmarks = await fetchRemoteBookmarks(targetUserId);
-      let hasWriteFailure = false;
+      do {
+        queuedSyncUsers.current.delete(targetUserId);
+        if (currentUserId.current !== targetUserId) break;
 
-      for (const [eventId, change] of Object.entries(pending)) {
-        const remote = remoteBookmarks.find((bookmark) => bookmark.event_id === eventId);
-        if (shouldUploadBookmarkChange(change, remote)) {
-          try {
-            await saveRemoteBookmark(eventId, change);
-          } catch {
-            hasWriteFailure = true;
-            break;
+        setBookmarkSyncStatus('syncing');
+        setBookmarkSyncError(null);
+
+        try {
+          const pending = await prepareBookmarksForSync(targetUserId);
+          let remoteBookmarks = await fetchRemoteBookmarks(targetUserId);
+          let writeError: unknown = null;
+
+          for (const [eventId, change] of Object.entries(pending)) {
+            const remote = remoteBookmarks.find((bookmark) => bookmark.event_id === eventId);
+            if (shouldUploadBookmarkChange(change, remote)) {
+              try {
+                await saveRemoteBookmark(eventId, change);
+              } catch (error) {
+                writeError = error;
+                break;
+              }
+            }
+          }
+
+          remoteBookmarks = await fetchRemoteBookmarks(targetUserId);
+          const reconciled = await reconcileBookmarks(targetUserId, remoteBookmarks);
+          if (currentUserId.current === targetUserId) {
+            currentBookmarkIds.current = reconciled.eventIds;
+            setBookmarkedIds(reconciled.eventIds);
+            const hasPendingChanges = reconciled.pendingCount > 0 || writeError !== null;
+            setBookmarkSyncStatus(hasPendingChanges ? 'pending' : 'synced');
+            setBookmarkSyncError(
+              !hasPendingChanges
+                ? null
+                : writeError
+                  ? getBookmarkSyncErrorMessage(writeError)
+                  : 'Änderungen bleiben auf diesem Gerät gespeichert und werden später erneut synchronisiert.',
+            );
+          }
+        } catch (error) {
+          if (currentUserId.current === targetUserId) {
+            setBookmarkSyncStatus('pending');
+            setBookmarkSyncError(getBookmarkSyncErrorMessage(error));
           }
         }
-      }
-
-      remoteBookmarks = await fetchRemoteBookmarks(targetUserId);
-      const reconciled = await reconcileBookmarks(targetUserId, remoteBookmarks);
-      if (currentUserId.current === targetUserId) {
-        currentBookmarkIds.current = reconciled.eventIds;
-        setBookmarkedIds(reconciled.eventIds);
-        const hasPendingChanges = reconciled.pendingCount > 0 || hasWriteFailure;
-        setBookmarkSyncStatus(hasPendingChanges ? 'pending' : 'synced');
-        setBookmarkSyncError(
-          hasPendingChanges
-            ? 'Änderungen bleiben auf diesem Gerät gespeichert und werden später erneut synchronisiert.'
-            : null,
-        );
-      }
-    } catch {
-      if (currentUserId.current === targetUserId) {
-        setBookmarkSyncStatus('pending');
-        setBookmarkSyncError(
-          'Die Synchronisierung ist gerade nicht möglich. Deine Favoriten bleiben auf diesem Gerät gespeichert.',
-        );
-      }
+      } while (
+        queuedSyncUsers.current.has(targetUserId) &&
+        currentUserId.current === targetUserId
+      );
     } finally {
       syncingUsers.current.delete(targetUserId);
+      queuedSyncUsers.current.delete(targetUserId);
     }
   }, []);
 
@@ -218,7 +234,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     async function loadEvents() {
       try {
         const cachedEvents = await loadCachedEvents();
-        if (isMounted && cachedEvents !== null && !hasLoadedLiveData.current) {
+        if (isMounted && cachedEvents !== null && !hasLoadedServerEvents.current) {
           setEvents(cachedEvents);
         }
       } catch {
@@ -239,25 +255,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let isMounted = true;
     if (eventsQuery.data) {
-      hasLoadedLiveData.current = true;
+      hasLoadedServerEvents.current = true;
       setEvents(eventsQuery.data.data);
-      const sourceIsCurrent = eventsQuery.data.sourceStatus.state === 'ok';
-      setIsLiveData(sourceIsCurrent);
-      setEventError(
-        sourceIsCurrent
-          ? null
-          : eventsQuery.data.data.length > 0 || events.length > 0
-            ? 'Die Turnierquelle ist derzeit nicht erreichbar · gespeicherte Termine werden angezeigt.'
-            : 'Die Turnierquelle ist derzeit nicht erreichbar · es sind keine gespeicherten Termine vorhanden.',
-      );
+      setEventError(null);
       void saveEventsToCache(eventsQuery.data.data).catch(() => {
-        if (isMounted) setStorageError('Live-Termine konnten nicht offline gespeichert werden.');
+        if (isMounted) setStorageError('Termine konnten nicht offline gespeichert werden.');
       });
     } else if (eventsQuery.isError) {
-      setIsLiveData(false);
       setEventError(
         events.length > 0
-          ? 'Live-Daten nicht erreichbar · gespeicherte Termine werden angezeigt.'
+          ? 'Die Termin-Datenbank ist nicht erreichbar · gespeicherte Termine werden angezeigt.'
           : 'Der Kalender konnte nicht geladen werden. Bitte prüfe die Verbindung.',
       );
     }
@@ -315,7 +322,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       isReady,
       authReady,
       isAuthenticated,
-      isLiveData,
       eventError,
       storageError,
       bookmarkSyncStatus,
@@ -330,7 +336,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       isReady,
       authReady,
       isAuthenticated,
-      isLiveData,
       eventError,
       storageError,
       bookmarkSyncStatus,

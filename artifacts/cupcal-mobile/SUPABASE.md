@@ -66,8 +66,10 @@ bestätigen das App-Schema nicht.
 | iOS | App vollständig beendet | E-Mail-Link öffnet CupCal; Token wird angenommen |
 | iOS | CupCal bereits geöffnet | Link wechselt zur Wiederherstellung; Token wird angenommen |
 
-Für die kontobasierte Merkliste muss außerdem die Migration
-`artifacts/api-server/supabase/migrations/0002_user_event_bookmarks.sql` auf
-dem Supabase-Projekt ausgeführt werden. Sie richtet die Favoritentabelle,
-Zugriffsregeln und den konfliktgeprüften Schreibweg ein. Ohne diese Migration
-bleiben Favoriten lokal gespeichert; CupCal zeigt den ausstehenden Abgleich an.
+Für die kontobasierte Merkliste müssen die Migrationen `0002`, `0003` und
+`0004` in dieser Reihenfolge aus `artifacts/api-server/supabase/migrations/`
+auf dem Supabase-Projekt ausgeführt werden. Sie richten die Favoritentabelle
+und Zugriffsregeln ein,
+stellen konfliktgeprüfte Schreibvorgänge sicher und aktivieren Realtime für
+Änderungen auf weiteren Geräten. Ohne diese Migrationen bleiben Favoriten lokal
+gespeichert; CupCal zeigt den ausstehenden Abgleich an.

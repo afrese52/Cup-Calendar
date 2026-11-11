@@ -3,7 +3,6 @@ import { Router, type IRouter } from "express";
 import { z } from "zod";
 import { logger } from "../lib/logger";
 import { getSupabaseAdmin } from "../services/supabase";
-import { getTournamentSyncStatus } from "../services/tournaments";
 
 const router: IRouter = Router();
 
@@ -60,7 +59,6 @@ router.get("/v1/events", async (req, res, next) => {
       return;
     }
 
-    const syncStatus = getTournamentSyncStatus();
     const events = (data ?? []).map((event) => ({
       id: event.id,
       title: event.title,
@@ -83,7 +81,7 @@ router.get("/v1/events", async (req, res, next) => {
       return;
     }
 
-    res.json({ count: events.length, data: events, sourceStatus: syncStatus });
+    res.json({ count: events.length, data: events });
   } catch (error) {
     next(error);
   }

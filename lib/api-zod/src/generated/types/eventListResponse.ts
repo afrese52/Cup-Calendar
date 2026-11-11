@@ -5,11 +5,9 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
-import type { EventListResponseSourceStatus } from './eventListResponseSourceStatus';
 import type { TournamentEvent } from './tournamentEvent';
 
 export interface EventListResponse {
   count: number;
   data: TournamentEvent[];
-  sourceStatus: EventListResponseSourceStatus;
 }

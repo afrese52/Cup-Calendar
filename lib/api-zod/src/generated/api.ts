@@ -42,12 +42,7 @@ export const GetEventsResponse = zod.object({
   "startTime": zod.coerce.date(),
   "endTime": zod.coerce.date(),
   "featured": zod.boolean()
-})),
-  "sourceStatus": zod.object({
-  "state": zod.enum(['unknown', 'running', 'ok', 'failed']),
-  "lastAttemptAt": zod.coerce.date().nullable(),
-  "lastSuccessAt": zod.coerce.date().nullable()
-})
+}))
 })
 
 

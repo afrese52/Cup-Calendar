@@ -62,7 +62,7 @@ function CategoryLegend() {
 
 export default function CalendarScreen() {
   const colors = useColors();
-  const { events, bookmarkedIds, toggleBookmark, eventError, isLiveData, storageError } = useCupCal();
+  const { events, bookmarkedIds, toggleBookmark, eventError, storageError } = useCupCal();
   const [selectedDate, setSelectedDate] = useState(() => new Date());
   const [currentMonth, setCurrentMonth] = useState(
     () => new Date(new Date().getFullYear(), new Date().getMonth(), 1),
@@ -145,12 +145,12 @@ export default function CalendarScreen() {
             ]}
           >
             <Feather
-              name={eventError ? 'alert-triangle' : 'wifi'}
+              name={eventError ? 'alert-triangle' : 'calendar'}
               size={11}
               color={eventError ? colors.warning : colors.primary}
             />
             <Text style={[styles.previewBadgeText, { color: eventError ? colors.warning : colors.primary }]}>
-              {isLiveData ? 'LIVE-DATEN' : eventError ? 'QUELLE OFFLINE' : 'DATEN WERDEN GELADEN'}
+              {eventError ? 'TERMINE OFFLINE' : 'MANUELLER IMPORT'}
             </Text>
           </View>
         </View>

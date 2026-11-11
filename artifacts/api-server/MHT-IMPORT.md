@@ -6,6 +6,10 @@ geschützte Upload-Maske für gespeicherte Fortnite-Spielpläne (`.mht` oder
 Bestätigung werden eindeutig zugeordnete zukünftige Termine in
 `public.fortnite_events` geschrieben.
 
+Der Kalender verwendet keinen automatischen FortniteAPI.io-Abgleich. Termine
+gelangen ausschließlich über diesen freigegebenen manuellen Import in die
+Datenbank.
+
 Der Import ist auf Konten beschränkt, deren E-Mail-Adresse in der
 serverseitigen Umgebungsvariable `CUPCAL_IMPORT_ADMIN_EMAILS` steht. Mehrere
 Adressen werden durch Kommas getrennt. Ohne diese Freigabeliste bleibt der
