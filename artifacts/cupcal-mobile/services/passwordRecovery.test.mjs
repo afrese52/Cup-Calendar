@@ -125,6 +125,42 @@ test('erlaubt nur den einmaligen Passwortwechsel mit aktueller Sitzung', async (
   await assert.rejects(recovery.saveNewPassword('another-password'), /gültigen Wiederherstellungslink/i);
 });
 
+test('weist parallele Passwortwechsel verständlich ab und sendet nur eine Serveranfrage', async () => {
+  let updateCalls = 0;
+  let finishUpdate;
+  let markUpdateStarted;
+  const updateStarted = new Promise((resolve) => {
+    markUpdateStarted = resolve;
+  });
+  const recovery = createPasswordRecovery(createAuth({
+    updateUser: async () => {
+      updateCalls += 1;
+      markUpdateStarted();
+      return new Promise((resolve) => {
+        finishUpdate = resolve;
+      });
+    },
+  }));
+  recovery.markRecoverySession(true);
+
+  const firstSave = recovery.saveNewPassword('strong-new-password');
+  await updateStarted;
+  await assert.rejects(
+    recovery.saveNewPassword('another-password'),
+    /Passwortwechsel läuft bereits\. Bitte warte/i,
+  );
+  assert.equal(
+    friendlyAuthError(new Error('Der Passwortwechsel läuft bereits. Bitte warte, bis er abgeschlossen ist.')),
+    'Der Passwortwechsel läuft bereits. Bitte warte, bis er abgeschlossen ist.',
+  );
+  assert.equal(updateCalls, 1);
+
+  finishUpdate({ error: null });
+  await firstSave;
+  assert.equal(updateCalls, 1);
+  assert.equal(recovery.isPending(), false);
+});
+
 test('behält die Wiederherstellungssitzung nach einem Netzwerkfehler für den erneuten Versuch', async () => {
   let updateAttempts = 0;
   const recovery = createPasswordRecovery(createAuth({

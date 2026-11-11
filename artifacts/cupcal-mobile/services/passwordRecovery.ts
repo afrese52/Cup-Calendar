@@ -70,6 +70,7 @@ function isTransientConnectionError(error: unknown): boolean {
 
 export function createPasswordRecovery(auth: PasswordRecoveryAuth) {
   let recoverySessionPending = false;
+  let passwordSavePending = false;
   let lastPasswordResetUrl: string | null = null;
   let lastPasswordResetPromise: Promise<boolean> | null = null;
 
@@ -133,38 +134,47 @@ export function createPasswordRecovery(auth: PasswordRecoveryAuth) {
     },
     handlePasswordResetUrl,
     async saveNewPassword(password: string): Promise<void> {
-      if (!recoverySessionPending) {
-        throw new Error('Bitte öffne zuerst einen gültigen Wiederherstellungslink.');
+      if (passwordSavePending) {
+        throw new Error('Der Passwortwechsel läuft bereits. Bitte warte, bis er abgeschlossen ist.');
       }
+      passwordSavePending = true;
 
-      let sessionResult: Awaited<ReturnType<PasswordRecoveryAuth['getSession']>>;
       try {
-        sessionResult = await auth.getSession();
-      } catch (error) {
-        if (!isTransientConnectionError(error)) recoverySessionPending = false;
-        throw error;
-      }
-      if (sessionResult.error) {
-        if (!isTransientConnectionError(sessionResult.error)) recoverySessionPending = false;
-        throw sessionResult.error;
-      }
-      if (!sessionResult.data.session) {
+        if (!recoverySessionPending) {
+          throw new Error('Bitte öffne zuerst einen gültigen Wiederherstellungslink.');
+        }
+
+        let sessionResult: Awaited<ReturnType<PasswordRecoveryAuth['getSession']>>;
+        try {
+          sessionResult = await auth.getSession();
+        } catch (error) {
+          if (!isTransientConnectionError(error)) recoverySessionPending = false;
+          throw error;
+        }
+        if (sessionResult.error) {
+          if (!isTransientConnectionError(sessionResult.error)) recoverySessionPending = false;
+          throw sessionResult.error;
+        }
+        if (!sessionResult.data.session) {
+          recoverySessionPending = false;
+          throw new Error('Die Wiederherstellungssitzung ist abgelaufen oder ungültig. Fordere bitte einen neuen Link an.');
+        }
+
+        let error: Awaited<ReturnType<PasswordRecoveryAuth['updateUser']>>['error'];
+        try {
+          ({ error } = await auth.updateUser({ password }));
+        } catch (caughtError) {
+          if (isUnusableRecoveryError(caughtError)) recoverySessionPending = false;
+          throw caughtError;
+        }
+        if (error) {
+          if (isUnusableRecoveryError(error)) recoverySessionPending = false;
+          throw error;
+        }
         recoverySessionPending = false;
-        throw new Error('Die Wiederherstellungssitzung ist abgelaufen oder ungültig. Fordere bitte einen neuen Link an.');
+      } finally {
+        passwordSavePending = false;
       }
-
-      let error: Awaited<ReturnType<PasswordRecoveryAuth['updateUser']>>['error'];
-      try {
-        ({ error } = await auth.updateUser({ password }));
-      } catch (caughtError) {
-        if (isUnusableRecoveryError(caughtError)) recoverySessionPending = false;
-        throw caughtError;
-      }
-      if (error) {
-        if (isUnusableRecoveryError(error)) recoverySessionPending = false;
-        throw error;
-      }
-      recoverySessionPending = false;
     },
   };
 }

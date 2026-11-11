@@ -21,6 +21,9 @@ export function friendlyAuthError(
   const message = rawMessage.toLowerCase();
   const code = typeof errorDetails.code === 'string' ? errorDetails.code.toLowerCase() : '';
 
+  if (message.includes('passwortwechsel läuft bereits')) {
+    return 'Der Passwortwechsel läuft bereits. Bitte warte, bis er abgeschlossen ist.';
+  }
   if (code === 'email_address_invalid' || message.includes('invalid email')) {
     return 'Bitte prüfe deine E-Mail-Adresse.';
   }
