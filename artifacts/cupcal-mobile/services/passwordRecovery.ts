@@ -35,7 +35,7 @@ function isPasswordResetRoute(url: string): boolean {
 }
 
 function isUnusableRecoveryError(error: unknown): boolean {
-  const message = error instanceof Error ? error.message.toLowerCase() : '';
+  const message = getErrorMessage(error).toLowerCase();
   return (
     message.includes('expired')
     || message.includes('invalid token')
@@ -44,6 +44,27 @@ function isUnusableRecoveryError(error: unknown): boolean {
     || message.includes('already used')
     || message.includes('email link is invalid')
     || message.includes('otp')
+  );
+}
+
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (typeof error === 'object' && error !== null && 'message' in error) {
+    const message = (error as { message?: unknown }).message;
+    if (typeof message === 'string') return message;
+  }
+  return '';
+}
+
+function isTransientConnectionError(error: unknown): boolean {
+  const message = getErrorMessage(error).toLowerCase();
+  return (
+    message.includes('network')
+    || message.includes('fetch failed')
+    || message.includes('failed to fetch')
+    || message.includes('connection')
+    || message.includes('timed out')
+    || message.includes('timeout')
   );
 }
 
@@ -120,11 +141,11 @@ export function createPasswordRecovery(auth: PasswordRecoveryAuth) {
       try {
         sessionResult = await auth.getSession();
       } catch (error) {
-        recoverySessionPending = false;
+        if (!isTransientConnectionError(error)) recoverySessionPending = false;
         throw error;
       }
       if (sessionResult.error) {
-        recoverySessionPending = false;
+        if (!isTransientConnectionError(sessionResult.error)) recoverySessionPending = false;
         throw sessionResult.error;
       }
       if (!sessionResult.data.session) {
@@ -132,7 +153,13 @@ export function createPasswordRecovery(auth: PasswordRecoveryAuth) {
         throw new Error('Die Wiederherstellungssitzung ist abgelaufen oder ungültig. Fordere bitte einen neuen Link an.');
       }
 
-      const { error } = await auth.updateUser({ password });
+      let error: Awaited<ReturnType<PasswordRecoveryAuth['updateUser']>>['error'];
+      try {
+        ({ error } = await auth.updateUser({ password }));
+      } catch (caughtError) {
+        if (isUnusableRecoveryError(caughtError)) recoverySessionPending = false;
+        throw caughtError;
+      }
       if (error) {
         if (isUnusableRecoveryError(error)) recoverySessionPending = false;
         throw error;

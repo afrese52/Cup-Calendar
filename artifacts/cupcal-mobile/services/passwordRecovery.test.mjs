@@ -125,6 +125,51 @@ test('erlaubt nur den einmaligen Passwortwechsel mit aktueller Sitzung', async (
   await assert.rejects(recovery.saveNewPassword('another-password'), /gültigen Wiederherstellungslink/i);
 });
 
+test('behält die Wiederherstellungssitzung nach einem Netzwerkfehler für den erneuten Versuch', async () => {
+  let updateAttempts = 0;
+  const recovery = createPasswordRecovery(createAuth({
+    updateUser: async () => {
+      updateAttempts += 1;
+      if (updateAttempts === 1) throw new Error('Network request failed');
+      return { error: null };
+    },
+  }));
+  recovery.markRecoverySession(true);
+
+  await assert.rejects(
+    recovery.saveNewPassword('strong-new-password'),
+    /Network request failed/i,
+  );
+  assert.equal(recovery.isPending(), true);
+  assert.equal(
+    friendlyAuthError(new Error('Network request failed')),
+    'Keine Verbindung möglich. Prüfe deine Internetverbindung und versuche es erneut.',
+  );
+
+  await recovery.saveNewPassword('strong-new-password');
+  assert.equal(updateAttempts, 2);
+  assert.equal(recovery.isPending(), false);
+});
+
+test('behält die Wiederherstellungssitzung bei einem vorübergehenden Sitzungs-Netzwerkfehler', async () => {
+  let sessionAttempts = 0;
+  const recovery = createPasswordRecovery(createAuth({
+    getSession: async () => {
+      sessionAttempts += 1;
+      if (sessionAttempts === 1) throw new Error('Network request failed');
+      return { data: { session: validSession }, error: null };
+    },
+  }));
+  recovery.markRecoverySession(true);
+
+  await assert.rejects(recovery.saveNewPassword('strong-new-password'), /Network request failed/i);
+  assert.equal(recovery.isPending(), true);
+
+  await recovery.saveNewPassword('strong-new-password');
+  assert.equal(sessionAttempts, 2);
+  assert.equal(recovery.isPending(), false);
+});
+
 test('verarbeitet Supabase-Recovery-Links ohne CupCal-Flow-Parameter', async () => {
   let exchangedCode;
   const recovery = createPasswordRecovery(createAuth({
