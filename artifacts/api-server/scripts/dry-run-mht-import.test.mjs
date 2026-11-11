@@ -83,6 +83,66 @@ test("erkennt FNCS Reload Solos als eindeutiges Solo-Format", () => {
   assert.deepEqual(result.events[0].review_warnings, []);
 });
 
+test("erkennt ausdrücklich angegebene Solo-, Duo-, Trio- und Squads-Formate", () => {
+  const formats = [
+    ["Solo Cash Cup", "Solo"],
+    ["Duos Reload Cup", "Duos"],
+    ["Trio Victory Cup", "Trios"],
+    ["Squads Battle Royale Cup", "Squads"],
+  ];
+  const cards = formats.map(([title], index) => `
+    <a id="schedule-event-link-format-${index}"
+      href="/competitive/events/Format${index}?round=Round${index}"
+      aria-label="19:00–20:00 Uhr - ${title}">
+      <span>${title}</span>
+    </a>`).join("");
+  const result = parseMhtSchedule(makeMht(`
+    <html><body><h2>10. November 2026</h2>${cards}</body></html>
+  `));
+
+  assert.equal(result.validCount, formats.length);
+  assert.deepEqual(result.events.map((event) => event.team_format), formats.map(([, format]) => format));
+  assert.deepEqual(result.issues, []);
+});
+
+test("sperrt ein unbekanntes oder widersprüchliches Spielformat mit Kennung und Titel", () => {
+  const html = `
+    <html><body>
+      <h2>10. November 2026</h2>
+      <a id="schedule-event-link-unknown"
+        href="/competitive/events/UnknownCup?round=UnknownRound"
+        aria-label="19:00–22:00 Uhr - Team Cash Cup">
+        <span>Team Cash Cup</span>
+      </a>
+      <a id="schedule-event-link-conflict"
+        href="/competitive/events/ConflictCup?round=ConflictRound"
+        aria-label="19:00–22:00 Uhr - Solo Duos Cup">
+        <span>Solo Duos Cup</span>
+      </a>
+    </body></html>`;
+  const result = parseMhtSchedule(makeMht(html));
+
+  assert.equal(result.cardCount, 2);
+  assert.equal(result.validCount, 0);
+  assert.equal(result.invalidCount, 2);
+  assert.deepEqual(result.events, []);
+  assert.deepEqual(
+    result.issues.map(({ id, title, errors }) => ({ id, title, errors })),
+    [
+      {
+        id: "epic:UnknownCup:UnknownRound",
+        title: "Team Cash Cup",
+        errors: ["Spielformat fehlt oder ist nicht eindeutig angegeben."],
+      },
+      {
+        id: "epic:ConflictCup:ConflictRound",
+        title: "Solo Duos Cup",
+        errors: ["Spielformat fehlt oder ist nicht eindeutig angegeben."],
+      },
+    ],
+  );
+});
+
 test("meldet unvollständige Karten, statt sie als importierbar auszugeben", () => {
   const html = `
     <html><body>

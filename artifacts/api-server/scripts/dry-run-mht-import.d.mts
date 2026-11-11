@@ -15,6 +15,8 @@ export interface ParsedMhtEvent {
 }
 
 export interface ParsedMhtIssue {
+  anchorId?: string;
+  id?: string;
   title?: string;
   errors: string[];
 }

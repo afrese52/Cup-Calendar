@@ -294,14 +294,18 @@ function mapGameMode(title) {
   return "Battle Royale";
 }
 
-function mapTeamFormat(title) {
-  const lower = title.toLowerCase();
-  if (/\bsolos?\b/.test(lower)) return { value: "Solo", inferred: false };
-  if (/\bduos?\b|\bduo\b/.test(lower)) return { value: "Duos", inferred: false };
-  if (/\btrios?\b|\btrio\b/.test(lower)) return { value: "Trios", inferred: false };
-  if (/\bsquads?\b/.test(lower)) return { value: "Squads", inferred: false };
-  if (/\bteam\b/.test(lower)) return { value: "Squads", inferred: true };
-  return { value: "Solo", inferred: true };
+function mapTeamFormat(cardText) {
+  const formats = [
+    [/\bsolos?\b/i, "Solo"],
+    [/\bduos?\b/i, "Duos"],
+    [/\btrios?\b/i, "Trios"],
+    [/\bsquads?\b/i, "Squads"],
+  ];
+  const matches = formats
+    .filter(([pattern]) => pattern.test(cardText))
+    .map(([, format]) => format);
+  const distinctMatches = [...new Set(matches)];
+  return distinctMatches.length === 1 ? distinctMatches[0] : null;
 }
 
 function getRegion(sourceUrl, regionOverride) {
@@ -424,10 +428,16 @@ function extractEventAnchors(html, sourceUrl, timeZone, region) {
       if (end <= start) throw new Error("Die Endzeit liegt nicht nach der Startzeit.");
 
       const tournamentType = mapTournamentType(title);
-      const teamFormat = mapTeamFormat(title);
-      const warnings = [];
-      if (teamFormat.inferred) {
-        warnings.push("Spielformat aus Titel nicht eindeutig; Standardzuordnung prüfen.");
+      const teamFormat = mapTeamFormat(`${title} ${attributes["aria-label"] ?? ""}`);
+      if (!teamFormat) {
+        issues.push({
+          anchorId: attributes.id,
+          id,
+          title,
+          errors: ["Spielformat fehlt oder ist nicht eindeutig angegeben."],
+        });
+        cursor = closingAnchorPattern.lastIndex;
+        continue;
       }
 
       events.push({
@@ -437,13 +447,13 @@ function extractEventAnchors(html, sourceUrl, timeZone, region) {
         poster_url: null,
         region,
         game_mode: mapGameMode(title),
-        team_format: teamFormat.value,
+        team_format: teamFormat,
         tournament_type: tournamentType,
         category: mapCategory(title, tournamentType),
         start_time: new Date(start).toISOString(),
         end_time: new Date(end).toISOString(),
         is_featured: false,
-        review_warnings: warnings,
+        review_warnings: [],
       });
     } catch (error) {
       issues.push({
@@ -557,8 +567,11 @@ export async function runDryRun(options) {
       `  ${event.start_time} · ${event.title} · ${event.id}`,
     );
   }
-  for (const issue of result.issues.slice(0, 10)) {
-    console.log(`  FEHLER ${issue.title || issue.anchorId}: ${issue.errors.join(" ")}`);
+  for (const issue of result.issues) {
+    const eventReference = issue.id ? `${issue.id} · ` : "";
+    console.log(
+      `  FEHLER ${eventReference}${issue.title || issue.anchorId}: ${issue.errors.join(" ")}`,
+    );
   }
   return result;
 } // Keep the shared parser free of command-line side effects.
