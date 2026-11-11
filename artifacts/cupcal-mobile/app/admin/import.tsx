@@ -25,6 +25,24 @@ function formatImportTime(value: string, timeZone: string) {
   }).format(new Date(value));
 }
 
+function getImportPeriod(preview: MhtImportPreview) {
+  const eligibleEvents = preview.events.filter((event) => event.warnings.length === 0);
+  if (eligibleEvents.length === 0) return null;
+
+  const start = eligibleEvents.reduce(
+    (earliest, event) => Math.min(earliest, Date.parse(event.startTime)),
+    Number.POSITIVE_INFINITY,
+  );
+  const end = eligibleEvents.reduce(
+    (latest, event) => Math.max(latest, Date.parse(event.endTime)),
+    Number.NEGATIVE_INFINITY,
+  );
+  return {
+    start: new Date(start).toISOString(),
+    end: new Date(end).toISOString(),
+  };
+}
+
 function resultCopy(result: MhtImportResult) {
   return `${result.importedCount} Termine gespeichert: ${result.insertedCount} neu, ${result.updatedCount} aktualisiert. ${result.skippedWarningCount} mit unklarer Zuordnung und ${result.skippedPastCount} vergangene Termine wurden übersprungen.`;
 }
@@ -135,8 +153,13 @@ export default function AdminImportScreen() {
 
   const confirmImport = () => {
     if (!preview) return;
+    const period = getImportPeriod(preview);
+    const periodCopy = period
+      ? ` Zeitraum: ${formatImportTime(period.start, preview.timeZone)} bis ${formatImportTime(period.end, preview.timeZone)}.`
+      : '';
     const message =
-      `${preview.importableCount} eindeutige zukünftige Termine importieren. ` +
+      `${preview.importableCount} geprüfte Termine importieren.${periodCopy} ` +
+      `${preview.warningCount} Termine mit Zuordnungswarnungen bleiben ausgelassen. ` +
       `${preview.updateCount} vorhandene Einträge werden aktualisiert; persönliche Admin-Notizen bleiben erhalten.`;
     if (Platform.OS === 'web') {
       if (window.confirm(message)) void saveImport();
@@ -151,6 +174,20 @@ export default function AdminImportScreen() {
   const isAuthorized = accessQuery.data?.authorized === true;
   const busy = previewMutation.isPending || importMutation.isPending;
   const isCheckingAccess = isCheckingSession || (Boolean(accessToken) && accessQuery.isLoading);
+  const importPeriod = preview ? getImportPeriod(preview) : null;
+  const visiblePreviewEvents = preview
+    ? [
+        ...new Map(
+          [
+            ...preview.events.slice(0, 20),
+            ...preview.events.filter((event) => event.warnings.length > 0),
+          ].map((event) => [event.id, event]),
+        ).values(),
+      ]
+    : [];
+  const omittedUnwarnedEvents = preview
+    ? preview.events.slice(20).filter((event) => event.warnings.length === 0).length
+    : 0;
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]} edges={['top']}>
@@ -290,6 +327,12 @@ export default function AdminImportScreen() {
                       ? formatImportTime(preview.snapshotAt, preview.timeZone)
                       : 'ohne Zeitstempel'}
                   </Text>
+                  <Text style={[styles.periodCopy, { color: colors.foreground }]}>
+                    Importzeitraum:{' '}
+                    {importPeriod
+                      ? `${formatImportTime(importPeriod.start, preview.timeZone)} bis ${formatImportTime(importPeriod.end, preview.timeZone)}`
+                      : 'keine eindeutig zugeordneten Termine'}
+                  </Text>
                   <View style={styles.stats}>
                     <Stat value={preview.importableCount} label="importierbar" color={colors.primary} />
                     <Stat value={preview.newCount} label="neu" color={colors.success} />
@@ -304,10 +347,10 @@ export default function AdminImportScreen() {
                   ) : null}
                 </View>
 
-                {preview.events.length > 0 ? (
+                  {visiblePreviewEvents.length > 0 ? (
                   <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                    <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Zukünftige Termine</Text>
-                    {preview.events.slice(0, 20).map((event) => {
+                    <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Zukünftige Termine und Zuordnungswarnungen</Text>
+                    {visiblePreviewEvents.map((event) => {
                       const hasWarnings = event.warnings.length > 0;
                       return (
                         <View key={event.id} style={[styles.eventRow, { borderBottomColor: colors.border }]}>
@@ -326,11 +369,21 @@ export default function AdminImportScreen() {
                         </View>
                       );
                     })}
-                    {preview.events.length > 20 ? (
+                    {omittedUnwarnedEvents > 0 ? (
                       <Text style={[styles.detailCopy, { color: colors.mutedForeground }]}>
-                        Weitere {preview.events.length - 20} Termine sind in der Zusammenfassung enthalten.
+                        {omittedUnwarnedEvents} weitere Termine ohne Warnung sind in der Anzahl enthalten.
                       </Text>
                     ) : null}
+                  </View>
+                ) : null}
+                {preview.issues.length > 0 ? (
+                  <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.warning }]}>
+                    <Text style={[styles.sectionTitle, { color: colors.warning }]}>Nicht importierte Karten</Text>
+                    {preview.issues.map((issue, index) => (
+                      <Text key={`${issue.title ?? 'karte'}-${index}`} style={[styles.detailCopy, { color: colors.mutedForeground }]}>
+                        {issue.title ?? 'Turnierkarte'}: {issue.errors.join(' ')}
+                      </Text>
+                    ))}
                   </View>
                 ) : null}
 
@@ -394,6 +447,7 @@ const styles = StyleSheet.create({
   uploadIcon: { width: 42, height: 42, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginBottom: 13 },
   cardTitle: { fontSize: 16, fontWeight: '700' },
   cardCopy: { fontSize: 12, lineHeight: 17, marginTop: 5 },
+  periodCopy: { fontSize: 12, lineHeight: 18, fontWeight: '700', marginTop: 12 },
   secondaryButton: { minHeight: 44, borderWidth: 1, borderRadius: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 15 },
   secondaryButtonText: { fontSize: 13, fontWeight: '700' },
   fileBadge: { minHeight: 38, borderRadius: 10, flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 10, marginTop: 10 },

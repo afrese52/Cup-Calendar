@@ -2,7 +2,7 @@ import express, { Router, type IRouter, type Request, type Response, type NextFu
 import { z } from "zod";
 import { parseMhtSchedule } from "../../scripts/dry-run-mht-import.mjs";
 import { getAdminImportAccess, getSafeUpcomingEvents, parseAdminEmailAllowlist } from "../services/adminImportAccess";
-import { getSupabaseAdmin } from "../services/supabase";
+import { getSupabaseAdmin, upsertMhtEvents } from "../services/supabase";
 import { MAX_MHT_UPLOAD_BYTES } from "../lib/uploadLimits";
 
 const router: IRouter = Router();
@@ -211,57 +211,20 @@ router.post(
         return;
       }
 
-      const admin = getSupabaseAdmin();
       const existingIds = await findExistingEventIds(preview.importableEvents.map((event) => event.id));
-      const insertRows = preview.importableEvents
-        .filter((event) => !existingIds.has(event.id))
-        .map((event) => ({
-          id: event.id,
-          title: event.title,
-          description: event.description,
-          poster_url: event.poster_url,
-          region: event.region,
-          game_mode: event.game_mode,
-          team_format: event.team_format,
-          tournament_type: event.tournament_type,
-          start_time: event.start_time,
-          end_time: event.end_time,
-          is_featured: event.is_featured,
-        }));
-
-      if (insertRows.length > 0) {
-        const { error } = await admin.from("fortnite_events").insert(insertRows);
-        if (error) throw error;
-      }
-
-      let updatedCount = 0;
-      for (const event of preview.importableEvents) {
-        if (!existingIds.has(event.id)) continue;
-        const { error } = await admin
-          .from("fortnite_events")
-          .update({
-            title: event.title,
-            region: event.region,
-            game_mode: event.game_mode,
-            team_format: event.team_format,
-            tournament_type: event.tournament_type,
-            start_time: event.start_time,
-            end_time: event.end_time,
-          })
-          .eq("id", event.id);
-        if (error) throw error;
-        updatedCount += 1;
-      }
+      await upsertMhtEvents(preview.importableEvents);
+      const insertedCount = preview.importableEvents.filter((event) => !existingIds.has(event.id)).length;
+      const updatedCount = preview.importableEvents.length - insertedCount;
 
       res.json({
-        importedCount: insertRows.length + updatedCount,
-        insertedCount: insertRows.length,
+        importedCount: preview.importableEvents.length,
+        insertedCount,
         updatedCount,
         skippedWarningCount: preview.warningCount,
         skippedPastCount: preview.skippedPastCount,
       });
     } catch (error) {
-      req.log.error({ err: error }, "MHT schedule import failed");
+      req.log.error("MHT schedule import failed");
       res.status(503).json({
         error: "Der Import konnte nicht vollständig abgeschlossen werden. Prüfe die Termine und starte den Import bei Bedarf erneut.",
       });
