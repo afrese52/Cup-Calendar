@@ -5,6 +5,7 @@ import * as Linking from 'expo-linking';
 import { Platform } from 'react-native';
 import type { RemoteBookmark, PendingBookmarkChange } from '@/services/localBookmarkStore';
 import { createPasswordRecovery } from './passwordRecovery';
+import { createPasswordResetRedirectUrl } from './authRedirectUrl';
 import { normalizeSupabaseBaseUrl } from './supabaseUrl';
 export { friendlyAuthError } from './accountAuth';
 
@@ -50,8 +51,16 @@ const passwordRecovery = supabase
   : null;
 
 export function getPasswordResetRedirectUrl(): string {
-  return Linking.createURL('auth/reset', {
+  const nativeUrl = Linking.createURL('auth/reset', {
     queryParams: { flow: 'cupcal-password-reset' },
+  });
+
+  return createPasswordResetRedirectUrl({
+    platform: Platform.OS === 'web' ? 'web' : 'native',
+    webOrigin: Platform.OS === 'web' && typeof window !== 'undefined'
+      ? window.location.origin
+      : null,
+    nativeUrl,
   });
 }
 
