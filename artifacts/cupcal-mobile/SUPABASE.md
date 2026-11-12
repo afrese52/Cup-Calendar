@@ -62,18 +62,29 @@ Auth. Der Link ist 30 Minuten gültig. Der Server signiert ihn mit dem
 serverseitigen `SUPABASE_SERVICE_ROLE_KEY`; dieser Schlüssel darf niemals in
 die Expo-App eingebettet werden.
 
-Für Browser-Vorschauen muss die aktuell verwendete HTTPS-Adresse der App mit
-`/auth/confirm` in **Authentication → URL Configuration → Redirect URLs**
-freigegeben sein. Für installierte Apps muss zusätzlich
-`cupcal-android://auth/confirm` erlaubt sein. Die bestehende Bestätigungsroute
-wird auch für Registrierungslinks verwendet.
+Die Kontolöschungs-Weiterleitung enthält zusätzlich `flow` und ein
+Bestätigungstoken als Query-Parameter. Deshalb reicht es nicht, nur die
+Basisadresse einzutragen. Gib in **Authentication → URL Configuration →
+Redirect URLs** folgende Muster frei:
 
-Der Versand nutzt Supabases **Magic Link**-E-Mailvorlage. Da CupCal diesen
-Anmeldeweg nicht anderweitig verwendet, sollte deren Betreff und Text klar
-sagen, dass der Link die endgültige Kontolöschung bestätigt. Die Vorlage muss
-den Supabase-Bestätigungslink enthalten. Nach erfolgreicher Löschung entfernt
-Supabase auch die an das Konto geknüpften Favoriten und Importhistorie; die
-öffentlichen Turniertermine bleiben erhalten.
+```text
+https://<aktuelle-vorschau-domain>/auth/confirm**
+cupcal-android://auth/confirm**
+```
+
+Ersetze `<aktuelle-vorschau-domain>` durch die Domain der gerade verwendeten
+Replit-Vorschau. Wenn Supabase die Weiterleitung nicht zulässt, kann der Link
+stattdessen auf die Site URL zurückfallen; die Löschkennzeichnung und das
+Bestätigungstoken fehlen dann. Die bestehende Bestätigungsroute wird auch für
+Registrierungslinks verwendet.
+
+Der Versand nutzt Supabases **Magic Link**-E-Mailvorlage unter
+**Authentication → Email Templates → Magic Link or OTP**. Betreff und Text
+müssen dort ausdrücklich die endgültige Kontolöschung nennen; die Vorlage muss
+`{{ .ConfirmationURL }}` enthalten. CupCal verwendet diesen Anmeldeweg nicht
+für normale Anmeldungen. Nach erfolgreicher Löschung entfernt Supabase auch
+die an das Konto geknüpften Favoriten und Importhistorie; die öffentlichen
+Turniertermine bleiben erhalten.
 
 ### Geräte-Prüfung
 
