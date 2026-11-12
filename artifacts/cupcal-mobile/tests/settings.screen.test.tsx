@@ -9,6 +9,16 @@ type MockAuth = Record<string, any>;
 type RenderedSettings = Awaited<ReturnType<typeof render>>;
 
 jest.mock('@expo/vector-icons', () => ({ Feather: () => null }));
+jest.mock('@workspace/api-client-react', () => {
+  const request = jest.fn(async () => ({
+    confirmationToken: 'signed.confirmation.token',
+    expiresAt: '2026-11-12T12:30:00.000Z',
+  }));
+  return {
+    useRequestAccountDeletion: () => ({ mutateAsync: request }),
+    __requestAccountDeletion: request,
+  };
+});
 jest.mock('expo-haptics', () => ({ impactAsync: jest.fn(), notificationAsync: jest.fn() }));
 jest.mock('expo-router', () => ({ useRouter: () => ({ push: jest.fn() }) }));
 jest.mock('react-native-safe-area-context', () => {
@@ -43,6 +53,7 @@ jest.mock('@/services/supabase', () => {
   const auth = {
     signInWithPassword: jest.fn(async () => ({ error: null })),
     signUp: jest.fn(async () => ({ data: { session: null }, error: null })),
+    signInWithOtp: jest.fn(async () => ({ error: null })),
     resend: jest.fn(async () => ({ error: null })),
     signOut: jest.fn(async () => {
       listener?.('SIGNED_OUT', null);
@@ -60,6 +71,8 @@ jest.mock('@/services/supabase', () => {
     isSupabaseConfigured: true,
     supabaseConfigurationMessage: null,
     getEmailConfirmationRedirectUrl: () => 'cupcal-test://auth/confirm',
+    getAccountDeletionRedirectUrl: (token: string) =>
+      `cupcal-test://auth/confirm?flow=cupcal-account-deletion&deletion_token=${token}`,
     requestEmailConfirmation: jest.fn(async () => {}),
     requestPasswordReset: jest.fn(),
     __emitAuthStateChange: (event: string, nextSession: unknown) => listener?.(event, nextSession),
@@ -92,8 +105,16 @@ function restoreAuthMocks() {
     mockSupabase.__emitAuthStateChange('SIGNED_OUT', null);
     return { error: null };
   });
+  auth.signInWithOtp.mockReset().mockImplementation(async () => ({ error: null }));
   auth.getSession.mockReset().mockImplementation(async () => ({ data: { session: null }, error: null }));
   auth.onAuthStateChange.mockClear();
+  const mockedApi = jest.requireMock('@workspace/api-client-react') as {
+    __requestAccountDeletion: jest.Mock;
+  };
+  mockedApi.__requestAccountDeletion.mockReset().mockImplementation(async () => ({
+    confirmationToken: 'signed.confirmation.token',
+    expiresAt: '2026-11-12T12:30:00.000Z',
+  }));
 }
 
 async function openSettings() {
@@ -246,4 +267,40 @@ test('zeigt einen Abmeldefehler sichtbar an', async () => {
   await fireEvent.press(view.getByTestId('sign-out-button'));
 
   expect(await view.findByText('Abmeldung fehlgeschlagen')).toBeTruthy();
+});
+
+test('fragt vor dem Versand des Kontolöschungslinks ausdrücklich nach', async () => {
+  auth.getSession.mockResolvedValue({ data: { session: testSession }, error: null });
+  const view = await render(<SettingsScreen />);
+  expect(await view.findByText('test@example.invalid')).toBeTruthy();
+
+  await fireEvent.press(view.getByTestId('delete-account-button'));
+  expect(view.getByText('Konto wirklich löschen?')).toBeTruthy();
+
+  await fireEvent.press(view.getByTestId('delete-account-cancel-button'));
+
+  expect(view.queryByText('Konto wirklich löschen?')).toBeNull();
+  const mockedApi = jest.requireMock('@workspace/api-client-react') as {
+    __requestAccountDeletion: jest.Mock;
+  };
+  expect(mockedApi.__requestAccountDeletion).not.toHaveBeenCalled();
+});
+
+test('sendet nach Bestätigung einen zeitlich befristeten Löschlink an das angemeldete Konto', async () => {
+  auth.getSession.mockResolvedValue({ data: { session: testSession }, error: null });
+  const view = await render(<SettingsScreen />);
+  expect(await view.findByText('test@example.invalid')).toBeTruthy();
+
+  await fireEvent.press(view.getByTestId('delete-account-button'));
+  await fireEvent.press(view.getByTestId('delete-account-confirm-button'));
+
+  expect(await view.findByText(/Bestätigungslink an test@example\.invalid gesendet/)).toBeTruthy();
+  expect(auth.signInWithOtp).toHaveBeenCalledWith({
+    email: 'test@example.invalid',
+    options: {
+      emailRedirectTo:
+        'cupcal-test://auth/confirm?flow=cupcal-account-deletion&deletion_token=signed.confirmation.token',
+      shouldCreateUser: false,
+    },
+  });
 });

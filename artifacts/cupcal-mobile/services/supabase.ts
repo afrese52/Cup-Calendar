@@ -5,7 +5,10 @@ import { Platform } from 'react-native';
 import type { RemoteBookmark, PendingBookmarkChange } from '@/services/localBookmarkStore';
 import { createCupCalSupabaseClient } from './createSupabaseClient';
 import { createPasswordRecovery } from './passwordRecovery';
-import { createPasswordResetRedirectUrl } from './authRedirectUrl';
+import {
+  createAccountDeletionRedirectUrl,
+  createPasswordResetRedirectUrl,
+} from './authRedirectUrl';
 import { normalizeSupabaseBaseUrl } from './supabaseUrl';
 export { friendlyAuthError } from './accountAuth';
 
@@ -54,6 +57,23 @@ export function getPasswordResetRedirectUrl(): string {
       ? window.location.origin
       : null,
     nativeUrl,
+  });
+}
+
+export function getAccountDeletionRedirectUrl(confirmationToken: string): string {
+  const nativeUrl = Linking.createURL('auth/confirm', {
+    queryParams: {
+      flow: 'cupcal-account-deletion',
+      deletion_token: confirmationToken,
+    },
+  });
+  return createAccountDeletionRedirectUrl({
+    platform: Platform.OS === 'web' ? 'web' : 'native',
+    webOrigin: Platform.OS === 'web' && typeof window !== 'undefined'
+      ? window.location.origin
+      : null,
+    nativeUrl,
+    confirmationToken,
   });
 }
 

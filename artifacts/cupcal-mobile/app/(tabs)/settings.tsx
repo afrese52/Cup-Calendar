@@ -1,4 +1,5 @@
 import { Feather } from '@expo/vector-icons';
+import { useRequestAccountDeletion } from '@workspace/api-client-react';
 import * as Haptics from 'expo-haptics';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
@@ -15,6 +16,7 @@ import {
   watchAuthSession,
 } from '@/services/accountAuth';
 import {
+  getAccountDeletionRedirectUrl,
   getEmailConfirmationRedirectUrl,
   isSupabaseConfigured,
   requestEmailConfirmation,
@@ -22,6 +24,7 @@ import {
   supabase,
   supabaseConfigurationMessage,
 } from '@/services/supabase';
+import { requestAccountDeletionConfirmation } from '@/services/accountDeletion';
 import { useCupCal } from '@/state/AppContext';
 
 const DISCLAIMER =
@@ -77,6 +80,8 @@ export default function SettingsScreen() {
   const [isSubmittingAuth, setIsSubmittingAuth] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
   const [authMessage, setAuthMessage] = useState<string | null>(null);
+  const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
+  const accountDeletionRequest = useRequestAccountDeletion();
 
   useEffect(() => {
     if (!supabase) return;
@@ -163,6 +168,38 @@ export default function SettingsScreen() {
     setIsSubmittingAuth(false);
   };
 
+  const sendAccountDeletionLink = async () => {
+    if (!supabase || !session?.user.email) {
+      setAuthError('Für dieses angemeldete Konto ist keine E-Mail-Adresse verfügbar.');
+      return;
+    }
+
+    setIsSubmittingAuth(true);
+    setAuthError(null);
+    setAuthMessage(null);
+    try {
+      const request = await accountDeletionRequest.mutateAsync();
+      await requestAccountDeletionConfirmation(
+        supabase.auth,
+        session.user.email,
+        getAccountDeletionRedirectUrl(request.confirmationToken),
+      );
+      setShowDeleteConfirmation(false);
+      setAuthMessage(
+        `Wir haben einen Bestätigungslink an ${session.user.email} gesendet. Das Konto wird erst gelöscht, wenn du den Link öffnest. Er ist 30 Minuten gültig.`,
+      );
+    } catch (error) {
+      setAuthError(
+        friendlyAuthError(
+          error,
+          'Der Bestätigungslink konnte nicht gesendet werden. Bitte versuche es erneut.',
+        ),
+      );
+    } finally {
+      setIsSubmittingAuth(false);
+    }
+  };
+
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]} edges={['top']}>
       <KeyboardAwareScrollViewCompat
@@ -212,6 +249,71 @@ export default function SettingsScreen() {
                   {isSubmittingAuth ? 'Wird abgemeldet …' : 'Abmelden'}
                 </Text>
               </Pressable>
+              {showDeleteConfirmation ? (
+                <View
+                  accessibilityLiveRegion="polite"
+                  style={[
+                    styles.deleteConfirmation,
+                    { backgroundColor: colors.destructive + '12', borderColor: colors.destructive + '66' },
+                  ]}
+                >
+                  <Text style={[styles.deleteConfirmationTitle, { color: colors.foreground }]}>
+                    Konto wirklich löschen?
+                  </Text>
+                  <Text style={[styles.deleteConfirmationCopy, { color: colors.mutedForeground }]}>
+                    Dein Konto und deine gespeicherten Favoriten werden endgültig entfernt. Zuerst senden wir einen Link an deine E-Mail-Adresse. Gelöscht wird erst, wenn du diesen Link öffnest.
+                  </Text>
+                  <Pressable
+                    accessibilityRole="button"
+                    testID="delete-account-confirm-button"
+                    disabled={isSubmittingAuth}
+                    onPress={() => void sendAccountDeletionLink()}
+                    style={({ pressed }) => [
+                      styles.deleteConfirmButton,
+                      { backgroundColor: colors.destructive },
+                      pressed && !isSubmittingAuth ? styles.pressed : null,
+                      isSubmittingAuth ? styles.disabled : null,
+                    ]}
+                  >
+                    {isSubmittingAuth ? (
+                      <ActivityIndicator color={colors.primaryForeground} />
+                    ) : (
+                      <Text style={[styles.deleteConfirmButtonText, { color: colors.primaryForeground }]}>
+                        Bestätigungslink senden
+                      </Text>
+                    )}
+                  </Pressable>
+                  <Pressable
+                    accessibilityRole="button"
+                    testID="delete-account-cancel-button"
+                    disabled={isSubmittingAuth}
+                    onPress={() => setShowDeleteConfirmation(false)}
+                    style={styles.modeToggle}
+                  >
+                    <Text style={[styles.modeToggleText, { color: colors.mutedForeground }]}>Abbrechen</Text>
+                  </Pressable>
+                </View>
+              ) : (
+                <Pressable
+                  accessibilityRole="button"
+                  testID="delete-account-button"
+                  disabled={isSubmittingAuth}
+                  onPress={() => {
+                    setAuthError(null);
+                    setAuthMessage(null);
+                    setShowDeleteConfirmation(true);
+                  }}
+                  style={({ pressed }) => [
+                    styles.deleteAccountButton,
+                    { borderColor: colors.destructive + '66' },
+                    pressed && !isSubmittingAuth ? styles.pressed : null,
+                    isSubmittingAuth ? styles.disabled : null,
+                  ]}
+                >
+                  <Feather name="trash-2" size={15} color={colors.destructive} />
+                  <Text style={[styles.deleteAccountButtonText, { color: colors.destructive }]}>Konto löschen</Text>
+                </Pressable>
+              )}
             </View>
           ) : !isSupabaseConfigured ? (
             <View style={styles.accountStatus}>
@@ -420,6 +522,13 @@ const styles = StyleSheet.create({
   primaryButtonText: { fontSize: 14, fontWeight: '700' },
   secondaryButton: { minHeight: 44, borderWidth: 1, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginTop: 15 },
   secondaryButtonText: { fontSize: 13, fontWeight: '700' },
+  deleteAccountButton: { minHeight: 44, borderWidth: 1, borderRadius: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 10 },
+  deleteAccountButtonText: { fontSize: 13, fontWeight: '700' },
+  deleteConfirmation: { borderWidth: 1, borderRadius: 14, padding: 13, marginTop: 12 },
+  deleteConfirmationTitle: { fontSize: 14, fontWeight: '700' },
+  deleteConfirmationCopy: { fontSize: 12, lineHeight: 18, marginTop: 6 },
+  deleteConfirmButton: { minHeight: 46, borderRadius: 11, alignItems: 'center', justifyContent: 'center', marginTop: 12 },
+  deleteConfirmButtonText: { fontSize: 13, fontWeight: '700' },
   modeToggle: { minHeight: 40, alignItems: 'center', justifyContent: 'center', marginTop: 4 },
   modeToggleText: { fontSize: 12, fontWeight: '700' },
   authNotice: { fontSize: 12, lineHeight: 17, marginTop: 10 },

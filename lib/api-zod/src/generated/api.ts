@@ -119,3 +119,22 @@ export const GetAdminImportHistoryResponse = zod.object({
 })
 
 
+/**
+ * @summary Create a short-lived account deletion confirmation token
+ */
+export const RequestAccountDeletionResponse = zod.object({
+  "confirmationToken": zod.string(),
+  "expiresAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Delete the authenticated account after email confirmation
+ */
+export const ConfirmAccountDeletionBody = zod.object({
+  "confirmationToken": zod.string()
+})
+
+export const ConfirmAccountDeletionResponse = zod.void()
+
+

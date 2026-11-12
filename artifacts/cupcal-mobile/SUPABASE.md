@@ -53,6 +53,28 @@ Supabase-Projekts gespeichert ist. Die Konfiguration im Repository bestätigt
 nur das App-Schema und die Route; sie bestätigt nicht den Inhalt des
 Supabase-Dashboards.
 
+## Konto löschen
+
+In den Kontoeinstellungen kann ein angemeldeter Benutzer zunächst den Versand
+eines Bestätigungslinks anfordern. Erst nach dem Öffnen des Links und der
+Bestätigung der E-Mail-Sitzung löscht der API-Server das Konto über Supabase
+Auth. Der Link ist 30 Minuten gültig. Der Server signiert ihn mit dem
+serverseitigen `SUPABASE_SERVICE_ROLE_KEY`; dieser Schlüssel darf niemals in
+die Expo-App eingebettet werden.
+
+Für Browser-Vorschauen muss die aktuell verwendete HTTPS-Adresse der App mit
+`/auth/confirm` in **Authentication → URL Configuration → Redirect URLs**
+freigegeben sein. Für installierte Apps muss zusätzlich
+`cupcal-android://auth/confirm` erlaubt sein. Die bestehende Bestätigungsroute
+wird auch für Registrierungslinks verwendet.
+
+Der Versand nutzt Supabases **Magic Link**-E-Mailvorlage. Da CupCal diesen
+Anmeldeweg nicht anderweitig verwendet, sollte deren Betreff und Text klar
+sagen, dass der Link die endgültige Kontolöschung bestätigt. Die Vorlage muss
+den Supabase-Bestätigungslink enthalten. Nach erfolgreicher Löschung entfernt
+Supabase auch die an das Konto geknüpften Favoriten und Importhistorie; die
+öffentlichen Turniertermine bleiben erhalten.
+
 ### Geräte-Prüfung
 
 Die Bestätigung benötigt installierte native Builds und ein echtes

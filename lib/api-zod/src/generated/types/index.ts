@@ -6,6 +6,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './accountDeletionConfirmation';
+export * from './accountDeletionRequest';
 export * from './adminImportAccess';
 export * from './adminImportAccessReason';
 export * from './eventListResponse';

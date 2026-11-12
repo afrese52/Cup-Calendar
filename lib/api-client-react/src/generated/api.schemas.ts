@@ -99,6 +99,15 @@ export interface AdminImportAccess {
   reason: AdminImportAccessReason;
 }
 
+export interface AccountDeletionRequest {
+  confirmationToken: string;
+  expiresAt: string;
+}
+
+export interface AccountDeletionConfirmation {
+  confirmationToken: string;
+}
+
 /**
  * UTF-8 text content of an MHT or MHTML schedule snapshot
  */
