@@ -73,9 +73,12 @@ cupcal-android://auth/confirm**
 ```
 
 Ersetze `<aktuelle-vorschau-domain>` durch die Domain der gerade verwendeten
-Replit-Vorschau. Wenn Supabase die Weiterleitung nicht zulässt, kann der Link
-stattdessen auf die Site URL zurückfallen; die Löschkennzeichnung und das
-Bestätigungstoken fehlen dann. Die bestehende Bestätigungsroute wird auch für
+Replit-Vorschau. Setze außerdem die **Site URL** auf eine HTTPS-Adresse der
+Web-App, nicht auf `cupcal-android://...`. Wenn Supabase eine
+Browser-Weiterleitung nicht zulässt, kann es stattdessen auf die Site URL
+zurückfallen; die Löschkennzeichnung und das Bestätigungstoken fehlen dann.
+Für reine Vorschautests kann die Site URL vorübergehend die aktuelle
+Vorschau-Adresse sein. Die bestehende Bestätigungsroute wird auch für
 Registrierungslinks verwendet.
 
 Der Versand nutzt Supabases **Magic Link**-E-Mailvorlage unter
