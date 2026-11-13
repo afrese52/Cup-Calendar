@@ -391,3 +391,46 @@ test('zeigt Admins die gespeicherte Importhistorie mit Konto, Quelle und Zähler
   expect(screen.getByText('fortnite.com')).toBeTruthy();
   expect(screen.getByText('2 neu · 1 aktualisiert · 4 übersprungen')).toBeTruthy();
 });
+
+test('zeigt fehlerhafte Karten getrennt im Importergebnis an', async () => {
+  setPlatformOS('android');
+  mockGetDocumentAsync.mockResolvedValue(selectedFile('plan.mht'));
+  mockPreviewImport.mockResolvedValue({
+    ...preview,
+    importableCount: 1,
+    events: [{
+      id: 'event-1',
+      title: 'Turnier',
+      startTime: '2026-11-12T18:00:00.000Z',
+      endTime: '2026-11-12T20:00:00.000Z',
+      gameMode: 'Battle Royale',
+      teamFormat: 'Solo',
+      tournamentType: 'Cash Cup',
+      category: 'Turnier',
+      warnings: [],
+      willUpdate: false,
+    }],
+  });
+  mockImportSchedule.mockResolvedValue({
+    importedCount: 1,
+    insertedCount: 1,
+    updatedCount: 0,
+    skippedWarningCount: 2,
+    skippedPastCount: 3,
+    skippedInvalidCount: 4,
+    skippedCount: 9,
+  });
+  const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation((_title, _message, buttons) => {
+    buttons?.find((button) => button.text === 'Importieren')?.onPress?.();
+  });
+  const screen = await openImportScreen();
+
+  await fireEvent.press(screen.getByTestId('choose-import-file-button'));
+  await fireEvent.press(screen.getByTestId('preview-import-file-button'));
+  await fireEvent.press(await screen.findByTestId('confirm-import-button'));
+
+  expect(await screen.findByText(
+    '1 Termine gespeichert: 1 neu, 0 aktualisiert. 2 mit unklarer Zuordnung, 3 vergangene Termine und 4 fehlerhafte Karten wurden übersprungen.',
+  )).toBeTruthy();
+  alertSpy.mockRestore();
+});

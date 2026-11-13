@@ -11,6 +11,7 @@ import {
   upsertMhtEvents,
 } from "../services/supabase";
 import { MAX_MHT_UPLOAD_BYTES } from "../lib/uploadLimits";
+import { getMhtImportSkippedCounts } from "../services/mhtImportCounts";
 
 const router: IRouter = Router();
 const uploadText = express.text({ type: "text/plain", limit: MAX_MHT_UPLOAD_BYTES });
@@ -250,23 +251,25 @@ router.post(
       if (!adminUser?.email) {
         throw new Error("Die Admin-Anmeldung enthält keine Konto-E-Mail-Adresse.");
       }
-      const skippedCount = preview.warningCount + preview.skippedPastCount;
+      const skippedCounts = getMhtImportSkippedCounts({
+        warningCount: preview.warningCount,
+        skippedPastCount: preview.skippedPastCount,
+        invalidCount: preview.invalidCount,
+      });
       await recordMhtImportHistory({
         adminUserId: adminUser.id,
         adminEmail: adminUser.email,
         sourceHint: getSourceHint(preview.sourceUrl),
         insertedCount,
         updatedCount,
-        skippedCount,
+        skippedCount: skippedCounts.skippedCount,
       });
 
       res.json({
         importedCount: preview.importableEvents.length,
         insertedCount,
         updatedCount,
-        skippedWarningCount: preview.warningCount,
-        skippedPastCount: preview.skippedPastCount,
-        skippedCount,
+        ...skippedCounts,
       });
     } catch (error) {
       req.log.error("MHT schedule import failed");

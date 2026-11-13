@@ -102,6 +102,7 @@ export const ImportMhtScheduleResponse = zod.object({
   "updatedCount": zod.number().int(),
   "skippedWarningCount": zod.number().int(),
   "skippedPastCount": zod.number().int(),
+  "skippedInvalidCount": zod.number().int(),
   "skippedCount": zod.number().int()
 })
 

@@ -84,7 +84,7 @@ function getImportPeriod(preview: MhtImportPreview) {
 }
 
 function resultCopy(result: MhtImportResult) {
-  return `${result.importedCount} Termine gespeichert: ${result.insertedCount} neu, ${result.updatedCount} aktualisiert. ${result.skippedWarningCount} mit unklarer Zuordnung und ${result.skippedPastCount} vergangene Termine wurden übersprungen.`;
+  return `${result.importedCount} Termine gespeichert: ${result.insertedCount} neu, ${result.updatedCount} aktualisiert. ${result.skippedWarningCount} mit unklarer Zuordnung, ${result.skippedPastCount} vergangene Termine und ${result.skippedInvalidCount} fehlerhafte Karten wurden übersprungen.`;
 }
 
 export default function AdminImportScreen() {

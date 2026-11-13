@@ -365,8 +365,9 @@ components:
         updatedCount: { type: integer }
         skippedWarningCount: { type: integer }
         skippedPastCount: { type: integer }
+        skippedInvalidCount: { type: integer }
         skippedCount: { type: integer }
-      required: [importedCount, insertedCount, updatedCount, skippedWarningCount, skippedPastCount, skippedCount]
+      required: [importedCount, insertedCount, updatedCount, skippedWarningCount, skippedPastCount, skippedInvalidCount, skippedCount]
     MhtImportHistoryEntry:
       type: object
       properties:
