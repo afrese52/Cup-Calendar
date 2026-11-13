@@ -1,7 +1,7 @@
 import React from 'react';
 import { beforeEach, expect, jest, test } from '@jest/globals';
 import { act, fireEvent, render, waitFor, within } from '@testing-library/react-native';
-import { AccessibilityInfo, Dimensions, StyleSheet } from 'react-native';
+import { AccessibilityInfo, Dimensions, Platform, StyleSheet } from 'react-native';
 import SettingsScreen from '../app/(tabs)/settings';
 import { supabase } from '@/services/supabase';
 import { ACCOUNT_CONFIRMATION_RESEND_COOLDOWN_SECONDS } from '../services/accountAuth';
@@ -105,6 +105,9 @@ const defaultScreenDimensions = Dimensions.get('screen');
 const sendAccessibilityFocus = jest
   .spyOn(AccessibilityInfo, 'sendAccessibilityEvent')
   .mockImplementation(() => {});
+const announceForAccessibility = jest
+  .spyOn(AccessibilityInfo, 'announceForAccessibility')
+  .mockImplementation(() => {});
 
 function restoreAuthMocks() {
   auth.signInWithPassword.mockReset().mockImplementation(async () => {
@@ -155,6 +158,7 @@ async function enterCredentials(view: RenderedSettings) {
 beforeEach(() => {
   restoreAuthMocks();
   sendAccessibilityFocus.mockClear();
+  announceForAccessibility.mockClear();
   Dimensions.set({
     window: defaultWindowDimensions,
     screen: defaultScreenDimensions,
@@ -573,6 +577,39 @@ test('zeigt nach Wiederherstellung einer gespeicherten Sitzung das angemeldete K
   expect(await view.findByText('Angemeldet')).toBeTruthy();
   expect(view.getByText('test@example.invalid')).toBeTruthy();
   expect(view.getByTestId('sign-out-button')).toBeTruthy();
+});
+
+test.each([
+  ['angemeldete', testSession, 'Angemeldet'],
+  ['abgemeldete', null, 'Bei CupCal anmelden'],
+] as const)('macht die %s Sitzung während und nach der verzögerten Prüfung hörbar', async (_name, session, finalStatus) => {
+  let finishSessionCheck!: (result: { data: { session: typeof testSession | null }; error: null }) => void;
+  auth.getSession.mockImplementation(
+    () => new Promise((resolve) => {
+      finishSessionCheck = resolve;
+    }),
+  );
+
+  const view = await render(<SettingsScreen />);
+  const loadingStatus = view.getByTestId('account-session-status');
+  expect(loadingStatus.props.accessible).toBe(true);
+  expect(loadingStatus.props.accessibilityRole).toBe('text');
+  expect(loadingStatus.props.accessibilityLiveRegion).toBe('polite');
+  expect(loadingStatus.props.children).toBe('Sitzung wird geprüft …');
+
+  await act(async () => finishSessionCheck({ data: { session }, error: null }));
+
+  const resolvedStatus = await view.findByTestId('account-session-status');
+  expect(resolvedStatus.props.children).toBe(finalStatus);
+  expect(resolvedStatus.props.accessible).toBe(true);
+  expect(resolvedStatus.props.accessibilityRole).toBe('text');
+  expect(resolvedStatus.props.accessibilityLiveRegion).toBe('polite');
+  if (session) expect(view.getByText('test@example.invalid')).toBeTruthy();
+  if (Platform.OS === 'ios') {
+    expect(announceForAccessibility).toHaveBeenCalledWith(
+      session ? 'Angemeldet. test@example.invalid' : 'Abgemeldet. Bei CupCal anmelden.',
+    );
+  }
 });
 
 test('zeigt einen Abmeldefehler sichtbar an', async () => {

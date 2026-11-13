@@ -96,6 +96,7 @@ export default function SettingsScreen() {
   const isSubmittingAuth = submittingAction !== null;
   const [authError, setAuthError] = useState<string | null>(null);
   const authErrorRef = useRef<React.ComponentRef<typeof Text>>(null);
+  const lastAnnouncedAccountStatusRef = useRef<string | null>(null);
   const [authMessage, setAuthMessage] = useState<string | null>(null);
   const [confirmationResendAvailableAt, setConfirmationResendAvailableAt] = useState<number | null>(null);
   const [confirmationResendClock, setConfirmationResendClock] = useState(() => Date.now());
@@ -148,6 +149,22 @@ export default function SettingsScreen() {
       onReady: () => setIsCheckingSession(false),
     });
   }, []);
+
+  useEffect(() => {
+    if (!supabase || isCheckingSession || Platform.OS !== 'ios') return;
+
+    const statusKey = session
+      ? `signed-in:${session.user.id}:${session.user.email ?? ''}`
+      : 'signed-out';
+    if (lastAnnouncedAccountStatusRef.current === statusKey) return;
+    lastAnnouncedAccountStatusRef.current = statusKey;
+
+    AccessibilityInfo.announceForAccessibility(
+      session
+        ? `Angemeldet. ${session.user.email ?? 'Deine CupCal-Sitzung ist aktiv.'}`
+        : 'Abgemeldet. Bei CupCal anmelden.',
+    );
+  }, [isCheckingSession, session]);
 
   const submitAuth = async () => {
     if (!supabase) return;
@@ -300,7 +317,15 @@ export default function SettingsScreen() {
         <View style={[styles.accountCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
           {isCheckingSession ? (
             <View style={styles.accountStatus}>
-              <Text style={[styles.accountTitle, { color: colors.foreground }]}>Sitzung wird geprüft …</Text>
+              <Text
+                accessible
+                accessibilityRole="text"
+                accessibilityLiveRegion="polite"
+                testID="account-session-status"
+                style={[styles.accountTitle, { color: colors.foreground }]}
+              >
+                Sitzung wird geprüft …
+              </Text>
             </View>
           ) : session ? (
             <View>
@@ -309,7 +334,15 @@ export default function SettingsScreen() {
                   <Feather name="user" size={17} color={colors.primary} />
                 </View>
                 <View style={styles.accountCopy}>
-                  <Text style={[styles.accountTitle, { color: colors.foreground }]}>Angemeldet</Text>
+                  <Text
+                    accessible
+                    accessibilityRole="text"
+                    accessibilityLiveRegion="polite"
+                    testID="account-session-status"
+                    style={[styles.accountTitle, { color: colors.foreground }]}
+                  >
+                    Angemeldet
+                  </Text>
                   <Text style={[styles.accountSubtitle, { color: colors.mutedForeground }]}>
                     {session.user.email ?? 'Deine CupCal-Sitzung ist aktiv.'}
                   </Text>
@@ -420,7 +453,13 @@ export default function SettingsScreen() {
             </View>
           ) : (
             <>
-              <Text style={[styles.accountTitle, { color: colors.foreground }]}>
+              <Text
+                accessible
+                accessibilityRole="text"
+                accessibilityLiveRegion="polite"
+                testID="account-session-status"
+                style={[styles.accountTitle, { color: colors.foreground }]}
+              >
                 {authMode === 'sign-in'
                   ? 'Bei CupCal anmelden'
                   : authMode === 'sign-up'
