@@ -319,6 +319,56 @@ test("RPC schützt Konten und synchronisiert eine zweite Gerätesitzung", async 
   });
 });
 
+test("gleichzeitige RPC-Aufrufe halten denselben Termin für zwei Konten getrennt", async () => {
+  await withTestAccounts(async (accountA, accountB) => {
+    const eventId = `shared-event-${randomUUID()}`;
+    const updatedAt = new Date(0).toISOString();
+    const [syncA, syncB] = await Promise.all([
+      accountA.client.rpc("sync_user_event_bookmark", {
+        p_event_id: eventId,
+        p_is_favorite: true,
+        p_updated_at: updatedAt,
+      }),
+      accountB.client.rpc("sync_user_event_bookmark", {
+        p_event_id: eventId,
+        p_is_favorite: false,
+        p_updated_at: updatedAt,
+      }),
+    ]);
+
+    assert.ifError(syncA.error);
+    assert.ifError(syncB.error);
+
+    const [savedA, savedB] = await Promise.all([
+      accountA.client
+        .from("user_event_bookmarks")
+        .select("user_id, event_id, is_favorite, revision")
+        .eq("event_id", eventId)
+        .single(),
+      accountB.client
+        .from("user_event_bookmarks")
+        .select("user_id, event_id, is_favorite, revision")
+        .eq("event_id", eventId)
+        .single(),
+    ]);
+
+    assert.ifError(savedA.error);
+    assert.ifError(savedB.error);
+    assert.deepEqual(savedA.data, {
+      user_id: accountA.id,
+      event_id: eventId,
+      is_favorite: true,
+      revision: 1,
+    });
+    assert.deepEqual(savedB.data, {
+      user_id: accountB.id,
+      event_id: eventId,
+      is_favorite: false,
+      revision: 1,
+    });
+  });
+});
+
 test("gleichzeitige RPC-Aufrufe erhöhen die Revision atomar und behalten den zuletzt angenommenen Status", async () => {
   await withTestAccounts(async (accountA) => {
     const secondDevice = createClient(supabaseUrl, anonKey, {
