@@ -50,4 +50,5 @@ export function parseMhtSchedule(
 
 export function mapTeamFormat(
   cardText: string,
+  officialEventSlug?: string,
 ): "Solo" | "Duos" | "Trios" | "Squads" | null;

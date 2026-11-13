@@ -340,7 +340,7 @@ function mapGameMode(title) {
   return matches.length === 1 ? matches[0] : null;
 }
 
-export function mapTeamFormat(cardText) {
+export function mapTeamFormat(cardText, officialEventSlug = "") {
   const formats = [
     [/\bsolos?\b/i, "Solo"],
     [/\bduos?\b/i, "Duos"],
@@ -350,6 +350,13 @@ export function mapTeamFormat(cardText) {
   const matches = formats
     .filter(([pattern]) => pattern.test(cardText))
     .map(([, format]) => format);
+  // Epic's official event slug can disambiguate a generic "Team" card, but
+  // only explicit squad tokens in that slug count as evidence.
+  const slugWords = officialEventSlug
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .split(/[^a-z0-9]+/i)
+    .filter(Boolean);
+  if (slugWords.some((word) => /^squads?$/i.test(word))) matches.push("Squads");
   const distinctMatches = [...new Set(matches)];
   return distinctMatches.length === 1 ? distinctMatches[0] : null;
 }
@@ -438,6 +445,9 @@ function extractEventAnchors(html, sourceUrl, timeZone, region) {
       }
     })();
     const eventSlug = eventUrl?.pathname.match(/\/events\/([^/]+)/)?.[1] ?? null;
+    const isOfficialFortniteEventUrl = eventUrl?.protocol === "https:"
+      && (eventUrl.hostname === "fortnite.com" || eventUrl.hostname.endsWith(".fortnite.com"));
+    const officialEventSlug = isOfficialFortniteEventUrl ? eventSlug ?? "" : "";
     const roundId = eventUrl?.searchParams.get("round") ?? null;
     const id = eventSlug && roundId ? `epic:${eventSlug}:${roundId}` : null;
     const errors = [];
@@ -484,7 +494,7 @@ function extractEventAnchors(html, sourceUrl, timeZone, region) {
         cursor = closingAnchorPattern.lastIndex;
         continue;
       }
-      const teamFormat = mapTeamFormat(`${title} ${attributes["aria-label"] ?? ""}`);
+      const teamFormat = mapTeamFormat(`${title} ${attributes["aria-label"] ?? ""}`, officialEventSlug);
       const gameMode = mapGameMode(`${title} ${attributes["aria-label"] ?? ""}`);
       if (!gameMode) {
         issues.push({

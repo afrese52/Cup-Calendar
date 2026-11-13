@@ -261,6 +261,41 @@ test("sperrt ein unbekanntes oder widersprüchliches Spielformat mit Kennung und
   );
 });
 
+test("wertet Squad-Belege nur aus offiziellen und widerspruchsfreien Eventkennungen", () => {
+  const html = `
+    <html><body>
+      <h2>10. November 2026</h2>
+      <a id="schedule-event-link-unofficial-squads"
+        href="https://not-fortnite.com/competitive/events/S43_SquadsVictoryCup?round=UnofficialRound"
+        aria-label="19:00–22:00 Uhr - Battle Royale Team Cash Cup">
+        <span>Battle Royale Team Cash Cup</span>
+      </a>
+      <a id="schedule-event-link-conflicting-squads"
+        href="https://www.fortnite.com/competitive/events/S43_SquadsVictoryCup?round=ConflictingRound"
+        aria-label="19:00–22:00 Uhr - Battle Royale Solo Cash Cup">
+        <span>Battle Royale Solo Cash Cup</span>
+      </a>
+    </body></html>`;
+  const result = parseMhtSchedule(makeMht(html));
+
+  assert.equal(result.validCount, 0);
+  assert.deepEqual(
+    result.issues.map(({ id, title, errors }) => ({ id, title, errors })),
+    [
+      {
+        id: "epic:S43_SquadsVictoryCup:UnofficialRound",
+        title: "Battle Royale Team Cash Cup",
+        errors: ["Spielformat fehlt oder ist nicht eindeutig angegeben."],
+      },
+      {
+        id: "epic:S43_SquadsVictoryCup:ConflictingRound",
+        title: "Battle Royale Solo Cash Cup",
+        errors: ["Spielformat fehlt oder ist nicht eindeutig angegeben."],
+      },
+    ],
+  );
+});
+
 test("prüft Spielformate an echten, anonymisierten MHT-Turnierkarten", async () => {
   const fixture = await readFile(
     new URL("./fixtures/real-schedule-format-sample.mht", import.meta.url),
@@ -275,6 +310,7 @@ test("prüft Spielformate an echten, anonymisierten MHT-Turnierkarten", async ()
         id: getAttribute("id"),
         title: fragment.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim(),
         ariaLabel: getAttribute("aria-label"),
+        href: getAttribute("href"),
       };
     })
     .filter((card) => card.id.startsWith("schedule-event-link-"));
@@ -283,7 +319,8 @@ test("prüft Spielformate an echten, anonymisierten MHT-Turnierkarten", async ()
     ["schedule-event-link-duo", "Duos"],
     ["schedule-event-link-trio", "Trios"],
     ["schedule-event-link-reload-zero-build", "Duos"],
-    ["schedule-event-link-team-unknown", null],
+    ["schedule-event-link-team-official-squads", "Squads"],
+    ["schedule-event-link-team-unconfirmed", null],
     ["schedule-event-link-format-unknown", null],
   ]);
 
@@ -291,8 +328,9 @@ test("prüft Spielformate an echten, anonymisierten MHT-Turnierkarten", async ()
   for (const card of cards) {
     const expected = expectedFormats.get(card.id);
     assert.equal(expectedFormats.has(card.id), true, `Unerwartete Karte ${card.id}`);
-    assert.equal(mapTeamFormat(card.title), expected, `${card.id}: sichtbarer Titel`);
-    assert.equal(mapTeamFormat(card.ariaLabel), expected, `${card.id}: aria-label`);
+    const eventSlug = new URL(card.href).pathname.match(/\/events\/([^/]+)/)?.[1] ?? "";
+    assert.equal(mapTeamFormat(card.title, eventSlug), expected, `${card.id}: Titel und Eventkennung`);
+    assert.equal(mapTeamFormat(card.ariaLabel, eventSlug), expected, `${card.id}: aria-label und Eventkennung`);
   }
 
   const acceptedByTitle = new Map(result.events.map((event) => [event.title, event]));
@@ -300,6 +338,10 @@ test("prüft Spielformate an echten, anonymisierten MHT-Turnierkarten", async ()
   assert.equal(
     acceptedByTitle.get("Reload ZB Duos Cash Cup Zero Build")?.game_mode,
     "Zero Build",
+  );
+  assert.equal(
+    acceptedByTitle.get("Victory Cash Cup (Team) Battle Royale")?.team_format,
+    "Squads",
   );
   assert.equal(
     acceptedByTitle.get("Reload Ranked Cup (Duo) Battle Royale")?.game_mode,
@@ -315,7 +357,7 @@ test("prüft Spielformate an echten, anonymisierten MHT-Turnierkarten", async ()
         errors: ["Turnierart fehlt oder ist nicht eindeutig angegeben."],
       },
       {
-        id: "epic:S43_SquadsVictoryCup:S43_SquadsVictoryCup_Event1_Round1_EU",
+        id: "epic:S43_VictoryCup:S43_VictoryCup_Event1_EU",
         title: "Victory Cash Cup (Team) Battle Royale",
         errors: ["Spielformat fehlt oder ist nicht eindeutig angegeben."],
       },
@@ -326,7 +368,7 @@ test("prüft Spielformate an echten, anonymisierten MHT-Turnierkarten", async ()
       },
     ],
   );
-  assert.equal(result.events.length, 3);
+  assert.equal(result.events.length, 4);
 });
 
 test("meldet unvollständige Karten, statt sie als importierbar auszugeben", () => {

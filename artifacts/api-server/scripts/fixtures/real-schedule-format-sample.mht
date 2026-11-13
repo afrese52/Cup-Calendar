@@ -15,6 +15,7 @@ Content-Transfer-Encoding: 8bit
       Mode labels cross-checked against Epic's official event pages:
       S43_RankedCupReloadDuos labels the event Reload and its category Battle Royale;
       S43_ReloadZBDuosCashCup labels the variant Zero Build.
+      The official S43_SquadsVictoryCup event slug identifies the Team card as Squads.
     -->
     <h2>10. November 2026</h2>
     <a id="schedule-event-link-solo"
@@ -26,8 +27,11 @@ Content-Transfer-Encoding: 8bit
     <a id="schedule-event-link-trio"
        href="https://www.fortnite.com/competitive/events/S43_TriosCashCup?round=S43_TriosCashCup_Event1_EU"
        aria-label="15:00–18:00 Uhr - Trio Cash Cup Battle Royale – Wettkampfabschnitt 1 - Runde 1">Trio Cash Cup Battle Royale</a>
-    <a id="schedule-event-link-team-unknown"
+    <a id="schedule-event-link-team-official-squads"
        href="https://www.fortnite.com/competitive/events/S43_SquadsVictoryCup?round=S43_SquadsVictoryCup_Event1_Round1_EU"
+       aria-label="19:00–21:00 Uhr - Victory Cash Cup (Team) Battle Royale – Wettkampfabschnitt 1 - Runde 1">Victory Cash Cup (Team) Battle Royale</a>
+    <a id="schedule-event-link-team-unconfirmed"
+       href="https://www.fortnite.com/competitive/events/S43_VictoryCup?round=S43_VictoryCup_Event1_EU"
        aria-label="19:00–21:00 Uhr - Victory Cash Cup (Team) Battle Royale – Wettkampfabschnitt 1 - Runde 1">Victory Cash Cup (Team) Battle Royale</a>
     <a id="schedule-event-link-format-unknown"
        href="https://www.fortnite.com/competitive/events/S43_OnePieceZoroCup?round=S43_OnePieceZoroCup_EU"
