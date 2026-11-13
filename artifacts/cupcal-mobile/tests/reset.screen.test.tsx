@@ -46,10 +46,19 @@ jest.mock('@/services/supabase', () => ({
   handlePasswordResetUrl: jest.fn(async () => false),
   PASSWORD_MIN_LENGTH: 6,
   saveNewPassword: mockSaveNewPassword,
-  friendlyAuthError: (error: unknown, fallback: string) =>
-    error instanceof Error && error.message.toLowerCase().includes('network')
-      ? 'Keine Verbindung möglich. Prüfe deine Internetverbindung und versuche es erneut.'
-      : fallback,
+  friendlyAuthError: (error: unknown, fallback: string) => {
+    const message = error instanceof Error ? error.message.toLowerCase() : '';
+    const code = typeof error === 'object' && error !== null && 'code' in error
+      ? String((error as { code?: unknown }).code).toLowerCase()
+      : '';
+    if (message.includes('network')) {
+      return 'Keine Verbindung möglich. Prüfe deine Internetverbindung und versuche es erneut.';
+    }
+    if (code === 'weak_password' || message.includes('weak password')) {
+      return 'Das Passwort ist zu kurz oder zu unsicher. Bitte wähle ein stärkeres Passwort.';
+    }
+    return fallback;
+  },
 }));
 
 const { default: ResetPasswordScreen } = require('../app/auth/reset') as {
@@ -88,6 +97,29 @@ test('behält Formular und Eingaben nach einem Verbindungsfehler für einen erne
 
   await waitFor(() => expect(view.getByText('Passwort geändert')).toBeTruthy());
   expect(mockSaveNewPassword).toHaveBeenCalledTimes(2);
+});
+
+test('behält Formular und Eingaben nach einer Passwort-Ablehnung für eine Korrektur', async () => {
+  mockSaveNewPassword.mockRejectedValue(
+    Object.assign(new Error('Password is too weak'), { code: 'weak_password' }),
+  );
+  const view = await render(<ResetPasswordScreen />);
+
+  await waitFor(() => expect(view.getByTestId('reset-password-submit-button')).toBeTruthy());
+  await fireEvent.changeText(view.getByTestId('reset-password-input'), 'kurz');
+  await fireEvent.changeText(view.getByTestId('reset-password-confirm-input'), 'kurz');
+  await fireEvent.press(view.getByTestId('reset-password-submit-button'));
+
+  expect(await view.findByText(
+    'Das Passwort ist zu kurz oder zu unsicher. Bitte wähle ein stärkeres Passwort.',
+  )).toBeTruthy();
+  expect(view.getByTestId('reset-password-input').props.value).toBe('kurz');
+  expect(view.getByTestId('reset-password-confirm-input').props.value).toBe('kurz');
+  expect(view.getByTestId('reset-password-submit-button').props.accessibilityState).toEqual({
+    disabled: false,
+    busy: false,
+  });
+  expect(mockSaveNewPassword).toHaveBeenCalledTimes(1);
 });
 
 test('sperrt schnelle wiederholte Speicherversuche bis die Passwortänderung abgeschlossen ist', async () => {
