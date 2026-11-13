@@ -25,6 +25,7 @@ export type AuthCallbackParams = {
   code?: string | null;
   accessToken?: string | null;
   refreshToken?: string | null;
+  flowId?: string | null;
   flow?: string | null;
   deletionToken?: string | null;
   error?: string | null;
@@ -47,6 +48,7 @@ export function parseAuthCallbackUrl(url: string): AuthCallbackParams {
       code: read('code'),
       accessToken: read('access_token'),
       refreshToken: read('refresh_token'),
+      flowId: read('flow_id'),
       flow: read('flow'),
       deletionToken: read('deletion_token'),
       error: read('error', 'error_code'),
@@ -64,7 +66,10 @@ export async function establishAuthCallbackSession(
   params: AuthCallbackParams,
 ): Promise<Session> {
   if (params.code) {
-    const { data, error } = await auth.exchangeCodeForSession(params.code);
+    const { data, error } = await auth.exchangeCodeForSession(
+      params.code,
+      params.flowId ? { flowId: params.flowId } : undefined,
+    );
     if (error) throw error;
     if (!data.session) throw new Error('Es wurde keine gültige Sitzung erstellt.');
     return data.session;

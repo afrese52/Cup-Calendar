@@ -174,6 +174,57 @@ export function watchAuthSession(
   };
 }
 
+export async function confirmEmailCode(
+  auth: Pick<AuthApi, 'exchangeCodeForSession'>,
+  code: string,
+  flowId?: string,
+): Promise<Session> {
+  if (!code) throw new Error('Der Bestätigungslink enthält keinen gültigen Code.');
+
+  const { data, error } = await auth.exchangeCodeForSession(
+    code,
+    flowId ? { flowId } : undefined,
+  );
+  if (error) throw error;
+  if (!data.session) throw new Error('Es wurde keine gültige Sitzung erstellt.');
+  return data.session;
+}
+
+export function emailConfirmationLinkError(
+  errorCode?: string,
+  errorDescription?: string,
+): string | null {
+  const code = errorCode?.toLowerCase() ?? '';
+  const description = errorDescription?.toLowerCase() ?? '';
+  const details = `${code} ${description}`;
+
+  if (details.includes('email_already_confirmed') || details.includes('already confirmed')) {
+    return 'Diese E-Mail-Adresse ist bereits bestätigt. Melde dich in CupCal an.';
+  }
+  if (
+    details.includes('pkce_code_verifier_not_found')
+    || details.includes('pkce code verifier not found')
+  ) {
+    return 'Öffne den Bestätigungslink auf dem Gerät, auf dem du CupCal registriert hast. Fordere sonst einen neuen Link an.';
+  }
+  if (
+    details.includes('otp_expired')
+    || details.includes('email_link_invalid')
+    || details.includes('flow_state_expired')
+    || details.includes('access_denied')
+    || details.includes('expired')
+    || details.includes('invalid')
+    || details.includes('already been used')
+    || details.includes('already used')
+    || details.includes('ungültig')
+    || details.includes('abgelaufen')
+    || details.includes('bereits verwendet')
+  ) {
+    return 'Der Bestätigungslink ist ungültig, abgelaufen oder wurde bereits verwendet. Bitte fordere einen neuen an.';
+  }
+  return null;
+}
+
 export async function submitAccountAuth(
   auth: AuthApi,
   options: {

@@ -11,7 +11,11 @@ import {
   parseAuthCallbackUrl,
   type AuthCallbackParams,
 } from '@/services/accountDeletion';
-import { friendlyAuthError } from '@/services/accountAuth';
+import {
+  confirmEmailCode,
+  emailConfirmationLinkError,
+  friendlyAuthError,
+} from '@/services/accountAuth';
 import { supabase } from '@/services/supabase';
 
 type ConfirmationStatus = 'checking' | 'success' | 'error';
@@ -25,6 +29,7 @@ function routeCallback(params: {
   code?: string | string[];
   access_token?: string | string[];
   refresh_token?: string | string[];
+  flow_id?: string | string[];
   flow?: string | string[];
   deletion_token?: string | string[];
   error?: string | string[];
@@ -35,9 +40,10 @@ function routeCallback(params: {
     code: firstValue(params.code),
     accessToken: firstValue(params.access_token),
     refreshToken: firstValue(params.refresh_token),
+    flowId: firstValue(params.flow_id),
     flow: firstValue(params.flow),
     deletionToken: firstValue(params.deletion_token),
-    error: firstValue(params.error) ?? firstValue(params.error_code),
+    error: firstValue(params.error_code) ?? firstValue(params.error),
     errorDescription: firstValue(params.error_description),
   };
 }
@@ -48,6 +54,7 @@ export default function ConfirmEmailScreen() {
     code?: string | string[];
     access_token?: string | string[];
     refresh_token?: string | string[];
+    flow_id?: string | string[];
     flow?: string | string[];
     deletion_token?: string | string[];
     error?: string | string[];
@@ -58,52 +65,73 @@ export default function ConfirmEmailScreen() {
   const processedCallback = useRef<string | null>(null);
   const [status, setStatus] = useState<ConfirmationStatus>('checking');
   const [message, setMessage] = useState('Deine E-Mail-Adresse wird bestätigt …');
+  const [completedFlow, setCompletedFlow] = useState<string | undefined>();
 
   useEffect(() => {
     let isMounted = true;
 
     const processCallback = async (callback: AuthCallbackParams) => {
       const callbackKey = [
+        callback.flowId,
         callback.flow,
         callback.deletionToken,
         callback.code,
         callback.accessToken,
+        callback.refreshToken,
         callback.error,
+        callback.errorDescription,
       ].join('|');
       if (processedCallback.current === callbackKey) return;
       processedCallback.current = callbackKey;
 
+      if (!isMounted) return;
+      setStatus('checking');
+      setMessage('Deine E-Mail-Adresse wird bestätigt …');
+      setCompletedFlow(undefined);
+
+      const isDeletion = callback.flow === ACCOUNT_DELETION_FLOW;
       if (callback.error || callback.errorDescription) {
-        if (!isMounted) return;
         setStatus('error');
-        setMessage(
-          callback.errorDescription
-            ? 'Der Bestätigungslink konnte nicht verwendet werden. Er ist ungültig, abgelaufen oder wurde bereits benutzt.'
-            : 'Der Bestätigungslink konnte nicht verwendet werden. Bitte fordere einen neuen an.',
-        );
+        setMessage(isDeletion
+          ? 'Der Bestätigungslink konnte nicht verwendet werden. Bitte fordere einen neuen an.'
+          : emailConfirmationLinkError(
+            callback.error ?? undefined,
+            callback.errorDescription ?? undefined,
+          ) ?? 'Der Bestätigungslink konnte nicht verwendet werden. Bitte fordere einen neuen an.');
         return;
       }
 
       if (!supabase) {
-        if (!isMounted) return;
         setStatus('error');
         setMessage('Die Konto-Funktion ist derzeit nicht verfügbar.');
         return;
       }
 
+      if (!isDeletion && !callback.code && !(callback.accessToken && callback.refreshToken)) {
+        setStatus('error');
+        setMessage('Der Bestätigungslink enthält keinen gültigen Code. Bitte fordere einen neuen an.');
+        return;
+      }
+
       try {
-        if (callback.flow === ACCOUNT_DELETION_FLOW && !callback.deletionToken) {
+        if (isDeletion && !callback.deletionToken) {
           throw new Error('Der Kontolöschungs-Bestätigungscode fehlt.');
         }
-        const session = await establishAuthCallbackSession(supabase.auth, callback);
 
-        if (callback.flow === ACCOUNT_DELETION_FLOW) {
-          if (!callback.deletionToken) throw new Error('Der Kontolöschungs-Bestätigungscode fehlt.');
+        const session = callback.code && !isDeletion
+          ? await confirmEmailCode(supabase.auth, callback.code, callback.flowId ?? undefined)
+          : await establishAuthCallbackSession(supabase.auth, callback);
+
+        if (isDeletion) {
+          if (!callback.deletionToken) {
+            throw new Error('Der Kontolöschungs-Bestätigungscode fehlt.');
+          }
           await confirmationMutation.mutateAsync({
             data: { confirmationToken: callback.deletionToken },
           });
           await supabase.auth.signOut({ scope: 'local' }).catch(() => undefined);
           if (!isMounted) return;
+          setCompletedFlow(callback.flow ?? undefined);
           setStatus('success');
           setMessage('Dein CupCal-Konto und die dazugehörigen Favoriten wurden endgültig gelöscht.');
           return;
@@ -116,9 +144,21 @@ export default function ConfirmEmailScreen() {
       } catch (error: unknown) {
         if (!isMounted) return;
         setStatus('error');
-        const isDeletion = callback.flow === ACCOUNT_DELETION_FLOW;
+        const errorDetails = typeof error === 'object' && error !== null
+          ? error as { code?: unknown; message?: unknown }
+          : {};
+        const confirmationError = isDeletion
+          ? null
+          : emailConfirmationLinkError(
+            typeof errorDetails.code === 'string' ? errorDetails.code : undefined,
+            error instanceof Error
+              ? error.message
+              : typeof errorDetails.message === 'string'
+                ? errorDetails.message
+                : undefined,
+          );
         setMessage(
-          friendlyAuthError(
+          confirmationError ?? friendlyAuthError(
             error,
             isDeletion
               ? 'Das Konto konnte nicht gelöscht werden. Bitte fordere einen neuen Bestätigungslink an.'
@@ -137,8 +177,18 @@ export default function ConfirmEmailScreen() {
           : null;
         const initialUrl = url ?? browserUrl;
         const initialCallback = initialUrl ? parseAuthCallbackUrl(initialUrl) : {};
-        const callback = Object.values(initialCallback).some(Boolean)
-          ? initialCallback
+        const hasInitialCallback = Object.values(initialCallback).some(Boolean);
+        const callback = hasInitialCallback
+          ? {
+            code: initialCallback.code ?? routeParams.code,
+            accessToken: initialCallback.accessToken ?? routeParams.accessToken,
+            refreshToken: initialCallback.refreshToken ?? routeParams.refreshToken,
+            flowId: initialCallback.flowId ?? routeParams.flowId,
+            flow: initialCallback.flow ?? routeParams.flow,
+            deletionToken: initialCallback.deletionToken ?? routeParams.deletionToken,
+            error: initialCallback.error ?? routeParams.error,
+            errorDescription: initialCallback.errorDescription ?? routeParams.errorDescription,
+          }
           : hasRouteCallback
             ? routeParams
             : {};
@@ -165,11 +215,13 @@ export default function ConfirmEmailScreen() {
     params.error_code,
     params.error_description,
     params.flow,
+    params.flow_id,
     params.refresh_token,
   ]);
 
   const isChecking = status === 'checking';
   const isSuccess = status === 'success';
+  const successFlow = completedFlow ?? firstValue(params.flow);
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]} edges={['top']}>
@@ -195,7 +247,7 @@ export default function ConfirmEmailScreen() {
           {isChecking
             ? 'Bestätigung prüfen'
             : isSuccess
-              ? firstValue(params.flow) === ACCOUNT_DELETION_FLOW
+              ? successFlow === ACCOUNT_DELETION_FLOW
                 ? 'Konto gelöscht'
                 : 'Bestätigt'
               : 'Bestätigung fehlgeschlagen'}

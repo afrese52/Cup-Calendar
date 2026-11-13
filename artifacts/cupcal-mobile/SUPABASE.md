@@ -15,7 +15,28 @@ Beide Werte werden in den nativen und Web-Client eingebettet und sind öffentlic
 
 Der Client speichert Auth-Sitzungen über AsyncStorage, erneuert sie im Web automatisch und startet beziehungsweise pausiert die Erneuerung auf nativen Geräten passend zum App-Status.
 
-## Passwort-Wiederherstellung und Redirects
+## Benutzerprofile
+
+Supabase Auth ist die Quelle für Konten, E-Mail-Adressen und Anmeldedaten. Diese
+Konten stehen unter **Authentication → Users** beziehungsweise intern in
+`auth.users`. CupCal verwendet zusätzlich `public.user_profiles` für optionale
+Profilfelder und Rollenflags; Passwörter oder E-Mail-Adressen werden dort nicht
+dupliziert.
+
+Migration `0006_user_profiles.sql` legt ein Profil für neue Auth-Benutzer
+automatisch an und trägt bereits vorhandene Auth-Benutzer nach. Führe die
+Migration einmal im SQL Editor des richtigen Supabase-Projekts oder über den
+autorisierten Migrationsweg aus. Sie zielt auf die SQL-Tabelle
+`public.user_profiles`. Neue Profile enthalten die Auth-User-ID, einen
+optionalen Anzeigenamen aus den Auth-Metadaten, sichere Standardwerte für
+`is_admin` und `is_pro` sowie Zeitstempel.
+
+Row-Level-Security erlaubt angemeldeten Benutzern nur das Lesen des eigenen
+Profils. Die App kann daher keine fremden Profile auflisten und keine
+Admin- oder Pro-Rechte selbst setzen. Das Supabase-Dashboard beziehungsweise
+ein vertrauenswürdiger Server kann die Tabellenzeilen weiterhin verwalten.
+
+## E-Mail-Bestätigung, Passwort-Wiederherstellung und Redirects
 
 Im Browser verwendet CupCal die HTTPS-Adresse der gerade geöffneten App-Vorschau
 mit dem Pfad `/auth/reset`. Diese vollständige Adresse muss in Supabase unter
@@ -24,26 +45,39 @@ native Builds bleibt zusätzlich `cupcal-android://auth/reset` als Redirect-URL
 eingetragen. Die native URI funktioniert nicht als Ziel in einem normalen
 Browser.
 
+Für Registrierungs- und erneut angeforderte Bestätigungs-E-Mails muss außerdem
+`cupcal-android://auth/confirm` als Redirect-URL freigegeben sein. CupCal
+verwendet für die Bestätigung den PKCE-Ablauf: Supabase muss nach dem Klick
+einen Code an diese Adresse zurückgeben, den CupCal gegen eine Sitzung tauscht.
+Die Sitzung wird über AsyncStorage gespeichert und beim nächsten Start geladen.
+
 ### Native App-Link
 
 Die native App verwendet in `app.json` das URL-Schema `cupcal-android`. Der von
-CupCal angeforderte Rücksprung lautet in einem installierten Android- oder
-iOS-Build:
+CupCal angeforderte Bestätigungsrücksprung lautet in einem installierten
+Android- oder iOS-Build:
+
+```text
+cupcal-android://auth/confirm?flow=cupcal-email-confirmation
+```
+
+Der Passwort-Rücksprung lautet:
 
 ```text
 cupcal-android://auth/reset?flow=cupcal-password-reset
 ```
 
-Die Query-Parameter `code` (oder bei älteren Token-Links `access_token` und
-`refresh_token`) werden von Supabase an diesen Rücksprung angehängt. Der
+Die Query-Parameter `code` und `flow_id` (oder bei älteren Token-Links
+`access_token` und `refresh_token`) werden von Supabase an diesen Rücksprung
+angehängt. Der
 Wiederherstellungsbildschirm tauscht den Code gegen eine Sitzung und verarbeitet
 sowohl den Kaltstart-Link als auch URL-Ereignisse bei bereits geöffneter App.
 
-Vor dem Versand echter Wiederherstellungs-E-Mails muss die Basis-URI in
-Supabase unter **Authentication → URL Configuration → Redirect URLs** exakt
-zugelassen sein:
+Vor dem Versand echter Auth-E-Mails müssen beide Basis-URIs in Supabase unter
+**Authentication → URL Configuration → Redirect URLs** exakt zugelassen sein:
 
 ```text
+cupcal-android://auth/confirm
 cupcal-android://auth/reset
 ```
 
@@ -53,6 +87,31 @@ Supabase-Projekts gespeichert ist. Die Konfiguration im Repository bestätigt
 nur das App-Schema und die Route; sie bestätigt nicht den Inhalt des
 Supabase-Dashboards.
 
+### Geräte-Prüfung
+
+Die Bestätigung benötigt installierte native Builds und ein echtes
+Supabase-Testkonto mit Zugriff auf sein E-Mail-Postfach. Expo-Web oder Expo Go
+allein bestätigen das App-Schema nicht. Der Redirect-Eintrag muss im
+Supabase-Dashboard vor dem Test geprüft werden; die Repository-Konfiguration
+beweist nicht, dass er im Projekt freigegeben ist.
+Die Tabelle beschreibt erwartete Prüfschritte, keine bestätigten Ergebnisse
+eines Tests auf physischen Geräten.
+
+| Plattform | Zustand vor Link-Klick | Ergebnis |
+| --- | --- | --- |
+| Android | App vollständig beendet | Bestätigungslink öffnet CupCal; Code wird gegen eine Sitzung getauscht |
+| Android | CupCal bereits geöffnet | Link navigiert zur Bestätigungsroute; Sitzung bleibt gespeichert |
+| iOS | App vollständig beendet | Bestätigungslink öffnet CupCal; Code wird gegen eine Sitzung getauscht |
+| iOS | CupCal bereits geöffnet | Link navigiert zur Bestätigungsroute; Sitzung bleibt gespeichert |
+| Android und iOS | Link abgelaufen oder erneut verwendet | Deutsche Meldung fordert einen neuen Bestätigungslink an |
+
+Für die kontobasierte Merkliste müssen die Migrationen `0002`, `0003` und
+`0004` in dieser Reihenfolge aus `artifacts/api-server/supabase/migrations/`
+auf dem Supabase-Projekt ausgeführt werden. Sie richten die Favoritentabelle
+und Zugriffsregeln ein,
+stellen konfliktgeprüfte Schreibvorgänge sicher und aktivieren Realtime für
+Änderungen auf weiteren Geräten. Ohne diese Migrationen bleiben Favoriten lokal
+gespeichert; CupCal zeigt den ausstehenden Abgleich an.
 ## Konto löschen
 
 In den Kontoeinstellungen kann ein angemeldeter Benutzer zunächst den Versand
@@ -89,23 +148,3 @@ für normale Anmeldungen. Nach erfolgreicher Löschung entfernt Supabase auch
 die an das Konto geknüpften Favoriten und Importhistorie; die öffentlichen
 Turniertermine bleiben erhalten.
 
-### Geräte-Prüfung
-
-Die Bestätigung benötigt installierte native Builds und ein echtes
-Supabase-Wiederherstellungs-E-Mail-Konto. Expo-Web oder Expo Go allein
-bestätigen das App-Schema nicht.
-
-| Plattform | Zustand vor Link-Klick | Ergebnis |
-| --- | --- | --- |
-| Android | App vollständig beendet | E-Mail-Link öffnet CupCal; Token wird angenommen |
-| Android | CupCal bereits geöffnet | Link wechselt zur Wiederherstellung; Token wird angenommen |
-| iOS | App vollständig beendet | E-Mail-Link öffnet CupCal; Token wird angenommen |
-| iOS | CupCal bereits geöffnet | Link wechselt zur Wiederherstellung; Token wird angenommen |
-
-Für die kontobasierte Merkliste müssen die Migrationen `0002`, `0003` und
-`0004` in dieser Reihenfolge aus `artifacts/api-server/supabase/migrations/`
-auf dem Supabase-Projekt ausgeführt werden. Sie richten die Favoritentabelle
-und Zugriffsregeln ein,
-stellen konfliktgeprüfte Schreibvorgänge sicher und aktivieren Realtime für
-Änderungen auf weiteren Geräten. Ohne diese Migrationen bleiben Favoriten lokal
-gespeichert; CupCal zeigt den ausstehenden Abgleich an.

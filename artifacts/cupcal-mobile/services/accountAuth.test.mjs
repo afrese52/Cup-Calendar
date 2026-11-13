@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  confirmEmailCode,
+  emailConfirmationLinkError,
   friendlyAuthError,
   resendAccountConfirmation,
   signOutAccount,
@@ -16,6 +18,78 @@ const savedSession = {
   expires_at: 1_900_000_000,
   user: { id: 'test-user-id', email: 'test@example.invalid' },
 };
+
+test('tauscht den Bestätigungscode nur mit einer gültigen Sitzung ein', async (t) => {
+  await t.test('übergibt den Code an Supabase und liefert die Sitzung zurück', async () => {
+    let exchangedCode;
+    let exchangedOptions;
+    const session = await confirmEmailCode({
+      exchangeCodeForSession: async (code, options) => {
+        exchangedCode = code;
+        exchangedOptions = options;
+        return { data: { session: savedSession }, error: null };
+      },
+    }, 'email-confirmation-code', 'confirmation-flow-id');
+
+    assert.equal(exchangedCode, 'email-confirmation-code');
+    assert.deepEqual(exchangedOptions, { flowId: 'confirmation-flow-id' });
+    assert.equal(session, savedSession);
+  });
+
+  await t.test('lehnt einen fehlenden Code oder eine fehlende Sitzung ab', async () => {
+    await assert.rejects(
+      confirmEmailCode({ exchangeCodeForSession: async () => ({
+        data: { session: null },
+        error: null,
+      }) }, ''),
+      /Bestätigungslink enthält keinen gültigen Code/i,
+    );
+    await assert.rejects(
+      confirmEmailCode({ exchangeCodeForSession: async () => ({
+        data: { session: null },
+        error: null,
+      }) }, 'email-confirmation-code'),
+      /keine gültige Sitzung/i,
+    );
+  });
+
+  await t.test('reicht abgelaufene oder bereits verwendete Codes als Fehler durch', async () => {
+    await assert.rejects(
+      confirmEmailCode({ exchangeCodeForSession: async () => ({
+        data: { session: null },
+        error: new Error('Email link is invalid or has expired'),
+      }) }, 'expired-code'),
+      /invalid or has expired/i,
+    );
+  });
+});
+
+test('übersetzt Fehler aus Bestätigungslinks in klare deutsche Hinweise', async (t) => {
+  await t.test('abgelaufener oder wiederverwendeter Link', () => {
+    assert.equal(
+      emailConfirmationLinkError('access_denied', 'Email link is invalid or has expired'),
+      'Der Bestätigungslink ist ungültig, abgelaufen oder wurde bereits verwendet. Bitte fordere einen neuen an.',
+    );
+  });
+  await t.test('bereits bestätigte Adresse', () => {
+    assert.equal(
+      emailConfirmationLinkError('email_already_confirmed'),
+      'Diese E-Mail-Adresse ist bereits bestätigt. Melde dich in CupCal an.',
+    );
+  });
+  await t.test('fehlender PKCE-Nachweis bei anderem Gerät', () => {
+    assert.match(
+      emailConfirmationLinkError(
+        'pkce_code_verifier_not_found',
+        'PKCE code verifier not found in storage',
+      ),
+      /Gerät, auf dem du CupCal registriert hast/,
+    );
+  });
+  await t.test('unbekannte Fehler bleiben allgemein verständlich', () => {
+    assert.equal(emailConfirmationLinkError('unknown_error'), null);
+  });
+});
 
 function createAuth(overrides = {}) {
   return {

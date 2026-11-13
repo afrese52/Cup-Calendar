@@ -1,0 +1,210 @@
+import { ArrowDown, ArrowRight, Bookmark, CalendarDays, Check, Clock3, Download, Filter, WifiOff } from 'lucide-react';
+import cupcalIcon from './assets/cupcal-icon.png';
+
+const features = [
+  {
+    number: '01',
+    title: 'Alles im Blick. Ein Kalender.',
+    description: 'Turniere, Ligen, Qualifikationen und Trainingsrunden übersichtlich an einem Ort.',
+    icon: CalendarDays,
+  },
+  {
+    number: '02',
+    title: 'Finde genau deine Termine.',
+    description: 'Nach Eventtyp filtern und wichtige Cups als Favorit markieren.',
+    icon: Filter,
+  },
+  {
+    number: '03',
+    title: 'Dein nächster Start. Zur richtigen Zeit.',
+    description: 'Termine in deiner Gerätezeit – damit aus „gleich“ auch wirklich gleich wird.',
+    icon: Clock3,
+  },
+];
+
+function App() {
+  return (
+    <main className="site-shell">
+      <header className="container topbar">
+        <a className="brand" href="#start" aria-label="CupCal – zum Anfang" data-testid="link-home">
+          <img src={cupcalIcon} alt="CupCal Kalender-App-Symbol" data-testid="img-cupcal-icon" />
+          <span className="brand-name">
+            <strong>CUPCAL</strong>
+            <span>DEIN WETTKAMPF-KOMPASS</span>
+          </span>
+        </a>
+        <nav className="nav-links" aria-label="Hauptnavigation">
+          <a href="#funktionen" data-testid="link-funktionen">Funktionen</a>
+          <a href="#vorschau" data-testid="link-vorschau">Ein Blick hinein</a>
+          <a href="#verfuegbarkeit" data-testid="link-verfuegbarkeit">Verfügbarkeit</a>
+        </nav>
+        <a className="nav-cta" href="#verfuegbarkeit" data-testid="button-download-status">
+          <span>App-Status</span><ArrowRight aria-hidden="true" />
+        </a>
+      </header>
+
+      <section className="container hero" id="start" data-testid="section-hero">
+        <div className="hero-grid">
+          <div className="fade-in">
+            <div className="eyebrow">Für deinen nächsten Drop</div>
+            <h1>Dein nächster<br /><span>Wettkampf.</span><br />Schon im Blick.</h1>
+            <p className="hero-copy">
+              CupCal bringt Turniere, Ligen, Qualifikationen und Trainingsrunden in deinen Kalender.
+              Damit du dich auf dein nächstes Match konzentrieren kannst – nicht auf die Suche nach dem Start.
+            </p>
+            <div className="hero-actions">
+              <a className="button-primary" href="#funktionen" data-testid="button-discover">
+                CupCal entdecken <ArrowDown aria-hidden="true" />
+              </a>
+              <a className="button-muted" href="#verfuegbarkeit" data-testid="button-availability">
+                <Download aria-hidden="true" /> Download-Status
+              </a>
+            </div>
+            <div className="hero-note"><b>Für die Community gemacht.</b> Unabhängiges Fanprojekt.</div>
+          </div>
+          <div className="hero-art fade-in fade-delay" aria-label="CupCal App-Symbol und Vorschauhinweise" data-testid="visual-hero">
+            <div className="art-orbit" />
+            <img className="hero-icon" src={cupcalIcon} alt="CupCal App-Symbol mit Kalender und Blitz" />
+            <div className="floating-tag tag-one">
+              <CalendarDays aria-hidden="true" />
+              <span><strong>Alle Cups</strong><small>an einem Ort</small></span>
+            </div>
+            <div className="floating-tag tag-two">
+              <Bookmark aria-hidden="true" />
+              <span><strong>Dein Fokus</strong><small>Favoriten im Blick</small></span>
+            </div>
+            <div className="signal"><i /> WENIGER SUCHEN · MEHR SPIELEN</div>
+          </div>
+        </div>
+      </section>
+
+      <div className="ticker" aria-label="CupCal im Überblick" data-testid="text-value-strip">
+        <div className="container">
+          <div className="ticker-track">
+            <span>Turniere <b>·</b> Ligen <b>·</b> Qualifikationen <b>·</b> Trainingsrunden <b>·</b> Favoriten <b>·</b> Offline verfügbar <b>·</b></span>
+            <span aria-hidden="true">Turniere <b>·</b> Ligen <b>·</b> Qualifikationen <b>·</b> Trainingsrunden <b>·</b> Favoriten <b>·</b> Offline verfügbar <b>·</b></span>
+          </div>
+        </div>
+      </div>
+
+      <section className="section container" id="funktionen" data-testid="section-features">
+        <div className="overview">
+          <div>
+            <div className="section-label">Der Überblick vor dem Match</div>
+            <h2 className="section-title">Weniger Tabs.<br /><span>Mehr Fokus.</span></h2>
+            <p className="section-intro">
+              Wenn der nächste Wettkampf ansteht, sollte der Plan klar sein.
+              CupCal sortiert die Termine, damit dein Kopf frei bleibt für die Runde.
+            </p>
+          </div>
+          <div className="feature-list">
+            {features.map(({ number, title, description, icon: Icon }) => (
+              <article className="feature-row" key={number} data-testid={`feature-row-${number}`}>
+                <span className="feature-index">{number}</span>
+                <div>
+                  <h3>{title}</h3>
+                  <p>{description}</p>
+                </div>
+                <Icon className="feature-icon" aria-hidden="true" />
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="section preview-section" id="vorschau" data-testid="section-preview">
+        <div className="container preview-layout">
+          <div className="preview-copy">
+            <div className="section-label">Ein Blick in CupCal</div>
+            <h2 className="section-title">Der Spielplan.<br /><span>Auf einen Blick.</span></h2>
+            <p className="section-intro">
+              Monatsübersicht, Event-Kategorien und die nächsten Starts – kompakt in einer Kalenderansicht.
+              Ein beispielhafter Einblick in die App.
+            </p>
+            <div className="preview-caption"><Check aria-hidden="true" /> Vorschau aus der CupCal-App</div>
+          </div>
+          <div className="phone-frame" role="img" aria-label="Beispielhafte Kalenderansicht mit Eventtypen und kommenden Terminen" data-testid="visual-calendar-preview">
+            <div className="phone-head">
+              <div className="phone-brand"><b>CUP</b>CAL · KALENDER</div>
+              <span className="phone-status">MANUELLER IMPORT</span>
+            </div>
+            <div className="calendar-month">
+              <strong>Oktober</strong><small>BEISPIELMONAT · 12 TERMINE</small>
+            </div>
+            <div className="weekdays">
+              {['MO', 'DI', 'MI', 'DO', 'FR', 'SA', 'SO'].map((day) => <span key={day}>{day}</span>)}
+            </div>
+            <div className="dates">
+              {['29', '30', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16', '17', '18', '19', '20', '21', '22', '23', '24', '25', '26', '27', '28', '29', '30', '31', '1', '2'].map((date, index) => {
+                const classes = [
+                  index < 2 || index > 32 ? 'quiet' : '',
+                  index === 15 ? 'today' : '',
+                  [7, 10, 14, 21, 24, 29].includes(index) ? 'event event-lime' : '',
+                  [5, 19, 27].includes(index) ? 'event' : '',
+                  [12, 23].includes(index) ? 'event event-gold' : '',
+                  index === 31 ? 'event event-violet' : '',
+                ].filter(Boolean).join(' ');
+                return <span className={classes} key={`${date}-${index}`}>{date}</span>;
+              })}
+            </div>
+            <div className="calendar-legend">
+              <span><i /> Turnier</span><span><i className="blue" /> Liga</span>
+              <span><i className="gold" /> Qualifikation</span><span><i className="violet" /> Training</span>
+            </div>
+            <div className="events-label">ALS NÄCHSTES · BEISPIELTERMINE</div>
+            <div className="event-card">
+              <span className="date">04<br />OKT</span><span><strong>Solo-Turnier</strong><small>Start: 18:00 · Gerätezeit</small></span><span className="kind">TURNIER</span>
+            </div>
+            <div className="event-card">
+              <span className="date">08<br />OKT</span><span><strong>Community-Liga</strong><small>Start: 19:30 · Gerätezeit</small></span><span className="kind">LIGA</span>
+            </div>
+            <div className="event-card">
+              <span className="date">12<br />OKT</span><span><strong>Offene Qualifikation</strong><small>Start: 17:00 · Gerätezeit</small></span><span className="kind">QUALI</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="offline-band" data-testid="section-offline">
+        <div className="container offline-inner">
+          <div className="offline-copy">
+            <div className="offline-mark"><WifiOff aria-hidden="true" /></div>
+            <div>
+              <h2>Auch offline auf Kurs.</h2>
+              <p>Deine gespeicherten Termine bleiben griffbereit – auch ohne Verbindung.</p>
+            </div>
+          </div>
+          <a className="button-dark" href="#verfuegbarkeit" data-testid="link-offline-info">
+            CupCal kennenlernen <ArrowRight aria-hidden="true" />
+          </a>
+        </div>
+      </section>
+
+      <section className="availability container" id="verfuegbarkeit" data-testid="section-availability">
+        <div className="section-label">Ehrlich gesagt</div>
+        <h2 className="section-title">Noch nicht im Store.<br /><span>Aber auf dem Radar.</span></h2>
+        <p className="section-intro">
+          CupCal ist aktuell noch nicht zum Download verfügbar. Sobald es einen offiziellen Store-Link gibt,
+          wird er hier ergänzt – bis dahin gibt es keinen Fake-Button und keinen falschen Umweg.
+        </p>
+        <div className="availability-panel" role="status" data-testid="status-download">
+          <Clock3 className="availability-icon" aria-hidden="true" />
+          <div>
+            <strong>Download derzeit nicht verfügbar</strong>
+            <p>Es wurden noch keine verifizierten Download-Links gefunden. Schau später wieder vorbei.</p>
+          </div>
+        </div>
+        <div className="disclaimer">Inoffizielles Fanprojekt · Nicht mit Epic Games verbunden oder von Epic Games unterstützt</div>
+      </section>
+
+      <footer className="footer">
+        <div className="container footer-inner">
+          <div className="footer-copy">© CupCal · Der Kalender für deinen Wettkampf-Alltag</div>
+          <div className="footer-note">Community-Projekt · Keine offizielle Verbindung zu Epic Games</div>
+        </div>
+      </footer>
+    </main>
+  );
+}
+
+export default App;

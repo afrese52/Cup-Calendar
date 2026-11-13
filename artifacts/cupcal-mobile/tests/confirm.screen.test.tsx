@@ -1,29 +1,23 @@
 import React from 'react';
-import { expect, jest, test } from '@jest/globals';
+import { beforeEach, expect, jest, test } from '@jest/globals';
 import { render, waitFor } from '@testing-library/react-native';
-import ConfirmEmailScreen from '../app/auth/confirm';
-import { supabase } from '@/services/supabase';
+
+const mockRouteParams: { current: Record<string, string | string[]> } = { current: {} };
+const mockInitialUrl: { current: string | null } = { current: null };
+const mockDeletionConfirm = jest.fn(async (_input: {
+  data: { confirmationToken: string };
+}) => undefined);
 
 jest.mock('@expo/vector-icons', () => ({ Feather: () => null }));
-jest.mock('@workspace/api-client-react', () => {
-  const confirm = jest.fn(async () => undefined);
-  return {
-    useConfirmAccountDeletion: () => ({ mutateAsync: confirm }),
-    __confirmAccountDeletion: confirm,
-  };
-});
+jest.mock('@workspace/api-client-react', () => ({
+  useConfirmAccountDeletion: () => ({ mutateAsync: mockDeletionConfirm }),
+}));
 jest.mock('expo-linking', () => ({
-  getInitialURL: jest.fn(async () =>
-    'https://cupcal.example/auth/confirm?flow=cupcal-account-deletion&deletion_token=signed-proof&code=one-time-code',
-  ),
+  getInitialURL: jest.fn(async () => mockInitialUrl.current),
   addEventListener: () => ({ remove: jest.fn() }),
 }));
 jest.mock('expo-router', () => ({
-  useLocalSearchParams: () => ({
-    flow: 'cupcal-account-deletion',
-    deletion_token: 'signed-proof',
-    code: 'one-time-code',
-  }),
+  useLocalSearchParams: () => mockRouteParams.current,
   router: { replace: jest.fn() },
 }));
 jest.mock('react-native-safe-area-context', () => {
@@ -40,7 +34,6 @@ jest.mock('@/hooks/useColors', () => ({
     secondary: '#eee',
     accent: '#def',
     destructive: '#c00',
-    success: '#080',
   }),
 }));
 jest.mock('@/services/supabase', () => ({
@@ -59,20 +52,75 @@ jest.mock('@/services/supabase', () => ({
   },
 }));
 
+const { default: ConfirmEmailScreen } = require('../app/auth/confirm') as {
+  default: React.ComponentType;
+};
+const { supabase } = jest.requireMock('@/services/supabase') as {
+  supabase: any;
+};
+
+beforeEach(() => {
+  mockRouteParams.current = {};
+  mockInitialUrl.current = null;
+  mockDeletionConfirm.mockReset().mockResolvedValue(undefined);
+  supabase.auth.exchangeCodeForSession.mockReset().mockResolvedValue({
+    data: { session: { user: { id: 'account-id' } } },
+    error: null,
+  });
+  supabase.auth.setSession.mockReset().mockResolvedValue({
+    data: { session: { user: { id: 'account-id' } } },
+    error: null,
+  });
+  supabase.auth.signOut.mockReset().mockResolvedValue({ error: null });
+});
+
+test('tauscht den E-Mail-Bestätigungscode samt Flow-ID ein und zeigt CupCal-Erfolg', async () => {
+  mockInitialUrl.current =
+    'https://cupcal.example/auth/confirm?code=email-confirmation-code&flow_id=confirmation-flow-id';
+  const view = await render(<ConfirmEmailScreen />);
+
+  await waitFor(() => {
+    expect(supabase.auth.exchangeCodeForSession).toHaveBeenCalledWith(
+      'email-confirmation-code',
+      { flowId: 'confirmation-flow-id' },
+    );
+    expect(view.getByText('Deine E-Mail-Adresse ist bestätigt. Du kannst CupCal jetzt verwenden.')).toBeTruthy();
+  });
+  expect(view.getByTestId('email-confirmation-return-button')).toBeTruthy();
+});
+
+test('zeigt abgelaufene und bereits verwendete Links verständlich auf Deutsch', async () => {
+  mockInitialUrl.current =
+    'https://cupcal.example/auth/confirm?error=access_denied&error_code=otp_expired&error_description=Email%20link%20is%20invalid%20or%20has%20expired';
+  const view = await render(<ConfirmEmailScreen />);
+
+  expect(await view.findByText(
+    'Der Bestätigungslink ist ungültig, abgelaufen oder wurde bereits verwendet. Bitte fordere einen neuen an.',
+  )).toBeTruthy();
+  expect(supabase.auth.exchangeCodeForSession).not.toHaveBeenCalled();
+});
+
+test('zeigt ohne Bestätigungscode eine klare Fehlermeldung', async () => {
+  const view = await render(<ConfirmEmailScreen />);
+
+  expect(await view.findByText(
+    'Der Bestätigungslink enthält keinen gültigen Code. Bitte fordere einen neuen an.',
+  )).toBeTruthy();
+  expect(supabase.auth.exchangeCodeForSession).not.toHaveBeenCalled();
+});
+
 test('löscht das Konto erst nach dem E-Mail-Link und meldet danach ab', async () => {
+  mockInitialUrl.current =
+    'https://cupcal.example/auth/confirm?flow=cupcal-account-deletion&deletion_token=signed-proof&code=one-time-code';
   const view = await render(<ConfirmEmailScreen />);
 
   await waitFor(() => expect(view.getByText('Konto gelöscht')).toBeTruthy());
   expect(view.getByText(
     'Dein CupCal-Konto und die dazugehörigen Favoriten wurden endgültig gelöscht.',
   )).toBeTruthy();
-
-  const mockedApi = jest.requireMock('@workspace/api-client-react') as {
-    __confirmAccountDeletion: jest.Mock;
-  };
-  expect(mockedApi.__confirmAccountDeletion).toHaveBeenCalledWith({
+  expect(mockDeletionConfirm).toHaveBeenCalledWith({
     data: { confirmationToken: 'signed-proof' },
   });
-  expect(supabase!.auth.exchangeCodeForSession).toHaveBeenCalledWith('one-time-code');
-  expect(supabase!.auth.signOut).toHaveBeenCalledWith({ scope: 'local' });
+  expect(supabase.auth.exchangeCodeForSession.mock.calls[0]?.[0]).toBe('one-time-code');
+  expect(supabase.auth.signOut).toHaveBeenCalledWith({ scope: 'local' });
 });

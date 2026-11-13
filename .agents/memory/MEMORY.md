@@ -6,6 +6,8 @@
 - [Asynchrone Expo-Bildschirmtests](async-expo-screen-tests.md) — React-Native-Testing-Library-14-Renderings und Interaktionen immer awaiten, bevor der Zustand geprüft wird.
 - [Expo-Router-Testdateien](expo-router-test-placement.md) — Bildschirmtests außerhalb von `app/` ablegen, damit Expo sie nicht als Routen bündelt.
 - [Supabase-Projekt-URL](supabase-base-url.md) — Supabase-Clients brauchen die Projektbasis; API-Endpfade können Auth-Fehler wie 401 oder 404 auslösen.
+- [Supabase-PKCE auf nativen Geräten](supabase-native-pkce.md) — Native Callback-Routen müssen `flow_id` an den Codeaustausch übergeben, damit parallele PKCE-Flows ihren richtigen Verifier nutzen.
+- [Supabase-Profile für Auth-Konten](supabase-user-profiles.md) — Jedes CupCal-Auth-Konto braucht einen passenden Eintrag in `public.user_profiles`.
 - [Supabase-Migrationen für Live-Tests](supabase-live-migrations.md) — Vor Konto-Isolationstests muss das Live-Schema die lokalen Favoritenmigrationen enthalten.
 - [Bookmark-Zeitordnung](bookmark-clock-ordering.md) — Favoritenänderungen anhand serverseitiger Revisionen statt Gerätezeitstempeln ordnen.
 - [Favoriten über Geräte hinweg](cross-device-bookmarks.md) — Favoriten gehören zum angemeldeten Konto und sollen auf all seinen Geräten erscheinen.

@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/cupcal-website/"
+title = "CupCal Website"
+description = "Die deutschsprachige Vorstellungs- und Downloadseite für CupCal, den Fortnite-Wettbewerbskalender mit Filtern, Favoriten und Offline-Zugriff."
+version = "1.0.0"
+id = "artifacts/cupcal-website"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/cupcal-website/" ]
+localPort = 19101
+
+[services.development]
+run = "pnpm --filter @workspace/cupcal-website run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/cupcal-website", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/cupcal-website/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "19101"
+BASE_PATH = "/cupcal-website/"

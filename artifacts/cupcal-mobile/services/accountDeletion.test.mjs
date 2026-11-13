@@ -53,6 +53,7 @@ test('liest Auth-Codes aus Query und Sitzungstoken aus dem URL-Fragment', () => 
       code: null,
       accessToken: 'access',
       refreshToken: 'refresh',
+      flowId: null,
       flow: 'cupcal-account-deletion',
       deletionToken: 'proof',
       error: null,
@@ -63,16 +64,19 @@ test('liest Auth-Codes aus Query und Sitzungstoken aus dem URL-Fragment', () => 
 
 test('tauscht einen PKCE-Code gegen die bestätigte Sitzung', async () => {
   let exchanged;
+  let exchangedOptions;
   const session = { user: { id: 'user-id' } };
   const result = await establishAuthCallbackSession({
-    exchangeCodeForSession: async (code) => {
+    exchangeCodeForSession: async (code, options) => {
       exchanged = code;
+      exchangedOptions = options;
       return { data: { session }, error: null };
     },
     setSession: async () => ({ data: { session: null }, error: null }),
-  }, { code: 'one-time-code' });
+  }, { code: 'one-time-code', flowId: 'callback-flow' });
 
   assert.equal(exchanged, 'one-time-code');
+  assert.deepEqual(exchangedOptions, { flowId: 'callback-flow' });
   assert.equal(result, session);
 });
 

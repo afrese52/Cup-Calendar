@@ -18,6 +18,7 @@ export function createCupCalSupabaseClient(
       autoRefreshToken: true,
       persistSession: true,
       detectSessionInUrl: false,
+      flowType: 'pkce',
     },
     ...(fetchImpl ? { global: { fetch: fetchImpl } } : {}),
   });
