@@ -74,3 +74,15 @@ export function verifyAccountDeletionToken(
     return null;
   }
 }
+
+export function getAccountDeletionTokenStatus(
+  token: string,
+  signingKey: string,
+  authenticatedUserId: string,
+  now = Date.now(),
+): "valid" | "invalid" | "foreign-account" {
+  if (!authenticatedUserId) return "invalid";
+  const claims = verifyAccountDeletionToken(token, signingKey, now);
+  if (!claims) return "invalid";
+  return claims.sub === authenticatedUserId ? "valid" : "foreign-account";
+}

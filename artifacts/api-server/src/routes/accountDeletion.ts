@@ -1,6 +1,6 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { z } from "zod";
-import { createAccountDeletionToken, verifyAccountDeletionToken } from "../services/accountDeletionToken";
+import { createAccountDeletionToken, getAccountDeletionTokenStatus } from "../services/accountDeletionToken";
 import { getSupabaseAdmin } from "../services/supabase";
 
 const router: IRouter = Router();
@@ -91,12 +91,16 @@ router.post("/v1/account/deletion/confirm", async (req, res): Promise<void> => {
     return;
   }
 
-  const claims = verifyAccountDeletionToken(parsedBody.data.confirmationToken, signingKey);
-  if (!claims) {
+  const tokenStatus = getAccountDeletionTokenStatus(
+    parsedBody.data.confirmationToken,
+    signingKey,
+    resolution.user.id,
+  );
+  if (tokenStatus === "invalid") {
     res.status(400).json({ error: "Der Bestätigungslink ist ungültig oder abgelaufen. Fordere bitte einen neuen an." });
     return;
   }
-  if (claims.sub !== resolution.user.id) {
+  if (tokenStatus === "foreign-account") {
     res.status(403).json({ error: "Der Bestätigungslink gehört zu einem anderen Konto." });
     return;
   }

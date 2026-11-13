@@ -62,6 +62,24 @@ test('liest Auth-Codes aus Query und Sitzungstoken aus dem URL-Fragment', () => 
   );
 });
 
+test('behält Löschkennung und aktuelle PKCE-Flow-ID bei einem nativen Rücksprung', () => {
+  const callback = parseAuthCallbackUrl(
+    'cupcal-android://auth/confirm?flow=cupcal-account-deletion&deletion_token=signed.proof&sb_flow_id=deletion-flow&code=one-time-code',
+  );
+
+  assert.equal(callback.flow, 'cupcal-account-deletion');
+  assert.equal(callback.deletionToken, 'signed.proof');
+  assert.equal(callback.flowId, 'deletion-flow');
+  assert.equal(callback.code, 'one-time-code');
+});
+
+test('liest die aktuelle PKCE-Flow-ID auch aus dem Fragment', () => {
+  assert.equal(
+    parseAuthCallbackUrl('cupcal-android://auth/confirm#sb_flow_id=fragment-flow&code=code').flowId,
+    'fragment-flow',
+  );
+});
+
 test('tauscht einen PKCE-Code gegen die bestätigte Sitzung', async () => {
   let exchanged;
   let exchangedOptions;
@@ -93,4 +111,43 @@ test('stellt eine implizite Sitzung aus den Fragmenttoken her', async () => {
 
   assert.deepEqual(sessionInput, { access_token: 'access', refresh_token: 'refresh' });
   assert.equal(result, session);
+});
+
+for (const reason of ['abgelaufen', 'bereits verwendet']) {
+  test(`verwendet nach einem ${reason}en Auth-Code keine bestehende Sitzung als Ersatz`, async () => {
+    const providerError = new Error(`Der Auth-Code ist ${reason}.`);
+    let fallbackCalled = false;
+    await assert.rejects(
+      establishAuthCallbackSession({
+        exchangeCodeForSession: async () => ({
+          data: { session: null },
+          error: providerError,
+        }),
+        setSession: async () => {
+          fallbackCalled = true;
+          return { data: { session: { user: { id: 'account-id' } } }, error: null };
+        },
+      }, { code: 'invalid-one-time-code' }),
+      (error) => error === providerError,
+    );
+    assert.equal(fallbackCalled, false);
+  });
+}
+
+test('verlangt einen Auth-Code oder vollständige Sitzungstoken statt nur einer Löschkennung', async () => {
+  let authCalled = false;
+  await assert.rejects(
+    establishAuthCallbackSession({
+      exchangeCodeForSession: async () => {
+        authCalled = true;
+        return { data: { session: null }, error: null };
+      },
+      setSession: async () => {
+        authCalled = true;
+        return { data: { session: null }, error: null };
+      },
+    }, { flow: 'cupcal-account-deletion', deletionToken: 'signed.proof' }),
+    /keine gültige Sitzung/i,
+  );
+  assert.equal(authCalled, false);
 });

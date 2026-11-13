@@ -48,7 +48,7 @@ export function parseAuthCallbackUrl(url: string): AuthCallbackParams {
       code: read('code'),
       accessToken: read('access_token'),
       refreshToken: read('refresh_token'),
-      flowId: read('flow_id'),
+      flowId: read('sb_flow_id', 'flow_id'),
       flow: read('flow'),
       deletionToken: read('deletion_token'),
       error: read('error', 'error_code'),

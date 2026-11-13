@@ -124,3 +124,69 @@ test('löscht das Konto erst nach dem E-Mail-Link und meldet danach ab', async (
   expect(supabase.auth.exchangeCodeForSession.mock.calls[0]?.[0]).toBe('one-time-code');
   expect(supabase.auth.signOut).toHaveBeenCalledWith({ scope: 'local' });
 });
+
+test('übernimmt die aktuelle Flow-ID eines nativen Löschlinks in den Codeaustausch', async () => {
+  mockInitialUrl.current =
+    'cupcal-android://auth/confirm?flow=cupcal-account-deletion&deletion_token=signed-proof&code=one-time-code&sb_flow_id=deletion-flow-id';
+  const view = await render(<ConfirmEmailScreen />);
+
+  expect(await view.findByText('Konto gelöscht')).toBeTruthy();
+  expect(supabase.auth.exchangeCodeForSession).toHaveBeenCalledWith(
+    'one-time-code',
+    { flowId: 'deletion-flow-id' },
+  );
+});
+
+test('löst bei einem abgelaufenen Löschlink keine Löschanfrage aus', async () => {
+  mockInitialUrl.current =
+    'https://cupcal.example/auth/confirm?flow=cupcal-account-deletion&deletion_token=signed-proof&error_code=otp_expired';
+  const view = await render(<ConfirmEmailScreen />);
+
+  expect(await view.findByText('Bestätigung fehlgeschlagen')).toBeTruthy();
+  expect(supabase.auth.exchangeCodeForSession).not.toHaveBeenCalled();
+  expect(mockDeletionConfirm).not.toHaveBeenCalled();
+});
+
+test('löst nach einem bereits verwendeten Auth-Code keine Löschanfrage aus', async () => {
+  mockInitialUrl.current =
+    'https://cupcal.example/auth/confirm?flow=cupcal-account-deletion&deletion_token=signed-proof&code=used-code';
+  supabase.auth.exchangeCodeForSession.mockResolvedValue({
+    data: { session: null },
+    error: { code: 'flow_state_not_found', message: 'The auth code has already been used.' },
+  });
+  const view = await render(<ConfirmEmailScreen />);
+
+  expect(await view.findByText('Bestätigung fehlgeschlagen')).toBeTruthy();
+  expect(mockDeletionConfirm).not.toHaveBeenCalled();
+  expect(supabase.auth.signOut).not.toHaveBeenCalled();
+});
+
+test('löscht nicht, wenn der Link keine E-Mail-Sitzung nachweist', async () => {
+  mockInitialUrl.current =
+    'https://cupcal.example/auth/confirm?flow=cupcal-account-deletion&deletion_token=signed-proof';
+  const view = await render(<ConfirmEmailScreen />);
+
+  expect(await view.findByText('Bestätigung fehlgeschlagen')).toBeTruthy();
+  expect(mockDeletionConfirm).not.toHaveBeenCalled();
+});
+
+test('prüft vor dem Codeaustausch, ob der signierte Löschcode vorhanden ist', async () => {
+  mockInitialUrl.current =
+    'https://cupcal.example/auth/confirm?flow=cupcal-account-deletion&code=one-time-code';
+  const view = await render(<ConfirmEmailScreen />);
+
+  expect(await view.findByText('Bestätigung fehlgeschlagen')).toBeTruthy();
+  expect(supabase.auth.exchangeCodeForSession).not.toHaveBeenCalled();
+  expect(mockDeletionConfirm).not.toHaveBeenCalled();
+});
+
+test('meldet eine kontofremde Löschbestätigung ohne Erfolg oder Abmeldung', async () => {
+  mockInitialUrl.current =
+    'https://cupcal.example/auth/confirm?flow=cupcal-account-deletion&deletion_token=foreign-proof&code=one-time-code';
+  mockDeletionConfirm.mockRejectedValue(new Error('Der Bestätigungslink gehört zu einem anderen Konto.'));
+  const view = await render(<ConfirmEmailScreen />);
+
+  expect(await view.findByText('Bestätigung fehlgeschlagen')).toBeTruthy();
+  expect(view.queryByText('Konto gelöscht')).toBeNull();
+  expect(supabase.auth.signOut).not.toHaveBeenCalled();
+});

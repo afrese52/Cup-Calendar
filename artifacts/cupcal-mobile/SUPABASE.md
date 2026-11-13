@@ -146,7 +146,8 @@ Vorschau-Adresse sein. Die Bestätigungsroute wird auch für Registrierungslinks
 verwendet.
 
 Der Versand nutzt Supabases **Magic Link**-E-Mailvorlage unter
-**Authentication → Email Templates → Magic Link or OTP**. Passe dort Betreff
+**Authentication → Email Templates → Magic Link or OTP**. Wenn diese Vorlage
+editierbar ist, passe dort Betreff
 und Nachricht an, damit die Mail nicht wie eine normale Anmeldung klingt. Zum
 Beispiel:
 
@@ -174,4 +175,25 @@ die serverseitige Bestätigung ausgeführt. CupCal verwendet diesen Anmeldeweg
 nicht für normale Anmeldungen. Nach erfolgreicher Löschung entfernt Supabase
 auch die an das Konto geknüpften Favoriten und Importhistorie; die öffentlichen
 Turniertermine bleiben erhalten.
+
+### Wenn die Magic-Link-Vorlage gesperrt ist
+
+Ein App-Parameter kann eine Vorlage mit einem fest eingebauten Ziel nicht
+überschreiben. Die tatsächliche Projektrolle und der Inhalt der laufenden
+Vorlage sind aus diesem Repository nicht überprüfbar. Supabase dokumentiert,
+dass Developer- und Read-Only-Rollen keine Projekteinstellungen ändern dürfen;
+ein Owner oder Administrator muss die Berechtigung und Vorlage prüfen.
+
+Als unterstützter Ersatz kann ein berechtigter Projektverantwortlicher einen
+**Send Email Auth Hook** aktivieren. Dieser ersetzt den eingebauten Versand und
+erhält `email_data.token_hash`, `email_action_type` und `redirect_to`. Ein
+signaturgeprüfter Hook kann damit denselben Supabase-Verifizierungslink samt
+vollständigem CupCal-Rücksprung versenden, ohne die gesperrte Vorlage zu
+verwenden. Ein eigener SMTP-Server allein ersetzt dagegen nicht die Vorlage.
+Der Hook und ein freigegebener Mailanbieter müssen tatsächlich eingerichtet
+sein; CupCal aktiviert sie nicht automatisch.
+
+Die Voraussetzungen, der sichere Linkaufbau und die ausdrücklich **nicht
+bestandenen echten Browser-/Android-Tests** stehen in
+[`KONTOLOESCHUNG-PRUEFUNG.md`](./KONTOLOESCHUNG-PRUEFUNG.md).
 

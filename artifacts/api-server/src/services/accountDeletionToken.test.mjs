@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   ACCOUNT_DELETION_TOKEN_TTL_SECONDS,
   createAccountDeletionToken,
+  getAccountDeletionTokenStatus,
   verifyAccountDeletionToken,
 } from "./accountDeletionToken.ts";
 
@@ -42,4 +43,28 @@ test("weist beschädigte Tokenformate zurück", () => {
   assert.equal(verifyAccountDeletionToken("", signingKey, now), null);
   assert.equal(verifyAccountDeletionToken("not.a.valid.token", signingKey, now), null);
   assert.equal(verifyAccountDeletionToken("%%%.%%%", signingKey, now), null);
+});
+
+test("gibt einen Löschcode nur für das serverseitig angemeldete Konto frei", () => {
+  const { token } = createAccountDeletionToken(userId, signingKey, now);
+  assert.equal(getAccountDeletionTokenStatus(token, signingKey, userId, now), "valid");
+  assert.equal(
+    getAccountDeletionTokenStatus(token, signingKey, "different-account", now),
+    "foreign-account",
+  );
+  assert.equal(getAccountDeletionTokenStatus(token, signingKey, "", now), "invalid");
+});
+
+test("gibt abgelaufene oder manipulierte Löschcodes auch für das richtige Konto nicht frei", () => {
+  const { token } = createAccountDeletionToken(userId, signingKey, now);
+  assert.equal(
+    getAccountDeletionTokenStatus(
+      token,
+      signingKey,
+      userId,
+      now + ACCOUNT_DELETION_TOKEN_TTL_SECONDS * 1000,
+    ),
+    "invalid",
+  );
+  assert.equal(getAccountDeletionTokenStatus(`${token}x`, signingKey, userId, now), "invalid");
 });

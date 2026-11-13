@@ -30,6 +30,7 @@ function routeCallback(params: {
   access_token?: string | string[];
   refresh_token?: string | string[];
   flow_id?: string | string[];
+  sb_flow_id?: string | string[];
   flow?: string | string[];
   deletion_token?: string | string[];
   error?: string | string[];
@@ -40,7 +41,7 @@ function routeCallback(params: {
     code: firstValue(params.code),
     accessToken: firstValue(params.access_token),
     refreshToken: firstValue(params.refresh_token),
-    flowId: firstValue(params.flow_id),
+    flowId: firstValue(params.sb_flow_id) ?? firstValue(params.flow_id),
     flow: firstValue(params.flow),
     deletionToken: firstValue(params.deletion_token),
     error: firstValue(params.error_code) ?? firstValue(params.error),
@@ -55,6 +56,7 @@ export default function ConfirmEmailScreen() {
     access_token?: string | string[];
     refresh_token?: string | string[];
     flow_id?: string | string[];
+    sb_flow_id?: string | string[];
     flow?: string | string[];
     deletion_token?: string | string[];
     error?: string | string[];
@@ -216,6 +218,7 @@ export default function ConfirmEmailScreen() {
     params.error_description,
     params.flow,
     params.flow_id,
+    params.sb_flow_id,
     params.refresh_token,
   ]);
 
