@@ -145,7 +145,12 @@ export default function ResetPasswordScreen() {
         <Text style={[styles.heading, { color: colors.foreground }]}>
           {isSaved ? 'Passwort geändert' : 'Neues Passwort'}
         </Text>
-        <Text style={[styles.description, { color: colors.mutedForeground }]}>
+        <Text
+          accessible={isSaved}
+          accessibilityRole={isSaved ? 'status' : undefined}
+          accessibilityLiveRegion={isSaved ? 'polite' : undefined}
+          style={[styles.description, { color: colors.mutedForeground }]}
+        >
           {isSaved
             ? 'Dein neues Passwort ist gespeichert. Du kannst dich jetzt mit diesem Passwort anmelden.'
             : isCheckingLink

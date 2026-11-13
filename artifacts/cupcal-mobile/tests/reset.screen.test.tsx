@@ -97,6 +97,25 @@ test('zeigt die geltende Passwortlänge vor dem Speichern', async () => {
   expect(view.getByTestId('reset-password-submit-button')).toBeTruthy();
 });
 
+test('meldet die erfolgreiche Passwortänderung als Screenreader-Status', async () => {
+  mockSaveNewPassword.mockResolvedValue(undefined);
+  const view = await render(<ResetPasswordScreen />);
+
+  await waitFor(() => expect(view.getByTestId('reset-password-submit-button')).toBeTruthy());
+  await fireEvent.changeText(view.getByTestId('reset-password-input'), 'Mein-neues-Passwort-123');
+  await fireEvent.changeText(view.getByTestId('reset-password-confirm-input'), 'Mein-neues-Passwort-123');
+  await fireEvent.press(view.getByTestId('reset-password-submit-button'));
+
+  const successMessage = await view.findByText(
+    'Dein neues Passwort ist gespeichert. Du kannst dich jetzt mit diesem Passwort anmelden.',
+  );
+  expect(successMessage.props.accessible).toBe(true);
+  expect(successMessage.props.accessibilityRole).toBe('status');
+  expect(successMessage.props.accessibilityLiveRegion).toBe('polite');
+  expect(view.getByText('Passwort geändert')).toBeTruthy();
+  expect(mockSaveNewPassword).toHaveBeenCalledTimes(1);
+});
+
 test('behält Formular und Eingaben nach einem Verbindungsfehler für einen erneuten Versuch', async () => {
   const view = await render(<ResetPasswordScreen />);
 
