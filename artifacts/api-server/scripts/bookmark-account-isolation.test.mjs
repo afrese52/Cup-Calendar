@@ -274,3 +274,67 @@ test("RPC schützt Konten und synchronisiert eine zweite Gerätesitzung", async 
     assert.equal(verifyA.data?.revision, 2);
   });
 });
+
+test("gleichzeitige RPC-Aufrufe erhöhen die Revision atomar und behalten den zuletzt angenommenen Status", async () => {
+  await withTestAccounts(async (accountA) => {
+    const secondDevice = createClient(supabaseUrl, anonKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+    const secondDeviceSignIn = await secondDevice.auth.signInWithPassword({
+      email: accountA.email,
+      password: accountA.password,
+    });
+    assert.ifError(secondDeviceSignIn.error);
+    assert.equal(secondDeviceSignIn.data.user?.id, accountA.id);
+
+    const eventId = `parallel-rpc-${randomUUID()}`;
+    const operationCount = 12;
+    const sync = async (client, isFavorite) => client.rpc(
+      "sync_user_event_bookmark",
+      {
+        p_event_id: eventId,
+        p_is_favorite: isFavorite,
+        // Identische, absichtlich alte Gerätezeitstempel dürfen die
+        // serverseitige Reihenfolge nicht beeinflussen.
+        p_updated_at: new Date(0).toISOString(),
+      },
+    );
+    const requests = Array.from({ length: operationCount }, (_, index) => {
+      const client = index % 2 === 0 ? accountA.client : secondDevice;
+      return sync(client, index % 2 === 0);
+    });
+    const results = await Promise.all(requests);
+    for (const result of results) assert.ifError(result.error);
+
+    const parallelState = await accountA.client
+      .from("user_event_bookmarks")
+      .select("is_favorite, revision")
+      .eq("user_id", accountA.id)
+      .eq("event_id", eventId)
+      .single();
+    assert.ifError(parallelState.error);
+    assert.equal(
+      Number(parallelState.data?.revision),
+      operationCount,
+      "Jeder parallele Schreibvorgang muss genau eine neue Revision erzeugen.",
+    );
+
+    // Der explizite letzte Schreibvorgang definiert eine feste Reihenfolge
+    // nach dem parallelen Block und muss dessen Status zuverlässig ersetzen.
+    const finalSync = await sync(secondDevice, false);
+    assert.ifError(finalSync.error);
+    const saved = await accountA.client
+      .from("user_event_bookmarks")
+      .select("is_favorite, revision")
+      .eq("user_id", accountA.id)
+      .eq("event_id", eventId)
+      .single();
+    assert.ifError(saved.error);
+    assert.equal(Number(saved.data?.revision), operationCount + 1);
+    assert.equal(
+      saved.data?.is_favorite,
+      false,
+      "Der Status muss dem zuletzt angenommenen Schreibvorgang entsprechen.",
+    );
+  });
+});
