@@ -29,8 +29,8 @@ test("liest Eventkarten und wandelt die Berliner Ortszeit nach UTC um", () => {
       <h2>10. November 2026</h2>
       <a id="schedule-event-link-epicgames_S43_Cup_EU-S43_Cup_Event1_EU"
         href="https://www.fortnite.com/competitive/events/S43_Cup?round=S43_Cup_Event1_EU"
-        aria-label="19:00–22:00 Uhr - Solo Cash Cup – Wettkampfabschnitt 1">
-        <span>Solo Cash Cup</span>
+        aria-label="19:00–22:00 Uhr - Battle Royale Solo Cash Cup – Wettkampfabschnitt 1">
+        <span>Battle Royale Solo Cash Cup</span>
       </a>
     </body></html>`;
   const result = parseMhtSchedule(makeMht(html));
@@ -40,7 +40,7 @@ test("liest Eventkarten und wandelt die Berliner Ortszeit nach UTC um", () => {
   assert.equal(result.validCount, 1);
   assert.equal(result.upcomingAtSnapshot, 1);
   assert.equal(result.events[0].id, "epic:S43_Cup:S43_Cup_Event1_EU");
-  assert.equal(result.events[0].title, "Solo Cash Cup");
+  assert.equal(result.events[0].title, "Battle Royale Solo Cash Cup");
   assert.equal(result.events[0].start_time, "2026-11-10T18:00:00.000Z");
   assert.equal(result.events[0].end_time, "2026-11-10T21:00:00.000Z");
   assert.equal(result.events[0].team_format, "Solo");
@@ -52,7 +52,7 @@ test("ordnet mehrere Karten dem jeweils zuletzt gelesenen Datum zu", () => {
     <html><body>
       <h2>10. November 2026</h2>
       <a id="schedule-event-link-a" href="/competitive/events/CupA?round=RoundA"
-        aria-label="19:00–20:00 Uhr - Solo Cup A"><span>Solo Cup A</span></a>
+        aria-label="19:00–20:00 Uhr - Battle Royale Solo Cup A"><span>Battle Royale Solo Cup A</span></a>
       <h2>12. November 2026</h2>
       <a id="schedule-event-link-b" href="/competitive/events/CupB?round=RoundB"
         aria-label="18:00–20:00 Uhr - Duos Reload Cup"><span>Duos Reload Cup</span></a>
@@ -85,10 +85,10 @@ test("erkennt FNCS Reload Solos als eindeutiges Solo-Format", () => {
 
 test("erkennt ausdrücklich angegebene Solo-, Duo-, Trio- und Squads-Formate", () => {
   const formats = [
-    ["Solo Cash Cup", "Solo"],
-    ["Duos Reload Cup", "Duos"],
-    ["Trio Victory Cup", "Trios"],
-    ["Squads Battle Royale Cup", "Squads"],
+    ["Battle Royale Solo Cash Cup", "Solo"],
+    ["Reload Duos Cup", "Duos"],
+    ["Zero Build Trio Victory Cup", "Trios"],
+    ["Creative Squads Cup", "Squads"],
   ];
   const cards = formats.map(([title], index) => `
     <a id="schedule-event-link-format-${index}"
@@ -105,19 +105,79 @@ test("erkennt ausdrücklich angegebene Solo-, Duo-, Trio- und Squads-Formate", (
   assert.deepEqual(result.issues, []);
 });
 
+test("importiert nur eindeutig erkennbare Spielmodi", () => {
+  const cards = [
+    "Battle Royale Solo Cash Cup",
+    "Zero Build Duos Cup",
+    "Reload Trios Cup",
+    "Creative Squads Cup",
+  ].map((title, index) => `
+    <a id="schedule-event-link-mode-${index}"
+      href="/competitive/events/Mode${index}?round=Round${index}"
+      aria-label="19:00–20:00 Uhr - ${title}">
+      <span>${title}</span>
+    </a>`).join("") + `
+    <a id="schedule-event-link-mode-in-label"
+      href="/competitive/events/ModeInLabel?round=ModeInLabel"
+      aria-label="19:00–20:00 Uhr - Reload Solos – Runden">
+      <span>Solo Cash Cup</span>
+    </a>`;
+  const result = parseMhtSchedule(makeMht(`
+    <html><body><h2>10. November 2026</h2>${cards}</body></html>
+  `));
+
+  assert.equal(result.validCount, 5);
+  assert.deepEqual(
+    result.events.map((event) => event.game_mode),
+    ["Battle Royale", "Zero Build", "Reload", "Community", "Reload"],
+  );
+  assert.deepEqual(result.issues, []);
+});
+
+test("sperrt fehlende, allgemeine und widersprüchliche Spielmodusangaben", () => {
+  const titles = [
+    "Solo Cash Cup",
+    "Duos Community Cup",
+    "Zero Build Reload Trios Cup",
+    "Duos Team Rumble Cup",
+  ];
+  const cards = titles.map((title, index) => `
+    <a id="schedule-event-link-unknown-mode-${index}"
+      href="/competitive/events/UnknownMode${index}?round=UnknownRound${index}"
+      aria-label="19:00–20:00 Uhr - ${title}">
+      <span>${title}</span>
+    </a>`).join("");
+  const result = parseMhtSchedule(makeMht(`
+    <html><body><h2>10. November 2026</h2>${cards}</body></html>
+  `));
+
+  assert.equal(result.cardCount, 4);
+  assert.equal(result.validCount, 0);
+  assert.equal(result.invalidCount, 4);
+  assert.deepEqual(result.events, []);
+  assert.deepEqual(
+    result.issues.map(({ id, title, errors }) => ({ id, title, errors })),
+    titles.map((title, index) => ({
+      id: `epic:UnknownMode${index}:UnknownRound${index}`,
+      title,
+      errors: ["Spielmodus fehlt oder ist nicht eindeutig angegeben."],
+    })),
+  );
+});
+
 test("sperrt ein unbekanntes oder widersprüchliches Spielformat mit Kennung und Titel", () => {
   const html = `
     <html><body>
       <h2>10. November 2026</h2>
       <a id="schedule-event-link-unknown"
         href="/competitive/events/UnknownCup?round=UnknownRound"
-        aria-label="19:00–22:00 Uhr - Team Cash Cup">
-        <span>Team Cash Cup</span>
+        aria-label="19:00–22:00 Uhr - Battle Royale Team Cash Cup">
+        <span>Battle Royale Team Cash Cup</span>
       </a>
       <a id="schedule-event-link-conflict"
         href="/competitive/events/ConflictCup?round=ConflictRound"
-        aria-label="19:00–22:00 Uhr - Solo Duos Cup">
-        <span>Solo Duos Cup</span>
+        aria-label="19:00–22:00 Uhr - Zero Build Solo Duos Cup">
+        <span>Zero Build Solo Duos Cup</span>
       </a>
     </body></html>`;
   const result = parseMhtSchedule(makeMht(html));
@@ -131,12 +191,12 @@ test("sperrt ein unbekanntes oder widersprüchliches Spielformat mit Kennung und
     [
       {
         id: "epic:UnknownCup:UnknownRound",
-        title: "Team Cash Cup",
+        title: "Battle Royale Team Cash Cup",
         errors: ["Spielformat fehlt oder ist nicht eindeutig angegeben."],
       },
       {
         id: "epic:ConflictCup:ConflictRound",
-        title: "Solo Duos Cup",
+        title: "Zero Build Solo Duos Cup",
         errors: ["Spielformat fehlt oder ist nicht eindeutig angegeben."],
       },
     ],

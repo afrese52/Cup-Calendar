@@ -288,10 +288,18 @@ function mapCategory(title, tournamentType) {
 
 function mapGameMode(title) {
   const lower = title.toLowerCase();
-  if (lower.includes("zero build") || lower.includes("null bauen")) return "Zero Build";
-  if (lower.includes("reload")) return "Reload";
-  if (lower.includes("creative") || lower.includes("community")) return "Community";
-  return "Battle Royale";
+  const modes = [
+    [/\bzero[\s-]+build\b|\bnull bauen\b/i, "Zero Build"],
+    [/\breload\b/i, "Reload"],
+    [/\bcreative\b/i, "Community"],
+    [/\bbattle royale\b/i, "Battle Royale"],
+  ];
+  const matches = [...new Set(
+    modes
+      .filter(([pattern]) => pattern.test(lower))
+      .map(([, mode]) => mode),
+  )];
+  return matches.length === 1 ? matches[0] : null;
 }
 
 function mapTeamFormat(cardText) {
@@ -429,6 +437,17 @@ function extractEventAnchors(html, sourceUrl, timeZone, region) {
 
       const tournamentType = mapTournamentType(title);
       const teamFormat = mapTeamFormat(`${title} ${attributes["aria-label"] ?? ""}`);
+      const gameMode = mapGameMode(`${title} ${attributes["aria-label"] ?? ""}`);
+      if (!gameMode) {
+        issues.push({
+          anchorId: attributes.id,
+          id,
+          title,
+          errors: ["Spielmodus fehlt oder ist nicht eindeutig angegeben."],
+        });
+        cursor = closingAnchorPattern.lastIndex;
+        continue;
+      }
       if (!teamFormat) {
         issues.push({
           anchorId: attributes.id,
@@ -446,7 +465,7 @@ function extractEventAnchors(html, sourceUrl, timeZone, region) {
         description: "",
         poster_url: null,
         region,
-        game_mode: mapGameMode(title),
+        game_mode: gameMode,
         team_format: teamFormat,
         tournament_type: tournamentType,
         category: mapCategory(title, tournamentType),
