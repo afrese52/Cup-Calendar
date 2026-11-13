@@ -31,7 +31,9 @@ export default function SavedScreen() {
         .sort((a, b) => a.startTime.localeCompare(b.startTime)),
     [events, bookmarkedIds, savedOnly],
   );
-  const visibleEvents = savedOnly && (!authReady || !isAuthenticated) ? [] : agendaEvents;
+  const visibleEvents = savedOnly && (!authReady || (!isAuthenticated && bookmarkedIds.length === 0))
+    ? []
+    : agendaEvents;
 
   const confirmClear = () => {
     Alert.alert(
@@ -88,7 +90,7 @@ export default function SavedScreen() {
                 <ActivityIndicator size="small" color={colors.primary} />
                 <Text style={[styles.authText, { color: colors.mutedForeground }]}>Sitzung wird geprüft …</Text>
               </View>
-            ) : savedOnly && !isAuthenticated ? (
+            ) : savedOnly && !isAuthenticated && bookmarkedIds.length === 0 ? (
               <View style={[styles.authNotice, { borderColor: colors.border, backgroundColor: colors.card }]}>
                 <Feather name="lock" size={18} color={colors.primary} />
                 <View style={styles.authCopy}>
@@ -104,6 +106,16 @@ export default function SavedScreen() {
                   >
                     <Text style={[styles.signInText, { color: colors.primaryForeground }]}>Zum Konto</Text>
                   </Pressable>
+                </View>
+              </View>
+            ) : savedOnly && !isAuthenticated && bookmarkedIds.length > 0 ? (
+              <View style={[styles.authNotice, { borderColor: colors.border, backgroundColor: colors.card }]}>
+                <Feather name="smartphone" size={18} color={colors.primary} />
+                <View style={styles.authCopy}>
+                  <Text style={[styles.authTitle, { color: colors.foreground }]}>Nur auf diesem Gerät</Text>
+                  <Text style={[styles.authText, { color: colors.mutedForeground }]}>
+                    Diese alten Favoriten bleiben lokal und werden keinem Konto zugeordnet.
+                  </Text>
                 </View>
               </View>
             ) : null}
@@ -162,7 +174,7 @@ export default function SavedScreen() {
           </View>
         }
         ListEmptyComponent={
-          savedOnly && (!authReady || !isAuthenticated) ? <View /> : isReady ? (
+          savedOnly && (!authReady || (!isAuthenticated && bookmarkedIds.length === 0)) ? <View /> : isReady ? (
             <View style={styles.empty}>
               <View style={[styles.emptyIcon, { backgroundColor: colors.accent }]}>
                 <Feather name="bookmark" size={22} color={colors.accentForeground} />

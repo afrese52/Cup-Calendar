@@ -3,6 +3,9 @@ import test, { beforeEach } from 'node:test';
 import {
   loadAnonymousBookmarks,
   loadBookmarksForUser,
+  getAnonymousBookmarksForImport,
+  importAnonymousBookmarksForUser,
+  keepAnonymousBookmarksLocal,
   prepareBookmarksForSync,
   reconcileBookmarks,
   setBookmarksFavorite,
@@ -64,10 +67,17 @@ test('verweigert das Speichern ohne angemeldetes Konto', async () => {
   assert.deepEqual(await loadAnonymousBookmarks(), []);
 });
 
-test('migriert alte anonyme Einträge nur in das erste angemeldete Konto', async () => {
+test('übernimmt alte anonyme Einträge erst nach ausdrücklicher Zustimmung', async () => {
   localStorage.setItem('cupcal.bookmarks.v1', JSON.stringify(['turnier-alt']));
 
-  assert.deepEqual(await loadBookmarksForUser('konto-a'), ['turnier-alt']);
+  assert.deepEqual(await loadBookmarksForUser(null), ['turnier-alt']);
+  assert.deepEqual(await loadBookmarksForUser('konto-a'), []);
+  assert.deepEqual(await getAnonymousBookmarksForImport('konto-a'), ['turnier-alt']);
+  assert.deepEqual(await prepareBookmarksForSync('konto-a'), {});
+  assert.deepEqual(await loadAnonymousBookmarks(), ['turnier-alt']);
+
+  const importedIds = await importAnonymousBookmarksForUser('konto-a');
+  assert.deepEqual(importedIds, ['turnier-alt']);
   const firstAccountChanges = await prepareBookmarksForSync('konto-a');
   assert.equal(firstAccountChanges['turnier-alt']?.isFavorite, true);
   assert.deepEqual(await loadAnonymousBookmarks(), []);
@@ -80,6 +90,31 @@ test('migriert alte anonyme Einträge nur in das erste angemeldete Konto', async
   assert.deepEqual(await loadBookmarksForUser('konto-a'), ['turnier-alt']);
   assert.deepEqual(await prepareBookmarksForSync('konto-b'), {});
   assert.deepEqual(await loadBookmarksForUser('konto-b'), []);
+});
+
+test('behält abgelehnte alte Einträge lokal und fragt dasselbe Konto nicht erneut', async () => {
+  localStorage.setItem('cupcal.bookmarks.v1', JSON.stringify(['turnier-alt']));
+
+  await keepAnonymousBookmarksLocal('konto-a');
+
+  assert.deepEqual(await getAnonymousBookmarksForImport('konto-a'), []);
+  assert.deepEqual(await getAnonymousBookmarksForImport('konto-b'), ['turnier-alt']);
+  assert.deepEqual(await loadBookmarksForUser('konto-a'), []);
+  assert.deepEqual(await loadBookmarksForUser('konto-b'), []);
+  assert.deepEqual(await loadBookmarksForUser(null), ['turnier-alt']);
+});
+
+test('übernimmt keine vorhandenen Gast-Einträge bei normalen Kontoschreibvorgängen', async () => {
+  localStorage.setItem('cupcal.bookmarks.v1', JSON.stringify(['gast-eintrag']));
+
+  await setBookmarksFavorite('konto-a', ['konto-eintrag'], true);
+
+  assert.deepEqual(await loadBookmarksForUser('konto-a'), ['konto-eintrag']);
+  assert.deepEqual(await loadAnonymousBookmarks(), ['gast-eintrag']);
+  const pending = await prepareBookmarksForSync('konto-a');
+  assert.deepEqual(Object.keys(pending), ['konto-eintrag']);
+  assert.equal(pending['konto-eintrag'].isFavorite, true);
+  assert.equal(typeof pending['konto-eintrag'].updatedAt, 'string');
 });
 
 test('gleiche Zeitstempel entscheiden nicht über die lokal gespeicherte Absicht', async () => {

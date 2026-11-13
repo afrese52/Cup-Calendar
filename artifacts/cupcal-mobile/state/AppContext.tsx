@@ -6,6 +6,9 @@ import { AppState } from 'react-native';
 import type { TournamentEvent } from '@/data/events';
 import { loadCachedEvents, saveEventsToCache } from '@/services/localEventStore';
 import {
+  getAnonymousBookmarksForImport,
+  importAnonymousBookmarksForUser,
+  keepAnonymousBookmarksLocal,
   loadBookmarksForUser,
   prepareBookmarksForSync,
   reconcileBookmarks,
@@ -25,6 +28,9 @@ interface AppContextValue {
   storageError: string | null;
   bookmarkSyncStatus: 'local' | 'syncing' | 'synced' | 'pending';
   bookmarkSyncError: string | null;
+  legacyBookmarkImportCount: number;
+  importLegacyBookmarks: () => Promise<void>;
+  keepLegacyBookmarksLocal: () => Promise<void>;
   toggleBookmark: (eventId: string) => Promise<void>;
   retryBookmarkSync: () => Promise<void>;
   clearBookmarks: () => Promise<void>;
@@ -40,6 +46,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [bookmarkSyncStatus, setBookmarkSyncStatus] =
     useState<AppContextValue['bookmarkSyncStatus']>('local');
   const [bookmarkSyncError, setBookmarkSyncError] = useState<string | null>(null);
+  const [legacyBookmarkImport, setLegacyBookmarkImport] = useState<{
+    userId: string;
+    count: number;
+  } | null>(null);
   const [eventsReady, setEventsReady] = useState(false);
   const [eventError, setEventError] = useState<string | null>(null);
   const [storageError, setStorageError] = useState<string | null>(null);
@@ -108,6 +118,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
       !supabase ||
       currentUserId.current !== targetUserId
     ) return;
+    let unclaimedIds: string[];
+    try {
+      unclaimedIds = await getAnonymousBookmarksForImport(targetUserId);
+    } catch (error) {
+      if (currentUserId.current === targetUserId) {
+        setBookmarkSyncStatus('pending');
+        setBookmarkSyncError(getBookmarkSyncErrorMessage(error));
+      }
+      return;
+    }
+    if (currentUserId.current !== targetUserId) return;
+    if (unclaimedIds.length) {
+      setLegacyBookmarkImport({ userId: targetUserId, count: unclaimedIds.length });
+      return;
+    }
+    setLegacyBookmarkImport((current) => current?.userId === targetUserId ? null : current);
     if (syncingUsers.current.has(targetUserId)) {
       queuedSyncUsers.current.add(targetUserId);
       return;
@@ -178,11 +204,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     void (async () => {
       try {
-        const localIds = userId ? await loadBookmarksForUser(userId) : [];
+        const localIds = await loadBookmarksForUser(userId);
         if (!isMounted || currentUserId.current !== userId) return;
         currentBookmarkIds.current = localIds;
         setBookmarkedIds(localIds);
         if (!userId) {
+          setLegacyBookmarkImport(null);
           setBookmarkSyncStatus('local');
           setBookmarkSyncError(null);
           return;
@@ -300,6 +327,36 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (activeUserId) await syncBookmarks(activeUserId);
   }, [syncBookmarks]);
 
+  const importLegacyBookmarks = useCallback(async () => {
+    const activeUserId = currentUserId.current;
+    if (!activeUserId || legacyBookmarkImport?.userId !== activeUserId) return;
+    setStorageError(null);
+    try {
+      const importedIds = await importAnonymousBookmarksForUser(activeUserId);
+      if (currentUserId.current !== activeUserId) return;
+      currentBookmarkIds.current = importedIds;
+      setBookmarkedIds(importedIds);
+      setLegacyBookmarkImport(null);
+      await syncBookmarks(activeUserId);
+    } catch {
+      setStorageError('Alte Favoriten konnten nicht übernommen werden.');
+    }
+  }, [legacyBookmarkImport, syncBookmarks]);
+
+  const keepLegacyBookmarks = useCallback(async () => {
+    const activeUserId = currentUserId.current;
+    if (!activeUserId || legacyBookmarkImport?.userId !== activeUserId) return;
+    setStorageError(null);
+    try {
+      await keepAnonymousBookmarksLocal(activeUserId);
+      if (currentUserId.current !== activeUserId) return;
+      setLegacyBookmarkImport(null);
+      await syncBookmarks(activeUserId);
+    } catch {
+      setStorageError('Die lokale Merkliste konnte nicht gespeichert werden.');
+    }
+  }, [legacyBookmarkImport, syncBookmarks]);
+
   const clearBookmarks = useCallback(async () => {
     if (!currentUserId.current) return;
     const idsToClear = [...currentBookmarkIds.current];
@@ -326,6 +383,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       storageError,
       bookmarkSyncStatus,
       bookmarkSyncError,
+      legacyBookmarkImportCount: legacyBookmarkImport?.count ?? 0,
+      importLegacyBookmarks,
+      keepLegacyBookmarksLocal: keepLegacyBookmarks,
       toggleBookmark,
       retryBookmarkSync,
       clearBookmarks,
@@ -340,6 +400,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       storageError,
       bookmarkSyncStatus,
       bookmarkSyncError,
+      legacyBookmarkImport,
+      importLegacyBookmarks,
+      keepLegacyBookmarks,
       toggleBookmark,
       retryBookmarkSync,
       clearBookmarks,

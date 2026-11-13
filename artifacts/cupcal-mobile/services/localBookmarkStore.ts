@@ -18,6 +18,7 @@ interface AccountBookmarks {
 
 interface BookmarkStore {
   anonymousIds: string[];
+  anonymousImportDeclinedUserIds: string[];
   accounts: Record<string, AccountBookmarks>;
 }
 
@@ -28,7 +29,11 @@ export interface RemoteBookmark {
   revision: number;
 }
 
-const emptyStore = (): BookmarkStore => ({ anonymousIds: [], accounts: {} });
+const emptyStore = (): BookmarkStore => ({
+  anonymousIds: [],
+  anonymousImportDeclinedUserIds: [],
+  accounts: {},
+});
 let bookmarkWriteQueue: Promise<unknown> = Promise.resolve();
 
 function enqueueBookmarkWrite<T>(operation: () => Promise<T>): Promise<T> {
@@ -72,7 +77,11 @@ function parseStore(value: unknown): BookmarkStore | null {
     };
   }
 
-  return { anonymousIds: uniqueIds(parsed.anonymousIds), accounts };
+  return {
+    anonymousIds: uniqueIds(parsed.anonymousIds),
+    anonymousImportDeclinedUserIds: uniqueIds(parsed.anonymousImportDeclinedUserIds),
+    accounts,
+  };
 }
 
 async function readStore(): Promise<BookmarkStore> {
@@ -90,7 +99,11 @@ async function readStore(): Promise<BookmarkStore> {
   if (!legacy) return emptyStore();
   try {
     const parsedLegacy: unknown = JSON.parse(legacy);
-    return { anonymousIds: uniqueIds(parsedLegacy), accounts: {} };
+    return {
+      anonymousIds: uniqueIds(parsedLegacy),
+      anonymousImportDeclinedUserIds: [],
+      accounts: {},
+    };
   } catch {
     return emptyStore();
   }
@@ -105,15 +118,7 @@ function accountFor(store: BookmarkStore, userId: string): AccountBookmarks {
   const existing = store.accounts[userId];
   if (existing) return existing;
 
-  const account: AccountBookmarks = {
-    eventIds: [...store.anonymousIds],
-    pending: {},
-    initialized: false,
-  };
-  // Anonymous bookmarks are a one-time migration, not a template for every
-  // account that signs in on this device.
-  store.anonymousIds = [];
-  return account;
+  return { eventIds: [], pending: {}, initialized: false };
 }
 
 function nextTimestamp(account: AccountBookmarks): string {
@@ -148,11 +153,46 @@ export async function loadAnonymousBookmarks(): Promise<string[]> {
   return [...store.anonymousIds];
 }
 
+export async function getAnonymousBookmarksForImport(userId: string): Promise<string[]> {
+  const store = await readStore();
+  if (store.anonymousImportDeclinedUserIds.includes(userId)) return [];
+  return [...store.anonymousIds];
+}
+
 export async function loadBookmarksForUser(userId: string | null): Promise<string[]> {
   const store = await readStore();
-  return userId && store.accounts[userId]
-    ? [...store.accounts[userId].eventIds]
+  return userId
+    ? [...(store.accounts[userId]?.eventIds ?? [])]
     : [...store.anonymousIds];
+}
+
+export async function importAnonymousBookmarksForUser(userId: string): Promise<string[]> {
+  return enqueueBookmarkWrite(async () => {
+    const store = await readStore();
+    const account = accountFor(store, userId);
+    for (const eventId of store.anonymousIds) {
+      if (account.pending[eventId]?.isFavorite === false) continue;
+      account.eventIds = uniqueIds([...account.eventIds, eventId]);
+      if (!account.pending[eventId]) {
+        account.pending[eventId] = { isFavorite: true, updatedAt: nextTimestamp(account) };
+      }
+    }
+    store.accounts[userId] = account;
+    store.anonymousIds = [];
+    await writeStore(store);
+    return [...account.eventIds];
+  });
+}
+
+export async function keepAnonymousBookmarksLocal(userId: string): Promise<void> {
+  return enqueueBookmarkWrite(async () => {
+    const store = await readStore();
+    store.anonymousImportDeclinedUserIds = uniqueIds([
+      ...store.anonymousImportDeclinedUserIds,
+      userId,
+    ]);
+    await writeStore(store);
+  });
 }
 
 export async function setBookmarksFavorite(

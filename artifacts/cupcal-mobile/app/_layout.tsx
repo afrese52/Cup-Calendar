@@ -18,6 +18,7 @@ import * as Linking from 'expo-linking';
 import { StatusBar } from 'expo-status-bar';
 import { setAuthTokenGetter, setBaseUrl } from '@workspace/api-client-react';
 import { AppProvider } from '@/state/AppContext';
+import { LegacyBookmarkImportPrompt } from '@/components/LegacyBookmarkImportPrompt';
 import { useColors } from '@/hooks/useColors';
 import { handlePasswordResetUrl, supabase } from '@/services/supabase';
 
@@ -47,6 +48,7 @@ function RootLayoutNav() {
         <Stack.Screen name="auth/confirm" options={{ animation: 'fade' }} />
         <Stack.Screen name="+not-found" />
       </Stack>
+      <LegacyBookmarkImportPrompt />
     </AppProvider>
   );
 }
