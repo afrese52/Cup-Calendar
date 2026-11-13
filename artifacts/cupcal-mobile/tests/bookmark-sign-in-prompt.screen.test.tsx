@@ -74,6 +74,16 @@ function setAuthState(isAuthenticated: boolean, bookmarkedIds: string[] = []) {
   };
 }
 
+function setAuthPending() {
+  mockContext.current = {
+    authReady: false,
+    isAuthenticated: false,
+    events: [event],
+    bookmarkedIds: [],
+    toggleBookmark: mockToggleBookmark,
+  };
+}
+
 const mockToggleBookmark = jest.fn(async (_eventId: string) => undefined);
 
 beforeEach(() => {
@@ -99,7 +109,12 @@ test.each(['android', 'ios'] as const)(
     );
     const bookmarkButton = view.getByTestId(`bookmark-${event.id}`);
 
-    expect(bookmarkButton.props.accessibilityLabel).toBe('Zum Speichern anmelden');
+    expect(bookmarkButton.props.accessibilityLabel).toBe(`${event.title}, Zum Speichern anmelden`);
+    expect(bookmarkButton.props.accessibilityState).toMatchObject({
+      disabled: false,
+      busy: false,
+      selected: false,
+    });
     await fireEvent.press(bookmarkButton);
     expect(alertSpy).toHaveBeenCalledWith(
       'Anmeldung erforderlich',
@@ -121,7 +136,7 @@ test.each(['android', 'ios'] as const)(
       <EventCard event={event} isBookmarked={false} onBookmarkToggle={onBookmarkToggle} />,
     );
     expect(view.getByTestId(`bookmark-${event.id}`).props.accessibilityLabel)
-      .toBe('In Merkliste speichern');
+      .toBe(`${event.title}, In Merkliste speichern`);
 
     await fireEvent.press(view.getByTestId(`bookmark-${event.id}`));
     expect(onBookmarkToggle).toHaveBeenCalledWith(event.id);
@@ -130,14 +145,31 @@ test.each(['android', 'ios'] as const)(
       <EventCard event={event} isBookmarked onBookmarkToggle={onBookmarkToggle} />,
     );
     expect(view.getByTestId(`bookmark-${event.id}`).props.accessibilityLabel)
-      .toBe('Aus Merkliste entfernen');
+      .toBe(`${event.title}, Aus Merkliste entfernen`);
+    expect(view.getByTestId(`bookmark-${event.id}`).props.accessibilityState.selected).toBe(true);
 
     setAuthState(false);
     await view.rerender(
       <EventCard event={event} isBookmarked={false} onBookmarkToggle={onBookmarkToggle} />,
     );
     expect(view.getByTestId(`bookmark-${event.id}`).props.accessibilityLabel)
-      .toBe('Zum Speichern anmelden');
+      .toBe(`${event.title}, Zum Speichern anmelden`);
+
+    alertSpy.mockClear();
+    const bookmarkCallsBeforePending = onBookmarkToggle.mock.calls.length;
+    setAuthPending();
+    await view.rerender(
+      <EventCard event={event} isBookmarked={false} onBookmarkToggle={onBookmarkToggle} />,
+    );
+    expect(view.getByTestId(`bookmark-${event.id}`).props.accessibilityLabel)
+      .toBe(`${event.title}, Anmeldung wird geprüft`);
+    expect(view.getByTestId(`bookmark-${event.id}`).props.accessibilityState).toMatchObject({
+      disabled: true,
+      busy: true,
+    });
+    await fireEvent.press(view.getByTestId(`bookmark-${event.id}`));
+    expect(alertSpy).not.toHaveBeenCalled();
+    expect(onBookmarkToggle).toHaveBeenCalledTimes(bookmarkCallsBeforePending);
   },
 );
 
@@ -147,8 +179,10 @@ test.each(['android', 'ios'] as const)(
     setPlatformOS(platform);
     const view = await render(<EventDetailsScreen />);
     expect(view.getByTestId('event-detail-bookmark')).toBeTruthy();
+    expect(view.getByTestId('event-detail-bookmark').props.accessibilityLabel)
+      .toBe(`${event.title}, Zum Speichern anmelden`);
     expect(view.getByTestId('event-save-button').props.accessibilityLabel)
-      .toBe('Zum Speichern anmelden');
+      .toBe(`${event.title}, Zum Speichern anmelden`);
 
     await fireEvent.press(view.getByTestId('event-save-button'));
     getDialogButtons().find((button) => button.text === 'Später')?.onPress?.();
@@ -163,20 +197,46 @@ test.each(['android', 'ios'] as const)(
     setAuthState(true);
     await view.rerender(<EventDetailsScreen />);
     expect(view.getByTestId('event-save-button').props.accessibilityLabel)
-      .toBe('In Merkliste speichern');
+      .toBe(`${event.title}, In Merkliste speichern`);
+    expect(view.getByTestId('event-detail-bookmark').props.accessibilityLabel)
+      .toBe(`${event.title}, In Merkliste speichern`);
     await fireEvent.press(view.getByTestId('event-save-button'));
     expect(mockToggleBookmark).toHaveBeenCalledWith(event.id);
 
     setAuthState(true, [event.id]);
     await view.rerender(<EventDetailsScreen />);
     expect(view.getByTestId('event-save-button').props.accessibilityLabel)
-      .toBe('Aus Merkliste entfernen');
+      .toBe(`${event.title}, Aus Merkliste entfernen`);
+    expect(view.getByTestId('event-save-button').props.accessibilityState.selected).toBe(true);
     expect(view.getByText('In deiner Merkliste')).toBeTruthy();
 
-    setAuthState(false);
+    setAuthState(false, [event.id]);
     await view.rerender(<EventDetailsScreen />);
     expect(view.getByTestId('event-save-button').props.accessibilityLabel)
-      .toBe('Zum Speichern anmelden');
+      .toBe(`${event.title}, Zum Speichern anmelden`);
+    expect(view.getByTestId('event-detail-bookmark').props.accessibilityState.selected).toBe(false);
+    expect(view.queryByText('In deiner Merkliste')).toBeNull();
+
+    alertSpy.mockClear();
+    const toggleCallsBeforePending = mockToggleBookmark.mock.calls.length;
+    setAuthPending();
+    await view.rerender(<EventDetailsScreen />);
+    expect(view.getByTestId('event-detail-bookmark').props.accessibilityLabel)
+      .toBe(`${event.title}, Anmeldung wird geprüft`);
+    expect(view.getByTestId('event-save-button').props.accessibilityLabel)
+      .toBe(`${event.title}, Anmeldung wird geprüft`);
+    expect(view.getByTestId('event-save-button').props.accessibilityState).toMatchObject({
+      disabled: true,
+      busy: true,
+    });
+    expect(view.getByTestId('event-detail-bookmark').props.accessibilityState).toMatchObject({
+      disabled: true,
+      busy: true,
+    });
+    expect(view.getByText('Anmeldung wird geprüft')).toBeTruthy();
+    await fireEvent.press(view.getByTestId('event-save-button'));
+    expect(alertSpy).not.toHaveBeenCalled();
+    expect(mockToggleBookmark).toHaveBeenCalledTimes(toggleCallsBeforePending);
   },
 );
 

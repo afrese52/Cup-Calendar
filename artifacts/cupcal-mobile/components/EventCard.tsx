@@ -72,14 +72,19 @@ export function EventCard({ event, isBookmarked, onBookmarkToggle }: EventCardPr
         accessibilityRole="button"
         accessibilityLabel={
           !authReady
-            ? 'Anmeldung wird geprüft'
+            ? `${event.title}, Anmeldung wird geprüft`
             : isAuthenticated
-              ? isBookmarked ? 'Aus Merkliste entfernen' : 'In Merkliste speichern'
-              : 'Zum Speichern anmelden'
+              ? `${event.title}, ${isBookmarked ? 'Aus Merkliste entfernen' : 'In Merkliste speichern'}`
+              : `${event.title}, Zum Speichern anmelden`
         }
+        accessibilityState={{
+          disabled: !authReady,
+          busy: !authReady,
+          selected: isAuthenticated && isBookmarked,
+        }}
         testID={`bookmark-${event.id}`}
+        disabled={!authReady}
         onPress={() => {
-          if (!authReady) return;
           if (!isAuthenticated) {
             promptAccountSignIn();
             return;

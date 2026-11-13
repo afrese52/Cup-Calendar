@@ -20,6 +20,7 @@ export default function EventDetailsScreen() {
   } = useCupCal();
   const event = events.find((item) => item.id === id);
   const isBookmarked = event ? bookmarkedIds.includes(event.id) : false;
+  const isSavedByUser = isAuthenticated && isBookmarked;
   const handleBack = () => {
     router.replace('/(tabs)');
   };
@@ -73,11 +74,17 @@ export default function EventDetailsScreen() {
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={
-              isAuthenticated
-                ? isBookmarked ? 'Aus Merkliste entfernen' : 'In Merkliste speichern'
-                : 'Zum Speichern anmelden'
+              !authReady
+                ? `${event.title}, Anmeldung wird geprüft`
+                : isAuthenticated
+                  ? `${event.title}, ${isSavedByUser ? 'Aus Merkliste entfernen' : 'In Merkliste speichern'}`
+                  : `${event.title}, Zum Speichern anmelden`
             }
-            accessibilityState={{ disabled: !authReady }}
+            accessibilityState={{
+              disabled: !authReady,
+              busy: !authReady,
+              selected: isSavedByUser,
+            }}
             testID="event-detail-bookmark"
             disabled={!authReady}
             onPress={handleBookmark}
@@ -86,7 +93,7 @@ export default function EventDetailsScreen() {
             <Feather
               name={authReady && !isAuthenticated ? 'lock' : 'bookmark'}
               size={18}
-              color={isBookmarked ? colors.primary : colors.foreground}
+              color={isSavedByUser ? colors.primary : colors.foreground}
             />
           </Pressable>
         </View>
@@ -118,27 +125,39 @@ export default function EventDetailsScreen() {
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={
-            isAuthenticated
-              ? isBookmarked ? 'Aus Merkliste entfernen' : 'In Merkliste speichern'
-              : 'Zum Speichern anmelden'
+            !authReady
+              ? `${event.title}, Anmeldung wird geprüft`
+              : isAuthenticated
+                ? `${event.title}, ${isSavedByUser ? 'Aus Merkliste entfernen' : 'In Merkliste speichern'}`
+                : `${event.title}, Zum Speichern anmelden`
           }
-          accessibilityState={{ disabled: !authReady }}
+          accessibilityState={{
+            disabled: !authReady,
+            busy: !authReady,
+            selected: isSavedByUser,
+          }}
           testID="event-save-button"
           disabled={!authReady}
           onPress={handleBookmark}
           style={({ pressed }) => [
             styles.saveButton,
-            { backgroundColor: isBookmarked ? colors.secondary : colors.primary },
+            { backgroundColor: isSavedByUser ? colors.secondary : colors.primary },
             pressed && styles.pressed,
           ]}
         >
           <Feather
-            name={!authReady || !isAuthenticated ? 'lock' : isBookmarked ? 'check' : 'bookmark'}
+            name={!authReady || !isAuthenticated ? 'lock' : isSavedByUser ? 'check' : 'bookmark'}
             size={17}
-            color={isBookmarked ? colors.secondaryForeground : colors.primaryForeground}
+            color={isSavedByUser ? colors.secondaryForeground : colors.primaryForeground}
           />
-          <Text style={[styles.saveText, { color: isBookmarked ? colors.secondaryForeground : colors.primaryForeground }]}>
-            {isBookmarked ? 'In deiner Merkliste' : isAuthenticated ? 'In Merkliste speichern' : 'Zum Speichern anmelden'}
+          <Text style={[styles.saveText, { color: isSavedByUser ? colors.secondaryForeground : colors.primaryForeground }]}>
+            {!authReady
+              ? 'Anmeldung wird geprüft'
+              : isSavedByUser
+                ? 'In deiner Merkliste'
+                : isAuthenticated
+                  ? 'In Merkliste speichern'
+                  : 'Zum Speichern anmelden'}
           </Text>
         </Pressable>
       </ScrollView>
