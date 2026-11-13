@@ -9,10 +9,19 @@ import { after, before, test } from "node:test";
 
 const projectDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const fixturePath = path.join(projectDir, "scripts/fixtures/bookmark-schema-before-0003.sql");
+const legacyFixturePath = path.join(
+  projectDir,
+  "scripts/fixtures/bookmark-schema-legacy-before-0002.sql",
+);
 const migrationPath = path.join(
   projectDir,
   "supabase/migrations/0003_clock_independent_bookmark_order.sql",
 );
+const legacyMigrationPath = path.join(
+  projectDir,
+  "supabase/migrations/0002_user_event_bookmarks.sql",
+);
+const legacyDatabase = "legacy_bookmark_migration";
 const legacyAccountId = "10000000-0000-0000-0000-000000000001";
 const otherAccountId = "20000000-0000-0000-0000-000000000002";
 
@@ -109,6 +118,9 @@ before(async (context) => {
 
   const fixture = await readFile(fixturePath, "utf8");
   psql(fixture);
+  psql(`CREATE DATABASE ${legacyDatabase};`);
+  const legacyFixture = await readFile(legacyFixturePath, "utf8");
+  psql(legacyFixture, legacyDatabase);
 });
 
 after(() => {
@@ -236,5 +248,118 @@ test("0003 aktualisiert eine bestehende 0002-Datenbank ohne Favoriten oder RLS z
     `),
     "t",
     "Die neue RPC muss die Gerätezeit ignorieren und Serverzeit verwenden.",
+  );
+});
+
+test("0002 übernimmt Favoriten aus Profil- und Event-gebundenen Tabellen", async (context) => {
+  if (!postgresAvailable) {
+    context.skip("PostgreSQL ist für den lokalen Migrationstest erforderlich.");
+    return;
+  }
+
+  const migration = await readFile(legacyMigrationPath, "utf8");
+  psql(migration, legacyDatabase);
+
+  assert.equal(
+    psql(`
+      SELECT string_agg(
+        user_id::text || ':' || event_id || ':' || is_favorite::text || ':' ||
+          (updated_at IS NOT NULL)::text || ':' || revision::text,
+        '|' ORDER BY user_id, event_id
+      )
+      FROM public.user_event_bookmarks;
+    `, legacyDatabase),
+    `${legacyAccountId}:legacy-event-one:true:true:0|${otherAccountId}:legacy-event-two:true:true:0`,
+    "Migration 0002 muss alle alten Favoriten erhalten und ergänzte Felder befüllen.",
+  );
+  assert.equal(
+    psql(`
+      SELECT string_agg(
+        key_column.attname || '->' || constraint_row.confrelid::regclass::text,
+        ',' ORDER BY key_column.attname
+      )
+      FROM pg_constraint AS constraint_row
+      CROSS JOIN LATERAL unnest(constraint_row.conkey) AS key_number(attnum)
+      JOIN pg_attribute AS key_column
+        ON key_column.attrelid = constraint_row.conrelid
+       AND key_column.attnum = key_number.attnum
+      WHERE constraint_row.conrelid = 'public.user_event_bookmarks'::regclass
+        AND constraint_row.contype = 'f';
+    `, legacyDatabase),
+    "user_id->auth.users",
+    "Nutzer-Favoriten müssen auf auth.users zeigen und dürfen keine Event-Fremdschlüssel behalten.",
+  );
+  assert.equal(
+    psql(`
+      SELECT relrowsecurity
+      FROM pg_class
+      WHERE oid = 'public.user_event_bookmarks'::regclass;
+    `, legacyDatabase),
+    "t",
+    "Die migrierte Tabelle muss Row Level Security verwenden.",
+  );
+
+  psql(`
+    SET ROLE authenticated;
+    SET request.jwt.claim.sub = '${legacyAccountId}';
+
+    DO $$
+    BEGIN
+      IF (SELECT count(*) FROM public.user_event_bookmarks) <> 1 THEN
+        RAISE EXCEPTION 'The account must only see its own migrated bookmark';
+      END IF;
+    END;
+    $$;
+
+    INSERT INTO public.user_event_bookmarks (user_id, event_id)
+    VALUES ('${legacyAccountId}', 'offline-event-not-in-fortnite-events');
+
+    DO $$
+    BEGIN
+      IF (SELECT count(*) FROM public.user_event_bookmarks) <> 2 THEN
+        RAISE EXCEPTION 'The account must see its own legacy and offline bookmarks';
+      END IF;
+    END;
+    $$;
+
+    DO $$
+    BEGIN
+      BEGIN
+        INSERT INTO public.user_event_bookmarks (user_id, event_id)
+        VALUES ('${otherAccountId}', 'another-account-event');
+        RAISE EXCEPTION 'Cross-account bookmark insert unexpectedly succeeded';
+      EXCEPTION
+        WHEN insufficient_privilege THEN
+          NULL;
+      END;
+    END;
+    $$;
+
+    RESET ROLE;
+
+    SET ROLE authenticated;
+    SET request.jwt.claim.sub = '${otherAccountId}';
+
+    DO $$
+    BEGIN
+      IF (SELECT count(*) FROM public.user_event_bookmarks) <> 1 THEN
+        RAISE EXCEPTION 'The second account must only see its own migrated bookmark';
+      END IF;
+    END;
+    $$;
+
+    RESET ROLE;
+  `, legacyDatabase);
+
+  assert.equal(
+    psql(`
+      SELECT string_agg(
+        user_id::text || ':' || event_id,
+        '|' ORDER BY user_id, event_id
+      )
+      FROM public.user_event_bookmarks;
+    `, legacyDatabase),
+    `${legacyAccountId}:legacy-event-one|${legacyAccountId}:offline-event-not-in-fortnite-events|${otherAccountId}:legacy-event-two`,
+    "RLS muss den eigenen Bestand erhalten, fremde Schreibzugriffe sperren und Offline-IDs zulassen.",
   );
 });
