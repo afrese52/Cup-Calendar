@@ -133,7 +133,7 @@ export function friendlyAuthError(
 }
 
 export type AuthOperationResult =
-  | { ok: true; message: string; clearPassword?: boolean }
+  | { ok: true; message: string; clearPassword?: boolean; emailConfirmationRequired?: boolean }
   | { ok: false; error: string };
 
 export function watchAuthSession(
@@ -281,6 +281,7 @@ export async function submitAccountAuth(
         ? 'Dein Konto ist erstellt und du bist angemeldet.'
         : 'Dein Konto ist erstellt. Bitte bestätige deine E-Mail-Adresse über den Link in deinem Postfach.',
       clearPassword: true,
+      ...(data.session ? {} : { emailConfirmationRequired: true }),
     };
   } catch (error) {
     return {

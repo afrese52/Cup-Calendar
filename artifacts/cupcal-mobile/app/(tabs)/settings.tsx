@@ -77,6 +77,7 @@ export default function SettingsScreen() {
   const [isCheckingSession, setIsCheckingSession] = useState(Boolean(supabase));
   const [authMode, setAuthMode] = useState<AuthMode>('sign-in');
   const [email, setEmail] = useState('');
+  const [registrationConfirmationEmail, setRegistrationConfirmationEmail] = useState<string | null>(null);
   const [password, setPassword] = useState('');
   const [submittingAction, setSubmittingAction] = useState<AuthAction | null>(null);
   const isSubmittingAuth = submittingAction !== null;
@@ -91,6 +92,7 @@ export default function SettingsScreen() {
     return watchAuthSession(supabase.auth, {
       onSession: (nextSession) => {
         setSession(nextSession);
+        if (nextSession) setRegistrationConfirmationEmail(null);
         setAuthError(null);
       },
       onError: (error) => {
@@ -117,6 +119,7 @@ export default function SettingsScreen() {
     setSubmittingAction('submit');
     setAuthError(null);
     setAuthMessage(null);
+    setRegistrationConfirmationEmail(null);
     try {
       const result = await submitAccountAuth(supabase.auth, {
         mode: authMode,
@@ -127,6 +130,9 @@ export default function SettingsScreen() {
       });
       if (result.ok) {
         setAuthMessage(result.message);
+        if (result.emailConfirmationRequired) {
+          setRegistrationConfirmationEmail(normalizedEmail);
+        }
         if (result.clearPassword) setPassword('');
       } else {
         setAuthError(result.error);
@@ -146,7 +152,7 @@ export default function SettingsScreen() {
     setAuthMessage(null);
     try {
       const result = await resendAccountConfirmation({
-        email,
+        email: registrationConfirmationEmail ?? email,
         emailConfirmationRedirectTo: getEmailConfirmationRedirectUrl(),
         requestEmailConfirmation,
       });
@@ -468,6 +474,7 @@ export default function SettingsScreen() {
                     setAuthMode('forgot-password');
                     setAuthError(null);
                     setAuthMessage(null);
+                    setRegistrationConfirmationEmail(null);
                   }}
                   style={styles.modeToggle}
                 >
@@ -509,6 +516,7 @@ export default function SettingsScreen() {
                   setAuthMode(authMode === 'forgot-password' || authMode === 'sign-up' ? 'sign-in' : 'sign-up');
                   setAuthError(null);
                   setAuthMessage(null);
+                  setRegistrationConfirmationEmail(null);
                 }}
                 style={styles.modeToggle}
               >
@@ -523,14 +531,42 @@ export default function SettingsScreen() {
             </>
           )}
           {authMessage ? (
-            <Text
-              accessibilityRole="alert"
-              accessibilityLiveRegion="polite"
-              testID="auth-success-message"
-              style={[styles.authNotice, { color: colors.success }]}
-            >
-              {authMessage}
-            </Text>
+            <View>
+              <Text
+                accessibilityRole="alert"
+                accessibilityLiveRegion="polite"
+                testID="auth-success-message"
+                style={[styles.authNotice, { color: colors.success }]}
+              >
+                {authMessage}
+              </Text>
+              {registrationConfirmationEmail && !session ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    submittingAction === 'resend-confirmation'
+                      ? 'Bestätigungslink wird gesendet'
+                      : 'Bestätigungslink erneut senden'
+                  }
+                  accessibilityState={{
+                    disabled: isSubmittingAuth,
+                    busy: submittingAction === 'resend-confirmation',
+                  }}
+                  testID="registration-resend-confirmation-button"
+                  disabled={isSubmittingAuth}
+                  onPress={() => void resendConfirmation()}
+                  style={({ pressed }) => [
+                    styles.modeToggle,
+                    pressed && !isSubmittingAuth ? styles.pressed : null,
+                    isSubmittingAuth ? styles.disabled : null,
+                  ]}
+                >
+                  <Text style={[styles.modeToggleText, { color: colors.primary }]}>
+                    Bestätigungslink erneut senden
+                  </Text>
+                </Pressable>
+              ) : null}
+            </View>
           ) : null}
           {authError && session ? (
             <Text

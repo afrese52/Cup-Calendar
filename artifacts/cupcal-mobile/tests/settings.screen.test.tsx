@@ -231,7 +231,66 @@ test('registriert ein Konto und zeigt die Bestätigungsmeldung', async () => {
   expect(successMessage.props.children).toBe(
     'Dein Konto ist erstellt. Bitte bestätige deine E-Mail-Adresse über den Link in deinem Postfach.',
   );
+  expect(view.getByTestId('registration-resend-confirmation-button')).toBeTruthy();
   expect(view.getByTestId('auth-password-input').props.value).toBe('');
+});
+
+test('zeigt nach einer Registrierung ohne Bestätigungsbedarf keine erneute Versandaktion', async () => {
+  auth.signUp.mockResolvedValue({
+    data: { session: testSession },
+    error: null,
+  });
+  const view = await openSettings();
+  await fireEvent.press(view.getByTestId('auth-mode-toggle'));
+  await enterCredentials(view);
+
+  await fireEvent.press(view.getByTestId('auth-submit-button'));
+
+  expect(await view.findByText('Dein Konto ist erstellt und du bist angemeldet.')).toBeTruthy();
+  expect(view.queryByTestId('registration-resend-confirmation-button')).toBeNull();
+});
+
+test('sendet nach der Registrierung den Bestätigungslink erneut und zeigt den Erfolg', async () => {
+  const mockedSupabase = jest.requireMock('@/services/supabase') as {
+    requestEmailConfirmation: jest.Mock;
+  };
+  const view = await openSettings();
+  await fireEvent.press(view.getByTestId('auth-mode-toggle'));
+  await enterCredentials(view);
+  await fireEvent.press(view.getByTestId('auth-submit-button'));
+  await view.findByTestId('registration-resend-confirmation-button');
+
+  await fireEvent.press(view.getByTestId('registration-resend-confirmation-button'));
+
+  expect(mockedSupabase.requestEmailConfirmation).toHaveBeenCalledWith(
+    'test@example.invalid',
+    'cupcal-test://auth/confirm',
+  );
+  expect(await view.findByText(
+    'Wenn dein Konto noch nicht bestätigt ist, erhältst du in Kürze einen neuen Bestätigungslink.',
+  )).toBeTruthy();
+  expect(view.getByTestId('registration-resend-confirmation-button')).toBeTruthy();
+});
+
+test('zeigt einen Fehler beim erneuten Senden direkt nach der Registrierung', async () => {
+  const mockedSupabase = jest.requireMock('@/services/supabase') as {
+    requestEmailConfirmation: jest.Mock;
+  };
+  mockedSupabase.requestEmailConfirmation.mockImplementation(async () => {
+    throw new Error('Email rate limit exceeded');
+  });
+  const view = await openSettings();
+  await fireEvent.press(view.getByTestId('auth-mode-toggle'));
+  await enterCredentials(view);
+  await fireEvent.press(view.getByTestId('auth-submit-button'));
+  await view.findByTestId('registration-resend-confirmation-button');
+
+  await fireEvent.press(view.getByTestId('registration-resend-confirmation-button'));
+
+  expect(await view.findByTestId('auth-error-message')).toBeTruthy();
+  expect(view.getByText(
+    'Zu viele Versuche in kurzer Zeit. Warte bitte einige Minuten und versuche es dann erneut.',
+  )).toBeTruthy();
 });
 
 test('zeigt einen Registrierungsfehler sichtbar an', async () => {

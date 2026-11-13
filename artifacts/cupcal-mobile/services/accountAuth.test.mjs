@@ -186,6 +186,7 @@ test('registriert erfolgreich mit und ohne sofortige Sitzung', async (t) => {
       ok: true,
       message: 'Dein Konto ist erstellt. Bitte bestätige deine E-Mail-Adresse über den Link in deinem Postfach.',
       clearPassword: true,
+      emailConfirmationRequired: true,
     });
   });
 });
