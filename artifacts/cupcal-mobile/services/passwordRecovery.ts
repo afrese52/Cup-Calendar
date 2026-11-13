@@ -157,20 +157,29 @@ export function createPasswordRecovery(auth: PasswordRecoveryAuth) {
 
     const requestId = ++latestPasswordResetRequest;
     recoverySessionPending = false;
-    lastPasswordResetUrl = url;
-    lastPasswordResetPromise = passwordResetQueue.then(async () => {
+    const requestPromise = passwordResetQueue.then(async () => {
       try {
         return await processPasswordResetUrl(url, requestId);
       } catch (error) {
         if (requestId === latestPasswordResetRequest) recoverySessionPending = false;
+        if (
+          isTransientConnectionError(error)
+          && lastPasswordResetUrl === url
+          && lastPasswordResetPromise === requestPromise
+        ) {
+          lastPasswordResetUrl = null;
+          lastPasswordResetPromise = null;
+        }
         throw error;
       }
     });
-    passwordResetQueue = lastPasswordResetPromise.then(
+    lastPasswordResetUrl = url;
+    lastPasswordResetPromise = requestPromise;
+    passwordResetQueue = requestPromise.then(
       () => undefined,
       () => undefined,
     );
-    return lastPasswordResetPromise;
+    return requestPromise;
   }
 
   return {

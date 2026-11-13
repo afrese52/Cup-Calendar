@@ -81,6 +81,29 @@ test('weist bereits verwendete Codes ab', async () => {
   );
 });
 
+test('erlaubt nach einem vorübergehenden Linkfehler denselben Link erneut', async () => {
+  let exchangeAttempts = 0;
+  const recovery = createPasswordRecovery(createAuth({
+    exchangeCodeForSession: async () => {
+      exchangeAttempts += 1;
+      if (exchangeAttempts === 1) {
+        return { error: new Error('Network request failed') };
+      }
+      return { error: null };
+    },
+  }));
+
+  await assert.rejects(
+    recovery.handlePasswordResetUrl(recoveryUrl),
+    /Network request failed/i,
+  );
+  assert.equal(recovery.isPending(), false);
+
+  assert.equal(await recovery.handlePasswordResetUrl(recoveryUrl), true);
+  assert.equal(exchangeAttempts, 2);
+  assert.equal(recovery.isPending(), true);
+});
+
 test('weist den Passwortwechsel ohne gültige Wiederherstellungssitzung ab', async () => {
   let updateCalled = false;
   const recovery = createPasswordRecovery(createAuth({
@@ -361,17 +384,28 @@ test('verarbeitet Supabase-Recovery-Sitzungen in URL-Fragmenten ohne CupCal-Flow
 
 test('verarbeitet denselben Link aus Kaltstart und URL-Ereignis nur einmal', async () => {
   let exchangeCount = 0;
+  let finishExchange;
+  let markExchangeStarted;
+  const exchangeStarted = new Promise((resolve) => {
+    markExchangeStarted = resolve;
+  });
   const recovery = createPasswordRecovery(createAuth({
     exchangeCodeForSession: async (code) => {
       assert.equal(code, 'one-time-code');
       exchangeCount += 1;
-      return { error: null };
+      markExchangeStarted();
+      return new Promise((resolve) => {
+        finishExchange = resolve;
+      });
     },
   }));
 
   const coldStart = recovery.handlePasswordResetUrl(recoveryUrl);
+  await exchangeStarted;
   const runningAppEvent = recovery.handlePasswordResetUrl(recoveryUrl);
 
+  assert.equal(exchangeCount, 1);
+  finishExchange({ error: null });
   assert.equal(await coldStart, true);
   assert.equal(await runningAppEvent, true);
   assert.equal(exchangeCount, 1);
