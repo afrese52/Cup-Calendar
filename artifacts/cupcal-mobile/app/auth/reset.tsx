@@ -116,7 +116,10 @@ export default function ResetPasswordScreen() {
       setConfirmPassword('');
     } catch (error) {
       setIsRecoveryReady(isPasswordRecoveryPending());
-      setErrorMessage(friendlyAuthError(error, 'Das Passwort konnte nicht gespeichert werden.'));
+      setErrorMessage(friendlyAuthError(
+        error,
+        'Das Passwort konnte nicht gespeichert werden. Bitte versuche es erneut oder fordere in den Einstellungen einen neuen Wiederherstellungslink an.',
+      ));
     } finally {
       isSavingRef.current = false;
       setIsSaving(false);

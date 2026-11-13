@@ -84,9 +84,11 @@ test('behält Formular und Eingaben nach einem Verbindungsfehler für einen erne
   await fireEvent.changeText(view.getByTestId('reset-password-confirm-input'), 'Mein-neues-Passwort-123');
   await fireEvent.press(view.getByTestId('reset-password-submit-button'));
 
-  expect(await view.findByText(
+  const errorMessage = await view.findByText(
     'Keine Verbindung möglich. Prüfe deine Internetverbindung und versuche es erneut.',
-  )).toBeTruthy();
+  );
+  expect(errorMessage.props.accessibilityRole).toBe('alert');
+  expect(errorMessage.props.children).toContain('versuche es erneut');
   expect(view.getByTestId('reset-password-input').props.value).toBe('Mein-neues-Passwort-123');
   expect(view.getByTestId('reset-password-confirm-input').props.value).toBe('Mein-neues-Passwort-123');
   expect(view.getByTestId('reset-password-submit-button')).toBeTruthy();
@@ -97,6 +99,23 @@ test('behält Formular und Eingaben nach einem Verbindungsfehler für einen erne
 
   await waitFor(() => expect(view.getByText('Passwort geändert')).toBeTruthy());
   expect(mockSaveNewPassword).toHaveBeenCalledTimes(2);
+});
+
+test('gibt bei einem unerwarteten Speicherfehler eine zugängliche nächste Aktion aus', async () => {
+  mockSaveNewPassword.mockRejectedValue(new Error('Unexpected server error'));
+  const view = await render(<ResetPasswordScreen />);
+
+  await waitFor(() => expect(view.getByTestId('reset-password-submit-button')).toBeTruthy());
+  await fireEvent.changeText(view.getByTestId('reset-password-input'), 'Mein-neues-Passwort-123');
+  await fireEvent.changeText(view.getByTestId('reset-password-confirm-input'), 'Mein-neues-Passwort-123');
+  await fireEvent.press(view.getByTestId('reset-password-submit-button'));
+
+  const errorMessage = await view.findByText(
+    'Das Passwort konnte nicht gespeichert werden. Bitte versuche es erneut oder fordere in den Einstellungen einen neuen Wiederherstellungslink an.',
+  );
+  expect(errorMessage.props.accessibilityRole).toBe('alert');
+  expect(view.getByTestId('reset-password-submit-button')).toBeTruthy();
+  expect(mockSaveNewPassword).toHaveBeenCalledTimes(1);
 });
 
 test('behält Formular und Eingaben nach einer Passwort-Ablehnung für eine Korrektur', async () => {
