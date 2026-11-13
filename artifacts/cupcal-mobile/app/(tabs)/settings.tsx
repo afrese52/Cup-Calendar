@@ -1,8 +1,9 @@
 import { Feather } from '@expo/vector-icons';
 import { useRequestAccountDeletion } from '@workspace/api-client-react';
 import * as Haptics from 'expo-haptics';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
+  AccessibilityInfo,
   ActivityIndicator,
   Platform,
   Pressable,
@@ -94,6 +95,7 @@ export default function SettingsScreen() {
   const [submittingAction, setSubmittingAction] = useState<AuthAction | null>(null);
   const isSubmittingAuth = submittingAction !== null;
   const [authError, setAuthError] = useState<string | null>(null);
+  const authErrorRef = useRef<React.ComponentRef<typeof Text>>(null);
   const [authMessage, setAuthMessage] = useState<string | null>(null);
   const [confirmationResendAvailableAt, setConfirmationResendAvailableAt] = useState<number | null>(null);
   const [confirmationResendClock, setConfirmationResendClock] = useState(() => Date.now());
@@ -119,6 +121,14 @@ export default function SettingsScreen() {
     const timer = setInterval(refreshCountdown, 1000);
     return () => clearInterval(timer);
   }, [confirmationResendAvailableAt]);
+
+  useEffect(() => {
+    if (!authError || isSubmittingAuth || Platform.OS === 'web') return;
+
+    if (authErrorRef.current) {
+      AccessibilityInfo.sendAccessibilityEvent(authErrorRef.current, 'focus');
+    }
+  }, [authError, isSubmittingAuth]);
 
   useEffect(() => {
     if (!supabase) return;
@@ -478,6 +488,8 @@ export default function SettingsScreen() {
               ) : null}
               {authError ? (
                 <Text
+                  ref={authErrorRef}
+                  accessible
                   accessibilityRole="alert"
                   accessibilityLiveRegion="assertive"
                   testID="auth-error-message"
@@ -633,6 +645,8 @@ export default function SettingsScreen() {
           ) : null}
           {authError && session ? (
             <Text
+              ref={authErrorRef}
+              accessible
               accessibilityRole="alert"
               accessibilityLiveRegion="assertive"
               testID="auth-error-message"

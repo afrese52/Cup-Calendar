@@ -1,7 +1,7 @@
 import React from 'react';
 import { beforeEach, expect, jest, test } from '@jest/globals';
 import { act, fireEvent, render, waitFor, within } from '@testing-library/react-native';
-import { Dimensions, StyleSheet } from 'react-native';
+import { AccessibilityInfo, Dimensions, StyleSheet } from 'react-native';
 import SettingsScreen from '../app/(tabs)/settings';
 import { supabase } from '@/services/supabase';
 import { ACCOUNT_CONFIRMATION_RESEND_COOLDOWN_SECONDS } from '../services/accountAuth';
@@ -102,6 +102,9 @@ const testSession = {
 };
 const defaultWindowDimensions = Dimensions.get('window');
 const defaultScreenDimensions = Dimensions.get('screen');
+const sendAccessibilityFocus = jest
+  .spyOn(AccessibilityInfo, 'sendAccessibilityEvent')
+  .mockImplementation(() => {});
 
 function restoreAuthMocks() {
   auth.signInWithPassword.mockReset().mockImplementation(async () => {
@@ -151,10 +154,32 @@ async function enterCredentials(view: RenderedSettings) {
 
 beforeEach(() => {
   restoreAuthMocks();
+  sendAccessibilityFocus.mockClear();
   Dimensions.set({
     window: defaultWindowDimensions,
     screen: defaultScreenDimensions,
   });
+});
+
+test.each([
+  ['Anmeldung', 'sign-in'],
+  ['Registrierung', 'sign-up'],
+  ['Passwortlink', 'forgot-password'],
+] as const)('setzt den Screenreader-Fokus nach fehlenden Eingaben bei %s auf die Fehlermeldung', async (_name, mode) => {
+  const view = await openSettings();
+  if (mode === 'sign-up') {
+    await fireEvent.press(view.getByTestId('auth-mode-toggle'));
+  } else if (mode === 'forgot-password') {
+    await fireEvent.press(view.getByTestId('forgot-password-button'));
+  }
+
+  await fireEvent.press(view.getByTestId('auth-submit-button'));
+
+  const errorMessage = await view.findByTestId('auth-error-message');
+  expect(errorMessage.props.accessible).toBe(true);
+  expect(errorMessage.props.accessibilityRole).toBe('alert');
+  await waitFor(() => expect(sendAccessibilityFocus).toHaveBeenCalledTimes(1));
+  expect(sendAccessibilityFocus).toHaveBeenCalledWith(expect.anything(), 'focus');
 });
 
 test('zeigt den Anmeldestatus und Erfolg nach der Anmeldung', async () => {
@@ -202,6 +227,7 @@ test('zeigt einen Anmeldefehler sichtbar an', async () => {
   expect(errorMessage.props.children).toBe(
     'E-Mail-Adresse oder Passwort stimmen nicht. Prüfe deine Eingaben oder fordere einen neuen Passwort-Link an.',
   );
+  await waitFor(() => expect(sendAccessibilityFocus).toHaveBeenCalledTimes(1));
 });
 
 test('zeigt Ladezustand und sperrt die Anmeldeschaltfläche während der Anfrage', async () => {
@@ -222,6 +248,7 @@ test('zeigt Ladezustand und sperrt die Anmeldeschaltfläche während der Anfrage
     });
     expect(view.getByTestId('auth-submit-button').props.accessibilityLabel).toBe('Anmeldung läuft');
   });
+  expect(sendAccessibilityFocus).not.toHaveBeenCalled();
   await act(async () => finishSignIn({ error: null }));
   expect(await view.findByText('Du bist angemeldet.')).toBeTruthy();
 });
@@ -360,6 +387,7 @@ test('zeigt einen Registrierungsfehler sichtbar an', async () => {
   expect(errorMessage.props.children).toBe(
     'Das Passwort ist zu kurz oder zu unsicher. Bitte wähle ein stärkeres Passwort.',
   );
+  await waitFor(() => expect(sendAccessibilityFocus).toHaveBeenCalledTimes(1));
 });
 
 test('öffnet den Passwort-zurücksetzen-Modus und fordert den Link mit einer anonymen Erfolgsmeldung an', async () => {
@@ -425,6 +453,7 @@ test('zeigt einen verständlichen Fehler beim Anfordern des Wiederherstellungsli
   expect(await view.findByText(
     'Zu viele Versuche in kurzer Zeit. Warte bitte einige Minuten und versuche es dann erneut.',
   )).toBeTruthy();
+  await waitFor(() => expect(sendAccessibilityFocus).toHaveBeenCalledTimes(1));
 });
 
 test('zeigt den Ladezustand und sperrt die Schaltflächen während der Linkanfrage', async () => {
