@@ -316,7 +316,15 @@ components:
           type: array
           items: { type: string }
         willUpdate: { type: boolean }
-      required: [id, title, startTime, endTime, gameMode, teamFormat, tournamentType, category, warnings, willUpdate]
+        previousStartTime:
+          type: ["string", "null"]
+          format: date-time
+          description: Previous start time when it differs from the imported value
+        previousEndTime:
+          type: ["string", "null"]
+          format: date-time
+          description: Previous end time when it differs from the imported value
+      required: [id, title, startTime, endTime, gameMode, teamFormat, tournamentType, category, warnings, willUpdate, previousStartTime, previousEndTime]
     MhtImportIssue:
       type: object
       properties:

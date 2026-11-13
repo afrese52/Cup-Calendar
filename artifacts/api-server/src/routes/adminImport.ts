@@ -4,6 +4,7 @@ import { parseMhtSchedule } from "../../scripts/dry-run-mht-import.mjs";
 import { getAdminImportAccess, getSafeUpcomingEvents, parseAdminEmailAllowlist } from "../services/adminImportAccess";
 import {
   getSupabaseAdmin,
+  getMhtEventTimeChanges,
   ImportHistoryWriteError,
   listRecentMhtImports,
   recordMhtImportHistory,
@@ -117,17 +118,21 @@ function parseSchedule(sourceText: string) {
   }
 }
 
-async function findExistingEventIds(
+async function findExistingEvents(
   eventIds: string[],
-): Promise<Set<string>> {
-  if (eventIds.length === 0) return new Set();
+): Promise<Map<string, { start_time: string; end_time: string }>> {
+  if (eventIds.length === 0) return new Map();
   try {
     const { data, error } = await getSupabaseAdmin()
       .from("fortnite_events")
-      .select("id")
+      .select("id, start_time, end_time")
       .in("id", eventIds);
     if (error) throw error;
-    return new Set((data ?? []).map((row: { id: string }) => row.id));
+    return new Map((data ?? []).map((row: {
+      id: string;
+      start_time: string;
+      end_time: string;
+    }) => [row.id, { start_time: row.start_time, end_time: row.end_time }]));
   } catch (error) {
     throw new ExistingEventsQueryError(error);
   }
@@ -136,7 +141,7 @@ async function findExistingEventIds(
 async function buildPreview(sourceText: string) {
   const schedule = parseSchedule(sourceText);
   const plan = getSafeUpcomingEvents(schedule.events, schedule.snapshotAt);
-  const existingIds = await findExistingEventIds(plan.importable.map((event) => event.id));
+  const existingEvents = await findExistingEvents(plan.importable.map((event) => event.id));
 
   return {
     sourceUrl: schedule.sourceUrl,
@@ -150,8 +155,8 @@ async function buildPreview(sourceText: string) {
     importableCount: plan.importable.length,
     warningCount: plan.upcoming.length - plan.importable.length,
     invalidCount: schedule.invalidCount,
-    newCount: plan.importable.filter((event) => !existingIds.has(event.id)).length,
-    updateCount: plan.importable.filter((event) => existingIds.has(event.id)).length,
+    newCount: plan.importable.filter((event) => !existingEvents.has(event.id)).length,
+    updateCount: plan.importable.filter((event) => existingEvents.has(event.id)).length,
     events: plan.upcoming.map((event) => ({
       id: event.id,
       title: event.title,
@@ -162,7 +167,8 @@ async function buildPreview(sourceText: string) {
       tournamentType: event.tournament_type,
       category: event.category,
       warnings: event.review_warnings,
-      willUpdate: plan.importable.includes(event) && existingIds.has(event.id),
+      willUpdate: plan.importable.includes(event) && existingEvents.has(event.id),
+      ...getMhtEventTimeChanges(event, existingEvents.get(event.id) ?? null),
     })),
     issues: schedule.issues.map((issue) => ({
       title: issue.title ?? null,
@@ -236,9 +242,9 @@ router.post(
         return;
       }
 
-      const existingIds = await findExistingEventIds(preview.importableEvents.map((event) => event.id));
+      const existingEvents = await findExistingEvents(preview.importableEvents.map((event) => event.id));
       await upsertMhtEvents(preview.importableEvents);
-      const insertedCount = preview.importableEvents.filter((event) => !existingIds.has(event.id)).length;
+      const insertedCount = preview.importableEvents.filter((event) => !existingEvents.has(event.id)).length;
       const updatedCount = preview.importableEvents.length - insertedCount;
       const adminUser = (req as ImportAdminRequest).importAdminUser;
       if (!adminUser?.email) {

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   buildMhtEventUpsertRows,
+  getMhtEventTimeChanges,
   listRecentMhtImports,
   recordMhtImportHistory,
   upsertMhtEvents,
@@ -25,6 +26,40 @@ function event(overrides = {}) {
     ...overrides,
   };
 }
+
+test("meldet für neue Termine und unveränderte Zeiten keine Zeitänderung", () => {
+  const imported = event();
+
+  assert.deepEqual(getMhtEventTimeChanges(imported, null), {
+    previousStartTime: null,
+    previousEndTime: null,
+  });
+  assert.deepEqual(getMhtEventTimeChanges(imported, {
+    start_time: "2026-11-12T19:00:00+01:00",
+    end_time: "2026-11-12T21:00:00+01:00",
+  }), {
+    previousStartTime: null,
+    previousEndTime: null,
+  });
+});
+
+test("gibt nur die jeweils geänderte bisherige Zeit zurück", () => {
+  assert.deepEqual(getMhtEventTimeChanges(event(), {
+    start_time: "2026-11-12T17:00:00.000Z",
+    end_time: "2026-11-12T20:00:00.000Z",
+  }), {
+    previousStartTime: "2026-11-12T17:00:00.000Z",
+    previousEndTime: null,
+  });
+
+  assert.deepEqual(getMhtEventTimeChanges(event(), {
+    start_time: "2026-11-12T18:00:00.000Z",
+    end_time: "2026-11-12T21:00:00.000Z",
+  }), {
+    previousStartTime: null,
+    previousEndTime: "2026-11-12T21:00:00.000Z",
+  });
+});
 
 test("upsert payload uses the stable event/round id and updates classified fields only", () => {
   const [row] = buildMhtEventUpsertRows([event()]);

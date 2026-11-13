@@ -472,6 +472,20 @@ export default function AdminImportScreen() {
                             <Text style={[styles.eventMeta, { color: colors.mutedForeground }]}>
                               {formatImportTime(event.startTime, preview.timeZone)} · {event.teamFormat} · {event.gameMode}
                             </Text>
+                            {event.previousStartTime || event.previousEndTime ? (
+                              <Text
+                                testID={`event-time-changes-${event.id}`}
+                                style={[styles.timeChangeText, { color: colors.categoryLeague }]}
+                              >
+                                Zeiten geändert:
+                                {event.previousStartTime
+                                  ? ` Start ${formatImportTime(event.previousStartTime, preview.timeZone)} → ${formatImportTime(event.startTime, preview.timeZone)}`
+                                  : ''}
+                                {event.previousEndTime
+                                  ? ` Ende ${formatImportTime(event.previousEndTime, preview.timeZone)} → ${formatImportTime(event.endTime, preview.timeZone)}`
+                                  : ''}
+                              </Text>
+                            ) : null}
                             {hasWarnings ? (
                               <Text style={[styles.warningText, { color: colors.warning }]}>{event.warnings.join(' ')}</Text>
                             ) : null}
@@ -644,6 +658,7 @@ const styles = StyleSheet.create({
   eventCopy: { flex: 1 },
   eventTitle: { fontSize: 12, fontWeight: '700' },
   eventMeta: { fontSize: 10, marginTop: 4 },
+  timeChangeText: { fontSize: 11, lineHeight: 16, fontWeight: '700', marginTop: 4 },
   warningText: { fontSize: 10, lineHeight: 14, marginTop: 4 },
   eventState: { fontSize: 9, fontWeight: '800', textTransform: 'uppercase' },
   messageBox: { borderWidth: 1, borderRadius: 13, padding: 13, flexDirection: 'row', gap: 9, alignItems: 'flex-start' },

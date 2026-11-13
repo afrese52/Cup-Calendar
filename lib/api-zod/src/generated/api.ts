@@ -82,7 +82,9 @@ export const PreviewMhtImportResponse = zod.object({
   "tournamentType": zod.enum(['FNCS', 'Cash Cup', 'Ranked Cup', 'Community']),
   "category": zod.enum(['Turnier', 'Liga', 'Qualifikation', 'Trainingsrunde']),
   "warnings": zod.array(zod.string()),
-  "willUpdate": zod.boolean()
+  "willUpdate": zod.boolean(),
+  "previousStartTime": zod.coerce.date().nullable().describe('Previous start time when it differs from the imported value'),
+  "previousEndTime": zod.coerce.date().nullable().describe('Previous end time when it differs from the imported value')
 })),
   "issues": zod.array(zod.object({
   "title": zod.string().nullable(),

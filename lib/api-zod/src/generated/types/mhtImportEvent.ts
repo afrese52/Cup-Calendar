@@ -21,4 +21,14 @@ export interface MhtImportEvent {
   category: MhtImportEventCategory;
   warnings: string[];
   willUpdate: boolean;
+  /**
+     * Previous start time when it differs from the imported value
+     * @nullable
+     */
+  previousStartTime: Date | null;
+  /**
+     * Previous end time when it differs from the imported value
+     * @nullable
+     */
+  previousEndTime: Date | null;
 }

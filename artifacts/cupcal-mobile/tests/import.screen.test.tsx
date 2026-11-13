@@ -211,6 +211,70 @@ test('meldet ein unbekanntes Snapshot-Alter, ohne es als veraltet auszugeben', a
   expect(screen.getByText('Alter nicht bestimmbar', { exact: false })).toBeTruthy();
 });
 
+test('zeigt geänderte Zeiten in der Vorschau, aber keine Änderungen für neue oder gleiche Termine', async () => {
+  mockGetDocumentAsync.mockResolvedValue(selectedFile('plan.mht'));
+  mockPreviewImport.mockResolvedValue({
+    ...preview,
+    importableCount: 3,
+    newCount: 1,
+    updateCount: 2,
+    events: [
+      {
+        id: 'new-event',
+        title: 'Neuer Termin',
+        startTime: '2026-11-12T18:00:00.000Z',
+        endTime: '2026-11-12T20:00:00.000Z',
+        previousStartTime: null,
+        previousEndTime: null,
+        gameMode: 'Battle Royale',
+        teamFormat: 'Solo',
+        tournamentType: 'Cash Cup',
+        category: 'Turnier',
+        warnings: [],
+        willUpdate: false,
+      },
+      {
+        id: 'same-event',
+        title: 'Unveränderter Termin',
+        startTime: '2026-11-12T18:00:00.000Z',
+        endTime: '2026-11-12T20:00:00.000Z',
+        previousStartTime: null,
+        previousEndTime: null,
+        gameMode: 'Battle Royale',
+        teamFormat: 'Solo',
+        tournamentType: 'Cash Cup',
+        category: 'Turnier',
+        warnings: [],
+        willUpdate: true,
+      },
+      {
+        id: 'changed-event',
+        title: 'Termin mit Zeitänderung',
+        startTime: '2026-11-12T18:00:00.000Z',
+        endTime: '2026-11-12T20:00:00.000Z',
+        previousStartTime: '2026-11-12T17:00:00.000Z',
+        previousEndTime: '2026-11-12T21:00:00.000Z',
+        gameMode: 'Battle Royale',
+        teamFormat: 'Solo',
+        tournamentType: 'Cash Cup',
+        category: 'Turnier',
+        warnings: [],
+        willUpdate: true,
+      },
+    ],
+  });
+  const screen = await openImportScreen();
+
+  await fireEvent.press(screen.getByTestId('choose-import-file-button'));
+  await fireEvent.press(screen.getByTestId('preview-import-file-button'));
+
+  expect(await screen.findByTestId('event-time-changes-changed-event')).toBeTruthy();
+  expect(screen.getByText(/Start 12\.11\.2026, 18:00 → 12\.11\.2026, 19:00/)).toBeTruthy();
+  expect(screen.getByText(/Ende 12\.11\.2026, 22:00 → 12\.11\.2026, 21:00/)).toBeTruthy();
+  expect(screen.queryByTestId('event-time-changes-new-event')).toBeNull();
+  expect(screen.queryByTestId('event-time-changes-same-event')).toBeNull();
+});
+
 test('meldet einen Abbruch verständlich und lässt die Auswahl erneut zu', async () => {
   mockGetDocumentAsync.mockResolvedValue({ canceled: true, assets: null });
   const screen = await openImportScreen();

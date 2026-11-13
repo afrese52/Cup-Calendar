@@ -18,6 +18,29 @@ export interface MhtImportEvent {
   review_warnings: string[];
 }
 
+export interface ExistingMhtEventTimes {
+  start_time: string;
+  end_time: string;
+}
+
+export function getMhtEventTimeChanges(
+  event: Pick<MhtImportEvent, "start_time" | "end_time">,
+  existing: ExistingMhtEventTimes | null,
+): { previousStartTime: string | null; previousEndTime: string | null } {
+  if (!existing) {
+    return { previousStartTime: null, previousEndTime: null };
+  }
+
+  return {
+    previousStartTime: Date.parse(existing.start_time) === Date.parse(event.start_time)
+      ? null
+      : existing.start_time,
+    previousEndTime: Date.parse(existing.end_time) === Date.parse(event.end_time)
+      ? null
+      : existing.end_time,
+  };
+}
+
 export interface MhtImportHistoryEntry {
   id: number;
   imported_at: string;
