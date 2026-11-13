@@ -331,6 +331,8 @@ components:
       properties:
         sourceUrl: { type: ["string", "null"] }
         snapshotAt: { type: ["string", "null"], format: date-time }
+        snapshotAgeMs: { type: ["integer", "null"], description: Snapshot age in milliseconds when previewed }
+        isSnapshotStale: { type: boolean, description: True when the snapshot is more than 24 hours old }
         region: { type: string }
         timeZone: { type: string }
         cardCount: { type: integer }
@@ -346,7 +348,7 @@ components:
         issues:
           type: array
           items: { $ref: "#/components/schemas/MhtImportIssue" }
-      required: [sourceUrl, snapshotAt, region, timeZone, cardCount, upcomingCount, importableCount, warningCount, invalidCount, newCount, updateCount, events, issues]
+      required: [sourceUrl, snapshotAt, snapshotAgeMs, isSnapshotStale, region, timeZone, cardCount, upcomingCount, importableCount, warningCount, invalidCount, newCount, updateCount, events, issues]
     MhtImportResult:
       type: object
       properties:

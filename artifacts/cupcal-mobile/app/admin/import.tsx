@@ -49,6 +49,22 @@ function formatImportTime(value: string, timeZone: string) {
   }).format(new Date(value));
 }
 
+function formatSnapshotAge(ageMs: number | null) {
+  if (ageMs === null) return 'Alter nicht bestimmbar';
+  if (ageMs < 0) return 'Zeitstempel liegt in der Zukunft';
+
+  const totalMinutes = Math.floor(ageMs / (60 * 1000));
+  if (totalMinutes < 1) return 'weniger als 1 Minute';
+  const totalHours = Math.floor(totalMinutes / 60);
+  const days = Math.floor(totalHours / 24);
+  const hours = totalHours % 24;
+  if (days > 0) {
+    return `vor ${days} ${days === 1 ? 'Tag' : 'Tagen'}${hours > 0 ? ` und ${hours} ${hours === 1 ? 'Stunde' : 'Stunden'}` : ''}`;
+  }
+  if (totalHours > 0) return `vor ${totalHours} ${totalHours === 1 ? 'Stunde' : 'Stunden'}`;
+  return `vor ${totalMinutes} ${totalMinutes === 1 ? 'Minute' : 'Minuten'}`;
+}
+
 function getImportPeriod(preview: MhtImportPreview) {
   const eligibleEvents = preview.events.filter((event) => event.warnings.length === 0);
   if (eligibleEvents.length === 0) return null;
@@ -237,12 +253,15 @@ export default function AdminImportScreen() {
     const message =
       `${preview.importableCount} geprüfte Termine importieren.${periodCopy} ` +
       `${preview.warningCount} Termine mit Zuordnungswarnungen bleiben ausgelassen. ` +
-      `${preview.updateCount} vorhandene Einträge werden aktualisiert; persönliche Admin-Notizen bleiben erhalten.`;
+      `${preview.updateCount} vorhandene Einträge werden aktualisiert; persönliche Admin-Notizen bleiben erhalten.` +
+      (preview.isSnapshotStale
+        ? ' Achtung: Der Snapshot ist älter als 24 Stunden. Prüfe eine aktuelle Datei, bevor du importierst.'
+        : '');
     if (Platform.OS === 'web') {
       if (window.confirm(message)) void saveImport();
       return;
     }
-    Alert.alert('Termine importieren?', message, [
+    Alert.alert(preview.isSnapshotStale ? 'Veralteten Spielplan importieren?' : 'Termine importieren?', message, [
       { text: 'Abbrechen', style: 'cancel' },
       { text: 'Importieren', onPress: () => void saveImport() },
     ]);
@@ -403,7 +422,24 @@ export default function AdminImportScreen() {
                     {preview.region} · Snapshot {preview.snapshotAt
                       ? formatImportTime(preview.snapshotAt, preview.timeZone)
                       : 'ohne Zeitstempel'}
+                    {' · '}{formatSnapshotAge(preview.snapshotAgeMs)}
                   </Text>
+                  {preview.snapshotAt === null || preview.snapshotAgeMs === null || preview.snapshotAgeMs < 0 || preview.isSnapshotStale ? (
+                    <View
+                      accessibilityRole="alert"
+                      testID="snapshot-age-warning"
+                      style={[styles.messageBox, styles.snapshotWarning, { backgroundColor: colors.warning + '18', borderColor: colors.warning }]}
+                    >
+                      <Feather name="alert-triangle" size={17} color={colors.warning} />
+                      <Text style={[styles.messageText, { color: colors.foreground }]}>
+                        {preview.isSnapshotStale
+                          ? 'Dieser Spielplan ist älter als 24 Stunden. Prüfe auf Fortnite eine aktuelle Version und lade sie erneut, bevor du speicherst.'
+                          : preview.snapshotAt === null || preview.snapshotAgeMs === null
+                            ? 'Das Alter des Spielplans ist nicht bestimmbar. Prüfe die Datei vor dem Import.'
+                            : 'Der Snapshot-Zeitpunkt liegt in der Zukunft. Prüfe die Datei vor dem Import.'}
+                      </Text>
+                    </View>
+                  ) : null}
                   <Text style={[styles.periodCopy, { color: colors.foreground }]}>
                     Importzeitraum:{' '}
                     {importPeriod
@@ -580,6 +616,7 @@ const styles = StyleSheet.create({
   primaryButton: { minHeight: 48, borderRadius: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 9, marginTop: 12, paddingHorizontal: 14 },
   primaryButtonText: { fontSize: 13, fontWeight: '800' },
   importButton: { marginTop: 0, marginBottom: 10 },
+  snapshotWarning: { marginTop: 12 },
   pressed: { opacity: 0.74 },
   disabled: { opacity: 0.5 },
   notice: { borderWidth: 1, borderRadius: 16, padding: 15, flexDirection: 'row', alignItems: 'center', gap: 11 },

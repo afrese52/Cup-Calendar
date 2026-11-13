@@ -61,6 +61,8 @@ export const GetAdminImportAccessResponse = zod.object({
 export const PreviewMhtImportResponse = zod.object({
   "sourceUrl": zod.string().nullable(),
   "snapshotAt": zod.coerce.date().nullable(),
+  "snapshotAgeMs": zod.number().int().nullable().describe('Snapshot age in milliseconds when previewed'),
+  "isSnapshotStale": zod.boolean().describe('True when the snapshot is more than 24 hours old'),
   "region": zod.string(),
   "timeZone": zod.string(),
   "cardCount": zod.number().int(),
@@ -120,7 +122,7 @@ export const GetAdminImportHistoryResponse = zod.object({
 
 
 /**
- * @summary Create a short-lived account deletion confirmation token
+ * @summary Erstellt ein kurzlebiges Bestätigungstoken für die Kontolöschung
  */
 export const RequestAccountDeletionResponse = zod.object({
   "confirmationToken": zod.string(),
@@ -129,7 +131,7 @@ export const RequestAccountDeletionResponse = zod.object({
 
 
 /**
- * @summary Delete the authenticated account after email confirmation
+ * @summary Löscht das angemeldete Konto nach der E-Mail-Bestätigung
  */
 export const ConfirmAccountDeletionBody = zod.object({
   "confirmationToken": zod.string()

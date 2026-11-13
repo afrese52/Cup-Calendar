@@ -13,6 +13,13 @@ export interface MhtImportPreview {
   sourceUrl: string | null;
   /** @nullable */
   snapshotAt: Date | null;
+  /**
+     * Snapshot age in milliseconds when previewed
+     * @nullable
+     */
+  snapshotAgeMs: number | null;
+  /** True when the snapshot is more than 24 hours old */
+  isSnapshotStale: boolean;
   region: string;
   timeZone: string;
   cardCount: number;

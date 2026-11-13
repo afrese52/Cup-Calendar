@@ -141,6 +141,8 @@ async function buildPreview(sourceText: string) {
   return {
     sourceUrl: schedule.sourceUrl,
     snapshotAt: schedule.snapshotAt,
+    snapshotAgeMs: schedule.snapshotAgeMs,
+    isSnapshotStale: schedule.isSnapshotStale,
     region: schedule.region,
     timeZone: schedule.timeZone,
     cardCount: schedule.cardCount,

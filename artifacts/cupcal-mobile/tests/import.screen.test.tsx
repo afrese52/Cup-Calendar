@@ -1,12 +1,13 @@
 import React from 'react';
 import { afterAll, beforeEach, expect, jest, test } from '@jest/globals';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
-import { Platform } from 'react-native';
+import { Alert, Platform } from 'react-native';
 import AdminImportScreen from '../app/admin/import';
 
 const mockGetDocumentAsync = jest.fn<(...args: any[]) => Promise<any>>();
 const mockReadFile = jest.fn<(...args: any[]) => Promise<string>>();
 const mockPreviewImport = jest.fn<(...args: any[]) => Promise<any>>();
+const mockImportSchedule = jest.fn<(...args: any[]) => Promise<any>>();
 const mockImportHistory = jest.fn<() => any>();
 let mockNativeFileSize: number | null = null;
 const originalPlatformOS = Platform.OS;
@@ -43,7 +44,7 @@ jest.mock('@workspace/api-client-react', () => ({
   getGetAdminImportHistoryQueryKey: () => ['admin-import-history'],
   useGetAdminImportHistory: () => mockImportHistory(),
   usePreviewMhtImport: () => ({ mutateAsync: mockPreviewImport, isPending: false }),
-  useImportMhtSchedule: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  useImportMhtSchedule: () => ({ mutateAsync: mockImportSchedule, isPending: false }),
 }));
 jest.mock('@/services/accountAuth', () => ({
   watchAuthSession: (_auth: unknown, callbacks: {
@@ -90,6 +91,8 @@ const preview = {
   issues: [],
   region: 'EU',
   snapshotAt: null,
+  snapshotAgeMs: null,
+  isSnapshotStale: false,
   timeZone: 'Europe/Berlin',
   sourceUrl: null,
 };
@@ -131,6 +134,7 @@ beforeEach(() => {
   mockGetDocumentAsync.mockReset();
   mockReadFile.mockReset().mockResolvedValue('MIME-Version: 1.0\n');
   mockPreviewImport.mockReset().mockResolvedValue(preview);
+  mockImportSchedule.mockReset();
   mockImportHistory.mockReset().mockReturnValue({
     data: { entries: [] },
     isLoading: false,
@@ -159,6 +163,52 @@ test.each(['plan.mht', 'plan.mhtml'])('liest %s ein und zeigt die Vorschau', asy
   await fireEvent.press(screen.getByTestId('preview-import-file-button'));
   await waitFor(() => expect(mockPreviewImport).toHaveBeenCalledWith({ data: 'MIME-Version: 1.0\n' }));
   expect(await screen.findByText('Prüfergebnis')).toBeTruthy();
+});
+
+test('zeigt das Alter und warnt vor einem mehr als 24 Stunden alten Snapshot', async () => {
+  mockGetDocumentAsync.mockResolvedValue(selectedFile('plan.mht'));
+  mockPreviewImport.mockResolvedValue({
+    ...preview,
+    importableCount: 1,
+    snapshotAt: '2026-11-11T10:00:00.000Z',
+    snapshotAgeMs: 25 * 60 * 60 * 1000,
+    isSnapshotStale: true,
+  });
+  const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+  const screen = await openImportScreen();
+
+  await fireEvent.press(screen.getByTestId('choose-import-file-button'));
+  await fireEvent.press(screen.getByTestId('preview-import-file-button'));
+
+  expect(await screen.findByTestId('snapshot-age-warning')).toBeTruthy();
+  expect(screen.getByText('Dieser Spielplan ist älter als 24 Stunden. Prüfe auf Fortnite eine aktuelle Version und lade sie erneut, bevor du speicherst.')).toBeTruthy();
+  expect(screen.getByText('vor 1 Tag und 1 Stunde', { exact: false })).toBeTruthy();
+
+  await fireEvent.press(screen.getByTestId('confirm-import-button'));
+  expect(alertSpy).toHaveBeenCalledWith(
+    'Veralteten Spielplan importieren?',
+    expect.stringContaining('Achtung: Der Snapshot ist älter als 24 Stunden.'),
+    expect.any(Array),
+  );
+  alertSpy.mockRestore();
+});
+
+test('meldet ein unbekanntes Snapshot-Alter, ohne es als veraltet auszugeben', async () => {
+  mockGetDocumentAsync.mockResolvedValue(selectedFile('plan.mht'));
+  mockPreviewImport.mockResolvedValue({
+    ...preview,
+    snapshotAt: null,
+    snapshotAgeMs: null,
+    isSnapshotStale: false,
+  });
+  const screen = await openImportScreen();
+
+  await fireEvent.press(screen.getByTestId('choose-import-file-button'));
+  await fireEvent.press(screen.getByTestId('preview-import-file-button'));
+
+  expect(await screen.findByTestId('snapshot-age-warning')).toBeTruthy();
+  expect(screen.getByText('Das Alter des Spielplans ist nicht bestimmbar. Prüfe die Datei vor dem Import.')).toBeTruthy();
+  expect(screen.getByText('Alter nicht bestimmbar', { exact: false })).toBeTruthy();
 });
 
 test('meldet einen Abbruch verständlich und lässt die Auswahl erneut zu', async () => {

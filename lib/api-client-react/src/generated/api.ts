@@ -661,7 +661,7 @@ export const getRequestAccountDeletionUrl = () => {
 }
 
 /**
- * @summary Create a short-lived account deletion confirmation token
+ * @summary Erstellt ein kurzlebiges Bestätigungstoken für die Kontolöschung
  */
 export const requestAccountDeletion = async ( options?: Parameters<typeof customFetch>[1]): Promise<AccountDeletionRequest> => {
 
@@ -713,7 +713,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
     /**
- * @summary Create a short-lived account deletion confirmation token
+ * @summary Erstellt ein kurzlebiges Bestätigungstoken für die Kontolöschung
  */
 export const useRequestAccountDeletion = <TError = ErrorType<void>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof requestAccountDeletion>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
@@ -735,7 +735,7 @@ export const getConfirmAccountDeletionUrl = () => {
 }
 
 /**
- * @summary Delete the authenticated account after email confirmation
+ * @summary Löscht das angemeldete Konto nach der E-Mail-Bestätigung
  */
 export const confirmAccountDeletion = async (accountDeletionConfirmation: AccountDeletionConfirmation, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
 
@@ -801,7 +801,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type ConfirmAccountDeletionMutationVariables = {data: BodyType<AccountDeletionConfirmation>}
 
     /**
- * @summary Delete the authenticated account after email confirmation
+ * @summary Löscht das angemeldete Konto nach der E-Mail-Bestätigung
  */
 export const useConfirmAccountDeletion = <TError = ErrorType<void>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof confirmAccountDeletion>>, TError,ConfirmAccountDeletionMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}

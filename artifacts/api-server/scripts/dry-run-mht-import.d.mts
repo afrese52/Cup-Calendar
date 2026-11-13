@@ -24,6 +24,8 @@ export interface ParsedMhtIssue {
 export interface ParsedMhtSchedule {
   sourceUrl: string | null;
   snapshotAt: string | null;
+  snapshotAgeMs: number | null;
+  isSnapshotStale: boolean;
   region: string;
   timeZone: string;
   cardCount: number;
@@ -34,9 +36,16 @@ export interface ParsedMhtSchedule {
   issues: ParsedMhtIssue[];
 }
 
+export const MAX_SNAPSHOT_AGE_MS: number;
+
+export function getSnapshotFreshness(
+  snapshotAt: string | null,
+  now?: Date | number,
+): { snapshotAgeMs: number | null; isSnapshotStale: boolean };
+
 export function parseMhtSchedule(
   buffer: Uint8Array,
-  options?: { timeZone?: string; region?: string | null },
+  options?: { timeZone?: string; region?: string | null; now?: Date | number },
 ): ParsedMhtSchedule;
 
 export function mapTeamFormat(

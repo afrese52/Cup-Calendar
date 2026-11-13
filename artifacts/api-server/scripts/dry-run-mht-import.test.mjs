@@ -3,6 +3,8 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import {
   extractMhtHtml,
+  getSnapshotFreshness,
+  MAX_SNAPSHOT_AGE_MS,
   mapTeamFormat,
   parseMhtSchedule,
 } from "./dry-run-mht-import.mjs";
@@ -285,4 +287,55 @@ test("meldet unvollständige Karten, statt sie als importierbar auszugeben", () 
 test("weist eine ungültige Region zurück", () => {
   const html = "<html><body>leer</body></html>";
   assert.throws(() => parseMhtSchedule(makeMht(html, { region: "INVALID" })), /Region/);
+});
+
+test("warnt erst, wenn der Snapshot strikt älter als 24 Stunden ist", () => {
+  const now = Date.parse("2026-11-13T12:00:00.000Z");
+  const snapshotAtDeadline = new Date(now - MAX_SNAPSHOT_AGE_MS).toISOString();
+  const snapshotJustTooOld = new Date(now - MAX_SNAPSHOT_AGE_MS - 1).toISOString();
+
+  assert.deepEqual(getSnapshotFreshness(snapshotAtDeadline, now), {
+    snapshotAgeMs: MAX_SNAPSHOT_AGE_MS,
+    isSnapshotStale: false,
+  });
+  assert.deepEqual(getSnapshotFreshness(snapshotJustTooOld, now), {
+    snapshotAgeMs: MAX_SNAPSHOT_AGE_MS + 1,
+    isSnapshotStale: true,
+  });
+});
+
+test("meldet unbekannte und zukünftige Snapshot-Zeitpunkte ohne falsche Alterswarnung", () => {
+  const now = Date.parse("2026-11-13T12:00:00.000Z");
+
+  assert.deepEqual(getSnapshotFreshness(null, now), {
+    snapshotAgeMs: null,
+    isSnapshotStale: false,
+  });
+  assert.deepEqual(getSnapshotFreshness("not-a-date", now), {
+    snapshotAgeMs: null,
+    isSnapshotStale: false,
+  });
+  assert.deepEqual(getSnapshotFreshness("2026-11-13T12:00:01.000Z", now), {
+    snapshotAgeMs: -1000,
+    isSnapshotStale: false,
+  });
+});
+
+test("gibt Snapshot-Alter und Warnstatus auch im Parser-Ergebnis zurück", () => {
+  const result = parseMhtSchedule(
+    makeMht(`
+      <html><body>
+        <h2>14. November 2026</h2>
+        <a id="schedule-event-link-freshness" href="/competitive/events/FreshnessCup?round=FreshnessRound"
+          aria-label="19:00–20:00 Uhr - Battle Royale Solo Cash Cup">
+          <span>Battle Royale Solo Cash Cup</span>
+        </a>
+      </body></html>`, {
+      date: "Thu, 12 Nov 2026 11:59:59 GMT",
+    }),
+    { now: Date.parse("2026-11-13T12:00:00.000Z") },
+  );
+
+  assert.equal(result.snapshotAgeMs, MAX_SNAPSHOT_AGE_MS + 1000);
+  assert.equal(result.isSnapshotStale, true);
 });

@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 
 const REGION_CODES = new Set(["EU", "NAE", "NAW", "BR", "ASIA", "OCE", "ME", "GLOBAL"]);
+export const MAX_SNAPSHOT_AGE_MS = 24 * 60 * 60 * 1000;
 const MONTHS = new Map([
   ["januar", 1], ["january", 1],
   ["februar", 2], ["february", 2],
@@ -110,6 +111,24 @@ export function extractMhtHtml(buffer) {
     snapshotAt: Number.isFinite(parsedSnapshotDate)
       ? new Date(parsedSnapshotDate).toISOString()
       : null,
+  };
+}
+
+export function getSnapshotFreshness(snapshotAt, now = new Date()) {
+  if (!snapshotAt) {
+    return { snapshotAgeMs: null, isSnapshotStale: false };
+  }
+
+  const snapshotTime = Date.parse(snapshotAt);
+  const nowTime = now instanceof Date ? now.getTime() : now;
+  if (!Number.isFinite(snapshotTime) || !Number.isFinite(nowTime)) {
+    return { snapshotAgeMs: null, isSnapshotStale: false };
+  }
+
+  const snapshotAgeMs = nowTime - snapshotTime;
+  return {
+    snapshotAgeMs,
+    isSnapshotStale: snapshotAgeMs > MAX_SNAPSHOT_AGE_MS,
   };
 }
 
@@ -505,6 +524,7 @@ export function parseMhtSchedule(buffer, options = {}) {
   }
 
   const snapshotTime = snapshotAt ? Date.parse(snapshotAt) : Number.NaN;
+  const freshness = getSnapshotFreshness(snapshotAt, options.now);
   const upcomingAtSnapshot = Number.isFinite(snapshotTime)
     ? events.filter((event) => Date.parse(event.start_time) >= snapshotTime).length
     : null;
@@ -512,6 +532,7 @@ export function parseMhtSchedule(buffer, options = {}) {
   return {
     sourceUrl,
     snapshotAt,
+    ...freshness,
     region,
     timeZone,
     cardCount: events.length + issues.length,
@@ -572,6 +593,14 @@ export async function runDryRun(options) {
   console.log(`Datei: ${path.basename(filePath)}`);
   console.log(`Quellseite: ${result.sourceUrl ?? "nicht in der Datei angegeben"}`);
   console.log(`Snapshot: ${result.snapshotAt ?? "Zeitpunkt nicht angegeben"}`);
+  console.log(
+    `Snapshot-Alter: ${result.snapshotAgeMs === null
+      ? "nicht bestimmbar"
+      : `${Math.max(0, Math.floor(result.snapshotAgeMs / (60 * 60 * 1000)))} Stunden`}`,
+  );
+  if (result.isSnapshotStale) {
+    console.log("WARNUNG: Der Snapshot ist älter als 24 Stunden. Prüfe vor dem Import eine aktuelle Datei.");
+  }
   console.log(`Region: ${result.region} · Zeitzone: ${result.timeZone}`);
   console.log(`Karten erkannt: ${result.cardCount}`);
   console.log(`Importierbar: ${result.validCount} · fehlerhaft: ${result.invalidCount}`);
