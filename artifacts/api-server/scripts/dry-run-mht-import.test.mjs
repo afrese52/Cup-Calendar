@@ -54,15 +54,66 @@ test("liest Eventkarten und wandelt die Berliner Ortszeit nach UTC um", () => {
   assert.equal(result.events[0].tournament_type, "Cash Cup");
 });
 
+test("ordnet nur ausdrücklich erkennbare Turnierarten zu", () => {
+  const titles = [
+    ["Battle Royale Solo FNCS", "FNCS"],
+    ["Battle Royale Solo Cash Cup", "Cash Cup"],
+    ["Battle Royale Solo Ranked Cup", "Ranked Cup"],
+    ["Battle Royale Solo Community Cup", "Community"],
+  ];
+  const cards = titles.map(([title], index) => `
+    <a id="schedule-event-link-type-${index}"
+      href="/competitive/events/Type${index}?round=TypeRound${index}"
+      aria-label="19:00–20:00 Uhr - ${title}">
+      <span>${title}</span>
+    </a>`).join("");
+  const result = parseMhtSchedule(makeMht(`
+    <html><body><h2>10. November 2026</h2>${cards}</body></html>
+  `));
+
+  assert.equal(result.validCount, titles.length);
+  assert.deepEqual(result.events.map((event) => event.tournament_type), titles.map(([, type]) => type));
+  assert.deepEqual(result.issues, []);
+});
+
+test("zeigt unbekannte und widersprüchliche Turnierarten als nicht importierte Karten", () => {
+  const titles = [
+    "Battle Royale Solo Invitational",
+    "Battle Royale Solo FNCS Cash Cup",
+  ];
+  const cards = titles.map((title, index) => `
+    <a id="schedule-event-link-unknown-type-${index}"
+      href="/competitive/events/UnknownType${index}?round=UnknownTypeRound${index}"
+      aria-label="19:00–20:00 Uhr - ${title}">
+      <span>${title}</span>
+    </a>`).join("");
+  const result = parseMhtSchedule(makeMht(`
+    <html><body><h2>10. November 2026</h2>${cards}</body></html>
+  `));
+
+  assert.equal(result.cardCount, 2);
+  assert.equal(result.validCount, 0);
+  assert.equal(result.invalidCount, 2);
+  assert.deepEqual(result.events, []);
+  assert.deepEqual(
+    result.issues.map(({ id, title, errors }) => ({ id, title, errors })),
+    titles.map((title, index) => ({
+      id: `epic:UnknownType${index}:UnknownTypeRound${index}`,
+      title,
+      errors: ["Turnierart fehlt oder ist nicht eindeutig angegeben."],
+    })),
+  );
+});
+
 test("ordnet mehrere Karten dem jeweils zuletzt gelesenen Datum zu", () => {
   const html = `
     <html><body>
       <h2>10. November 2026</h2>
       <a id="schedule-event-link-a" href="/competitive/events/CupA?round=RoundA"
-        aria-label="19:00–20:00 Uhr - Battle Royale Solo Cup A"><span>Battle Royale Solo Cup A</span></a>
+        aria-label="19:00–20:00 Uhr - Battle Royale Solo Cash Cup A"><span>Battle Royale Solo Cash Cup A</span></a>
       <h2>12. November 2026</h2>
       <a id="schedule-event-link-b" href="/competitive/events/CupB?round=RoundB"
-        aria-label="18:00–20:00 Uhr - Duos Reload Cup"><span>Duos Reload Cup</span></a>
+        aria-label="18:00–20:00 Uhr - Duos Reload Cash Cup"><span>Duos Reload Cash Cup</span></a>
     </body></html>`;
   const result = parseMhtSchedule(makeMht(html));
 
@@ -93,9 +144,9 @@ test("erkennt FNCS Reload Solos als eindeutiges Solo-Format", () => {
 test("erkennt ausdrücklich angegebene Solo-, Duo-, Trio- und Squads-Formate", () => {
   const formats = [
     ["Battle Royale Solo Cash Cup", "Solo"],
-    ["Reload Duos Cup", "Duos"],
+    ["Reload Duos Cash Cup", "Duos"],
     ["Zero Build Trio Victory Cup", "Trios"],
-    ["Creative Squads Cup", "Squads"],
+    ["Creative Squads Community Cup", "Squads"],
   ];
   const cards = formats.map(([title], index) => `
     <a id="schedule-event-link-format-${index}"
@@ -115,9 +166,9 @@ test("erkennt ausdrücklich angegebene Solo-, Duo-, Trio- und Squads-Formate", (
 test("importiert nur eindeutig erkennbare Spielmodi", () => {
   const cards = [
     "Battle Royale Solo Cash Cup",
-    "Zero Build Duos Cup",
-    "Reload Trios Cup",
-    "Creative Squads Cup",
+    "Zero Build Duos Cash Cup",
+    "Reload Trios Cash Cup",
+    "Creative Squads Community Cup",
   ].map((title, index) => `
     <a id="schedule-event-link-mode-${index}"
       href="/competitive/events/Mode${index}?round=Round${index}"
@@ -145,8 +196,8 @@ test("sperrt fehlende, allgemeine und widersprüchliche Spielmodusangaben", () =
   const titles = [
     "Solo Cash Cup",
     "Duos Community Cup",
-    "Zero Build Reload Trios Cup",
-    "Duos Team Rumble Cup",
+    "Zero Build Reload Trios Cash Cup",
+    "Duos Team Rumble Cash Cup",
   ];
   const cards = titles.map((title, index) => `
     <a id="schedule-event-link-unknown-mode-${index}"
@@ -183,8 +234,8 @@ test("sperrt ein unbekanntes oder widersprüchliches Spielformat mit Kennung und
       </a>
       <a id="schedule-event-link-conflict"
         href="/competitive/events/ConflictCup?round=ConflictRound"
-        aria-label="19:00–22:00 Uhr - Zero Build Solo Duos Cup">
-        <span>Zero Build Solo Duos Cup</span>
+        aria-label="19:00–22:00 Uhr - Zero Build Solo Duos Cash Cup">
+        <span>Zero Build Solo Duos Cash Cup</span>
       </a>
     </body></html>`;
   const result = parseMhtSchedule(makeMht(html));
@@ -203,7 +254,7 @@ test("sperrt ein unbekanntes oder widersprüchliches Spielformat mit Kennung und
       },
       {
         id: "epic:ConflictCup:ConflictRound",
-        title: "Zero Build Solo Duos Cup",
+        title: "Zero Build Solo Duos Cash Cup",
         errors: ["Spielformat fehlt oder ist nicht eindeutig angegeben."],
       },
     ],
@@ -244,12 +295,16 @@ test("prüft Spielformate an echten, anonymisierten MHT-Turnierkarten", async ()
   }
 
   const acceptedByTitle = new Map(result.events.map((event) => [event.title, event]));
-  assert.equal(acceptedByTitle.get("Solo Reload Test Cup")?.team_format, "Solo");
   assert.equal(acceptedByTitle.get("Trio Cash Cup Battle Royale")?.team_format, "Trios");
-  assert.equal(result.issues.length, 3);
+  assert.equal(result.issues.length, 4);
   assert.deepEqual(
     result.issues.map(({ id, title, errors }) => ({ id, title, errors })),
     [
+      {
+        id: "epic:S43_SoloReloadTestCup:S43_SoloReloadTestCup_EU",
+        title: "Solo Reload Test Cup",
+        errors: ["Turnierart fehlt oder ist nicht eindeutig angegeben."],
+      },
       {
         id: "epic:S43_RankedCupReloadDuos:S43_RankedCupReloadDuos_Event1_EU",
         title: "Reload Ranked Cup (Duo) Battle Royale",
@@ -263,7 +318,7 @@ test("prüft Spielformate an echten, anonymisierten MHT-Turnierkarten", async ()
       {
         id: "epic:S43_OnePieceZoroCup:S43_OnePieceZoroCup_EU",
         title: "ONE PIECE: „ZORRO“-CUP Battle Royale",
-        errors: ["Spielformat fehlt oder ist nicht eindeutig angegeben."],
+        errors: ["Turnierart fehlt oder ist nicht eindeutig angegeben."],
       },
     ],
   );

@@ -284,11 +284,18 @@ function datePlusOneDay(dateParts) {
 }
 
 function mapTournamentType(title) {
-  const upper = title.toUpperCase();
-  if (upper.includes("FNCS")) return "FNCS";
-  if (upper.includes("CASH CUP") || upper.includes("VICTORY CUP")) return "Cash Cup";
-  if (upper.includes("RANKED")) return "Ranked Cup";
-  return "Community";
+  const indicators = [
+    [/\bFNCS\b/i, "FNCS"],
+    [/\b(?:CASH CUP|VICTORY CUP)\b/i, "Cash Cup"],
+    [/\bRANKED CUP\b/i, "Ranked Cup"],
+    [/\bCOMMUNITY\s+(?:CUP|TOURNAMENT)\b/i, "Community"],
+  ];
+  const matches = [...new Set(
+    indicators
+      .filter(([pattern]) => pattern.test(title))
+      .map(([, type]) => type),
+  )];
+  return matches.length === 1 ? matches[0] : null;
 }
 
 function mapCategory(title, tournamentType) {
@@ -454,7 +461,17 @@ function extractEventAnchors(html, sourceUrl, timeZone, region) {
       const end = wallTimeToEpoch(endDate, endHour, endMinute, timeZone);
       if (end <= start) throw new Error("Die Endzeit liegt nicht nach der Startzeit.");
 
-      const tournamentType = mapTournamentType(title);
+      const tournamentType = mapTournamentType(`${title} ${attributes["aria-label"] ?? ""}`);
+      if (!tournamentType) {
+        issues.push({
+          anchorId: attributes.id,
+          id,
+          title,
+          errors: ["Turnierart fehlt oder ist nicht eindeutig angegeben."],
+        });
+        cursor = closingAnchorPattern.lastIndex;
+        continue;
+      }
       const teamFormat = mapTeamFormat(`${title} ${attributes["aria-label"] ?? ""}`);
       const gameMode = mapGameMode(`${title} ${attributes["aria-label"] ?? ""}`);
       if (!gameMode) {
