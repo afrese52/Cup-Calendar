@@ -196,7 +196,7 @@ test("sperrt fehlende, allgemeine und widersprüchliche Spielmodusangaben", () =
   const titles = [
     "Solo Cash Cup",
     "Duos Community Cup",
-    "Zero Build Reload Trios Cash Cup",
+    "Zero Build Creative Trios Cash Cup",
     "Duos Team Rumble Cash Cup",
   ];
   const cards = titles.map((title, index) => `
@@ -282,6 +282,7 @@ test("prüft Spielformate an echten, anonymisierten MHT-Turnierkarten", async ()
     ["schedule-event-link-solo", "Solo"],
     ["schedule-event-link-duo", "Duos"],
     ["schedule-event-link-trio", "Trios"],
+    ["schedule-event-link-reload-zero-build", "Duos"],
     ["schedule-event-link-team-unknown", null],
     ["schedule-event-link-format-unknown", null],
   ]);
@@ -296,7 +297,15 @@ test("prüft Spielformate an echten, anonymisierten MHT-Turnierkarten", async ()
 
   const acceptedByTitle = new Map(result.events.map((event) => [event.title, event]));
   assert.equal(acceptedByTitle.get("Trio Cash Cup Battle Royale")?.team_format, "Trios");
-  assert.equal(result.issues.length, 4);
+  assert.equal(
+    acceptedByTitle.get("Reload ZB Duos Cash Cup Zero Build")?.game_mode,
+    "Zero Build",
+  );
+  assert.equal(
+    acceptedByTitle.get("Reload Ranked Cup (Duo) Battle Royale")?.game_mode,
+    "Reload",
+  );
+  assert.equal(result.issues.length, 3);
   assert.deepEqual(
     result.issues.map(({ id, title, errors }) => ({ id, title, errors })),
     [
@@ -304,11 +313,6 @@ test("prüft Spielformate an echten, anonymisierten MHT-Turnierkarten", async ()
         id: "epic:S43_SoloReloadTestCup:S43_SoloReloadTestCup_EU",
         title: "Solo Reload Test Cup",
         errors: ["Turnierart fehlt oder ist nicht eindeutig angegeben."],
-      },
-      {
-        id: "epic:S43_RankedCupReloadDuos:S43_RankedCupReloadDuos_Event1_EU",
-        title: "Reload Ranked Cup (Duo) Battle Royale",
-        errors: ["Spielmodus fehlt oder ist nicht eindeutig angegeben."],
       },
       {
         id: "epic:S43_SquadsVictoryCup:S43_SquadsVictoryCup_Event1_Round1_EU",
@@ -322,6 +326,7 @@ test("prüft Spielformate an echten, anonymisierten MHT-Turnierkarten", async ()
       },
     ],
   );
+  assert.equal(result.events.length, 3);
 });
 
 test("meldet unvollständige Karten, statt sie als importierbar auszugeben", () => {

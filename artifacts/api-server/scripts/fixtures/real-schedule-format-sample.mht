@@ -11,6 +11,11 @@ Content-Transfer-Encoding: 8bit
 <html>
   <body>
     <!-- Public event-card fields only; page resources and account data are omitted. -->
+    <!--
+      Mode labels cross-checked against Epic's official event pages:
+      S43_RankedCupReloadDuos labels the event Reload and its category Battle Royale;
+      S43_ReloadZBDuosCashCup labels the variant Zero Build.
+    -->
     <h2>10. November 2026</h2>
     <a id="schedule-event-link-solo"
        href="https://www.fortnite.com/competitive/events/S43_SoloReloadTestCup?round=S43_SoloReloadTestCup_EU"
@@ -27,6 +32,10 @@ Content-Transfer-Encoding: 8bit
     <a id="schedule-event-link-format-unknown"
        href="https://www.fortnite.com/competitive/events/S43_OnePieceZoroCup?round=S43_OnePieceZoroCup_EU"
        aria-label="19:00–22:00 Uhr - ONE PIECE: „ZORRO“-CUP Battle Royale – Wettkampfabschnitt 1">ONE PIECE: „ZORRO“-CUP Battle Royale</a>
+    <h2>15. November 2026</h2>
+    <a id="schedule-event-link-reload-zero-build"
+       href="https://www.fortnite.com/competitive/events/S43_ReloadZBDuosCashCup?round=S43_ReloadZBDuosCashCup_Event1Round2_EU"
+       aria-label="09:00–11:30 Uhr - Reload ZB Duos Cash Cup Zero Build – Wettkampfabschnitt 1 - Runde 2">Reload ZB Duos Cash Cup Zero Build</a>
   </body>
 </html>
 --CupCalAnonymizedSchedule--

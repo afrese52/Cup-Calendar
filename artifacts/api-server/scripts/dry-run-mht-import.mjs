@@ -314,11 +314,23 @@ function mapCategory(title, tournamentType) {
 
 function mapGameMode(title) {
   const lower = title.toLowerCase();
+  const hasZeroBuild = /\bzero[\s-]+build\b|\bnull bauen\b/i.test(lower);
+  const hasReload = /\breload\b/i.test(lower);
+  const hasCreative = /\bcreative\b/i.test(lower);
+  const hasBattleRoyale = /\bbattle royale\b/i.test(lower);
+
+  // Epic uses Battle Royale as the broad event category, while the card can
+  // name a more specific ruleset. In the Reload Zero Build event variant,
+  // Zero Build is the distinguishing ruleset; otherwise Reload takes
+  // precedence over the broad Battle Royale label. Do not guess when
+  // unrelated concrete modes (such as Creative and Reload) are both present.
+  if (hasCreative && (hasZeroBuild || hasReload || hasBattleRoyale)) return null;
+  if (hasZeroBuild) return "Zero Build";
+  if (hasReload) return "Reload";
+  if (hasBattleRoyale) return "Battle Royale";
+
   const modes = [
-    [/\bzero[\s-]+build\b|\bnull bauen\b/i, "Zero Build"],
-    [/\breload\b/i, "Reload"],
     [/\bcreative\b/i, "Community"],
-    [/\bbattle royale\b/i, "Battle Royale"],
   ];
   const matches = [...new Set(
     modes
