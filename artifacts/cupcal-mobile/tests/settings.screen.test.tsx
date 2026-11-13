@@ -53,6 +53,9 @@ jest.mock('@/services/supabase', () => {
   const auth = {
     signInWithPassword: jest.fn(async () => ({ error: null })),
     signUp: jest.fn(async () => ({ data: { session: null }, error: null })),
+    resetPasswordForEmail: jest.fn(
+      async (_email: string, _options: { redirectTo: string }) => ({ error: null as Error | null }),
+    ),
     signInWithOtp: jest.fn(async () => ({ error: null })),
     resend: jest.fn(async () => ({ error: null })),
     signOut: jest.fn(async () => {
@@ -74,7 +77,12 @@ jest.mock('@/services/supabase', () => {
     getAccountDeletionRedirectUrl: (token: string) =>
       `cupcal-test://auth/confirm?flow=cupcal-account-deletion&deletion_token=${token}`,
     requestEmailConfirmation: jest.fn(async () => {}),
-    requestPasswordReset: jest.fn(),
+    requestPasswordReset: jest.fn(async (email: string) => {
+      const { error } = await auth.resetPasswordForEmail(email, {
+        redirectTo: 'cupcal-test://auth/reset?flow=cupcal-password-reset',
+      });
+      if (error) throw error;
+    }),
     __emitAuthStateChange: (event: string, nextSession: unknown) => listener?.(event, nextSession),
   };
 });
@@ -97,10 +105,19 @@ function restoreAuthMocks() {
     return { error: null };
   });
   auth.signUp.mockReset().mockImplementation(async () => ({ data: { session: null }, error: null }));
+  auth.resetPasswordForEmail.mockReset().mockImplementation(async () => ({ error: null }));
   const mockedSupabase = jest.requireMock('@/services/supabase') as {
     requestEmailConfirmation: jest.Mock;
+    requestPasswordReset: jest.Mock;
   };
   mockedSupabase.requestEmailConfirmation.mockReset().mockImplementation(async () => {});
+  mockedSupabase.requestPasswordReset.mockReset().mockImplementation(async (...args: unknown[]) => {
+    const email = String(args[0] ?? '');
+    const { error } = await auth.resetPasswordForEmail(email, {
+      redirectTo: 'cupcal-test://auth/reset?flow=cupcal-password-reset',
+    });
+    if (error) throw error;
+  });
   auth.signOut.mockReset().mockImplementation(async () => {
     mockSupabase.__emitAuthStateChange('SIGNED_OUT', null);
     return { error: null };
@@ -200,6 +217,61 @@ test('zeigt einen Registrierungsfehler sichtbar an', async () => {
 
   expect(await view.findByText(
     'Das Passwort ist zu kurz oder zu unsicher. Bitte wähle ein stärkeres Passwort.',
+  )).toBeTruthy();
+});
+
+test('öffnet den Passwort-zurücksetzen-Modus und fordert den Link mit einer anonymen Erfolgsmeldung an', async () => {
+  const view = await openSettings();
+  await fireEvent.press(view.getByTestId('forgot-password-button'));
+
+  expect(view.getByText('Passwort zurücksetzen')).toBeTruthy();
+  expect(view.queryByTestId('auth-password-input')).toBeNull();
+  await fireEvent.changeText(view.getByTestId('auth-email-input'), ' test@example.invalid ');
+  await fireEvent.press(view.getByTestId('auth-submit-button'));
+
+  expect(await view.findByText(
+    'Wenn zu dieser E-Mail ein CupCal-Konto besteht, erhältst du in Kürze einen Wiederherstellungslink.',
+  )).toBeTruthy();
+  expect(auth.resetPasswordForEmail).toHaveBeenCalledWith('test@example.invalid', {
+    redirectTo: 'cupcal-test://auth/reset?flow=cupcal-password-reset',
+  });
+});
+
+test('zeigt einen verständlichen Fehler beim Anfordern des Wiederherstellungslinks', async () => {
+  auth.resetPasswordForEmail.mockResolvedValue({
+    error: new Error('Email rate limit exceeded'),
+  });
+  const view = await openSettings();
+  await fireEvent.press(view.getByTestId('forgot-password-button'));
+  await fireEvent.changeText(view.getByTestId('auth-email-input'), 'test@example.invalid');
+
+  await fireEvent.press(view.getByTestId('auth-submit-button'));
+
+  expect(await view.findByText(
+    'Zu viele Versuche in kurzer Zeit. Warte bitte einige Minuten und versuche es dann erneut.',
+  )).toBeTruthy();
+});
+
+test('zeigt den Ladezustand und sperrt die Schaltflächen während der Linkanfrage', async () => {
+  let finishReset!: (result: { error: null }) => void;
+  auth.resetPasswordForEmail.mockImplementation(
+    () => new Promise((resolve) => { finishReset = resolve; }),
+  );
+  const view = await openSettings();
+  await fireEvent.press(view.getByTestId('forgot-password-button'));
+  await fireEvent.changeText(view.getByTestId('auth-email-input'), 'test@example.invalid');
+
+  await fireEvent.press(view.getByTestId('auth-submit-button'));
+
+  await waitFor(() => {
+    expect(view.getByText('Einen Moment …')).toBeTruthy();
+    expect(view.getByTestId('auth-submit-button').props.accessibilityState.disabled).toBe(true);
+    expect(view.getByTestId('auth-mode-toggle').props.accessibilityState.disabled).toBe(true);
+  });
+  await act(async () => finishReset({ error: null }));
+
+  expect(await view.findByText(
+    'Wenn zu dieser E-Mail ein CupCal-Konto besteht, erhältst du in Kürze einen Wiederherstellungslink.',
   )).toBeTruthy();
 });
 
