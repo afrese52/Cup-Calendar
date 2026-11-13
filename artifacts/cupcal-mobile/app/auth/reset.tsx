@@ -159,7 +159,7 @@ export default function ResetPasswordScreen() {
               testID="reset-password-policy"
               style={[styles.passwordPolicy, { color: colors.mutedForeground }]}
             >
-              Mindestens {PASSWORD_MIN_LENGTH} Zeichen.
+              Mindestens {PASSWORD_MIN_LENGTH} Zeichen. Es sind keine weiteren Zeichenregeln erforderlich.
             </Text>
             <TextInput
               accessibilityLabel="Neues Passwort"

@@ -10,6 +10,7 @@
 - [Gesperrte Supabase-Mailvorlage](supabase-locked-email-template.md) — Die Magic-Link-Vorlage kann im CupCal-Supabase-Projekt schreibgeschützt sein; einen unterstützten Rücksprung nicht voraussetzen.
 - [Supabase-Profile für Auth-Konten](supabase-user-profiles.md) — Jedes CupCal-Auth-Konto braucht einen passenden Eintrag in `public.user_profiles`.
 - [Supabase-Migrationen für Live-Tests](supabase-live-migrations.md) — Vor Konto-Isolationstests muss das Live-Schema die lokalen Favoritenmigrationen enthalten.
+- [Supabase-Passwortregel](supabase-password-policy.md) — Beim CupCal-Passwort-Reset gelten mindestens sechs Zeichen, ohne zusätzliche Zeichenklassen.
 - [Bookmark-Zeitordnung](bookmark-clock-ordering.md) — Favoritenänderungen anhand serverseitiger Revisionen statt Gerätezeitstempeln ordnen.
 - [Favoriten über Geräte hinweg](cross-device-bookmarks.md) — Favoriten gehören zum angemeldeten Konto und sollen auf all seinen Geräten erscheinen.
 - [Zustimmung für alte Gast-Favoriten](legacy-bookmark-consent.md) — Vorhandene lokale Gast-Favoriten dürfen erst nach ausdrücklicher Wahl dem aktuellen Konto zugeordnet werden.

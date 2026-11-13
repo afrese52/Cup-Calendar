@@ -122,7 +122,7 @@ test('weist ein zu kurzes Passwort vor der Serveranfrage ab', async () => {
   assert.equal(recovery.isPending(), true);
 });
 
-test('akzeptiert ein Passwort mit der bestätigten Mindestlänge', async () => {
+test('akzeptiert sechs Buchstaben ohne zusätzliche Zeichenregeln', async () => {
   let updatedPassword;
   const recovery = createPasswordRecovery(createAuth({
     updateUser: async ({ password }) => {
@@ -132,7 +132,7 @@ test('akzeptiert ein Passwort mit der bestätigten Mindestlänge', async () => {
   }));
   recovery.markRecoverySession(true);
 
-  const password = 'A1!xyz'.padEnd(PASSWORD_MIN_LENGTH, 'z');
+  const password = 'a'.repeat(PASSWORD_MIN_LENGTH);
   await recovery.saveNewPassword(password);
 
   assert.equal(updatedPassword, password);
