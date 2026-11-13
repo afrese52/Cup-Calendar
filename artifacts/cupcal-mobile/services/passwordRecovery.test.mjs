@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createPasswordRecovery } from './passwordRecovery.ts';
+import { createPasswordRecovery, PASSWORD_MIN_LENGTH } from './passwordRecovery.ts';
 import { friendlyAuthError } from './accountAuth.ts';
 
 const validSession = {
@@ -102,6 +102,41 @@ test('weist den Passwortwechsel ohne gültige Wiederherstellungssitzung ab', asy
     friendlyAuthError(new Error('Die Wiederherstellungssitzung ist abgelaufen oder ungültig.')),
     /ungültig, abgelaufen oder wurde bereits verwendet/,
   );
+});
+
+test('weist ein zu kurzes Passwort vor der Serveranfrage ab', async () => {
+  let updateCalled = false;
+  const recovery = createPasswordRecovery(createAuth({
+    updateUser: async () => {
+      updateCalled = true;
+      return { error: null };
+    },
+  }));
+  recovery.markRecoverySession(true);
+
+  await assert.rejects(
+    recovery.saveNewPassword('A1!xyz'.slice(0, PASSWORD_MIN_LENGTH - 1)),
+    new RegExp(`mindestens ${PASSWORD_MIN_LENGTH} Zeichen lang sein`, 'i'),
+  );
+  assert.equal(updateCalled, false);
+  assert.equal(recovery.isPending(), true);
+});
+
+test('akzeptiert ein Passwort mit der bestätigten Mindestlänge', async () => {
+  let updatedPassword;
+  const recovery = createPasswordRecovery(createAuth({
+    updateUser: async ({ password }) => {
+      updatedPassword = password;
+      return { error: null };
+    },
+  }));
+  recovery.markRecoverySession(true);
+
+  const password = 'A1!xyz'.padEnd(PASSWORD_MIN_LENGTH, 'z');
+  await recovery.saveNewPassword(password);
+
+  assert.equal(updatedPassword, password);
+  assert.equal(recovery.isPending(), false);
 });
 
 test('erlaubt nur den einmaligen Passwortwechsel mit aktueller Sitzung', async () => {

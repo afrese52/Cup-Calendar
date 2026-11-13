@@ -11,6 +11,7 @@ import {
   handlePasswordResetUrl,
   isPasswordRecoveryPending,
   markPasswordRecoverySession,
+  PASSWORD_MIN_LENGTH,
   saveNewPassword,
   supabase,
 } from '@/services/supabase';
@@ -146,6 +147,12 @@ export default function ResetPasswordScreen() {
 
         {!isCheckingLink && isRecoveryReady && !isSaved ? (
           <>
+            <Text
+              testID="reset-password-policy"
+              style={[styles.passwordPolicy, { color: colors.mutedForeground }]}
+            >
+              Mindestens {PASSWORD_MIN_LENGTH} Zeichen.
+            </Text>
             <TextInput
               accessibilityLabel="Neues Passwort"
               testID="reset-password-input"
@@ -229,6 +236,7 @@ const styles = StyleSheet.create({
   eyebrow: { fontSize: 10, fontWeight: '800', letterSpacing: 1.8, marginBottom: 8 },
   heading: { fontSize: 28, fontWeight: '700', letterSpacing: -0.6 },
   description: { fontSize: 14, lineHeight: 21, marginTop: 8, marginBottom: 18 },
+  passwordPolicy: { fontSize: 13, lineHeight: 18, marginBottom: 2 },
   input: { minHeight: 50, borderWidth: 1, borderRadius: 12, paddingHorizontal: 14, fontSize: 14, marginTop: 12 },
   notice: { fontSize: 12, lineHeight: 18, marginTop: 13 },
   primaryButton: { minHeight: 50, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginTop: 18 },

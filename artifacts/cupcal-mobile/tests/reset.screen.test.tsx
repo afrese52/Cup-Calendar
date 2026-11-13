@@ -44,6 +44,7 @@ jest.mock('@/services/supabase', () => ({
   isPasswordRecoveryPending: () => true,
   markPasswordRecoverySession: jest.fn(),
   handlePasswordResetUrl: jest.fn(async () => false),
+  PASSWORD_MIN_LENGTH: 6,
   saveNewPassword: mockSaveNewPassword,
   friendlyAuthError: (error: unknown, fallback: string) =>
     error instanceof Error && error.message.toLowerCase().includes('network')
@@ -57,6 +58,13 @@ const { default: ResetPasswordScreen } = require('../app/auth/reset') as {
 
 beforeEach(() => {
   mockSaveNewPassword.mockReset().mockRejectedValue(new Error('Network request failed'));
+});
+
+test('zeigt die geltende Passwortlänge vor dem Speichern', async () => {
+  const view = await render(<ResetPasswordScreen />);
+
+  expect(await view.findByText('Mindestens 6 Zeichen.')).toBeTruthy();
+  expect(view.getByTestId('reset-password-submit-button')).toBeTruthy();
 });
 
 test('behält Formular und Eingaben nach einem Verbindungsfehler für einen erneuten Versuch', async () => {

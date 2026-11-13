@@ -11,6 +11,7 @@ import {
 } from './authRedirectUrl';
 import { normalizeSupabaseBaseUrl } from './supabaseUrl';
 export { friendlyAuthError } from './accountAuth';
+export { PASSWORD_MIN_LENGTH } from './passwordRecovery';
 
 const configuredSupabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL?.trim() ?? '';
 const supabaseUrl = normalizeSupabaseBaseUrl(configuredSupabaseUrl);
