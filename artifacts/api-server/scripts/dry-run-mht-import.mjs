@@ -302,7 +302,7 @@ function mapGameMode(title) {
   return matches.length === 1 ? matches[0] : null;
 }
 
-function mapTeamFormat(cardText) {
+export function mapTeamFormat(cardText) {
   const formats = [
     [/\bsolos?\b/i, "Solo"],
     [/\bduos?\b/i, "Duos"],

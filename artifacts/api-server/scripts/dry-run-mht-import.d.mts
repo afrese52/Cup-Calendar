@@ -38,3 +38,7 @@ export function parseMhtSchedule(
   buffer: Uint8Array,
   options?: { timeZone?: string; region?: string | null },
 ): ParsedMhtSchedule;
+
+export function mapTeamFormat(
+  cardText: string,
+): "Solo" | "Duos" | "Trios" | "Squads" | null;

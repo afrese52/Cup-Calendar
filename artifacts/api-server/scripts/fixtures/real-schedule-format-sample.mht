@@ -1,0 +1,32 @@
+From: <Saved tournament schedule>
+Snapshot-Content-Location: https://www.fortnite.com/competitive/schedule?region=EU
+Date: Mon, 09 Nov 2026 23:37:49 GMT
+Content-Type: multipart/related; boundary="CupCalAnonymizedSchedule"
+
+--CupCalAnonymizedSchedule
+Content-Type: text/html; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+<!doctype html>
+<html>
+  <body>
+    <!-- Public event-card fields only; page resources and account data are omitted. -->
+    <h2>10. November 2026</h2>
+    <a id="schedule-event-link-solo"
+       href="https://www.fortnite.com/competitive/events/S43_SoloReloadTestCup?round=S43_SoloReloadTestCup_EU"
+       aria-label="19:00–21:30 Uhr - Solo Reload Test Cup – Wettkampfabschnitt 1">Solo Reload Test Cup</a>
+    <a id="schedule-event-link-duo"
+       href="https://www.fortnite.com/competitive/events/S43_RankedCupReloadDuos?round=S43_RankedCupReloadDuos_Event1_EU"
+       aria-label="19:00–22:00 Uhr - Reload Ranked Cup (Duo) Battle Royale – Wettkampfabschnitt 1 - Runde 1">Reload Ranked Cup (Duo) Battle Royale</a>
+    <a id="schedule-event-link-trio"
+       href="https://www.fortnite.com/competitive/events/S43_TriosCashCup?round=S43_TriosCashCup_Event1_EU"
+       aria-label="15:00–18:00 Uhr - Trio Cash Cup Battle Royale – Wettkampfabschnitt 1 - Runde 1">Trio Cash Cup Battle Royale</a>
+    <a id="schedule-event-link-team-unknown"
+       href="https://www.fortnite.com/competitive/events/S43_SquadsVictoryCup?round=S43_SquadsVictoryCup_Event1_Round1_EU"
+       aria-label="19:00–21:00 Uhr - Victory Cash Cup (Team) Battle Royale – Wettkampfabschnitt 1 - Runde 1">Victory Cash Cup (Team) Battle Royale</a>
+    <a id="schedule-event-link-format-unknown"
+       href="https://www.fortnite.com/competitive/events/S43_OnePieceZoroCup?round=S43_OnePieceZoroCup_EU"
+       aria-label="19:00–22:00 Uhr - ONE PIECE: „ZORRO“-CUP Battle Royale – Wettkampfabschnitt 1">ONE PIECE: „ZORRO“-CUP Battle Royale</a>
+  </body>
+</html>
+--CupCalAnonymizedSchedule--

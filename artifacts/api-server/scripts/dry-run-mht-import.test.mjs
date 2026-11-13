@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
-import { parseMhtSchedule } from "./dry-run-mht-import.mjs";
+import {
+  extractMhtHtml,
+  mapTeamFormat,
+  parseMhtSchedule,
+} from "./dry-run-mht-import.mjs";
 
 function makeMht(html, { region = "EU", date = "Mon, 09 Nov 2026 23:37:49 GMT" } = {}) {
   const boundary = "CupCalTestBoundary";
@@ -197,6 +202,65 @@ test("sperrt ein unbekanntes oder widersprüchliches Spielformat mit Kennung und
       {
         id: "epic:ConflictCup:ConflictRound",
         title: "Zero Build Solo Duos Cup",
+        errors: ["Spielformat fehlt oder ist nicht eindeutig angegeben."],
+      },
+    ],
+  );
+});
+
+test("prüft Spielformate an echten, anonymisierten MHT-Turnierkarten", async () => {
+  const fixture = await readFile(
+    new URL("./fixtures/real-schedule-format-sample.mht", import.meta.url),
+  );
+  const result = parseMhtSchedule(fixture);
+  const { html } = extractMhtHtml(fixture);
+  const cards = [...html.matchAll(/<a\b([^>]*)>([\s\S]*?)<\/a>/gi)]
+    .map(([, attributes, fragment]) => {
+      const getAttribute = (name) =>
+        attributes.match(new RegExp(`\\b${name}="([^"]*)"`, "i"))?.[1] ?? "";
+      return {
+        id: getAttribute("id"),
+        title: fragment.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim(),
+        ariaLabel: getAttribute("aria-label"),
+      };
+    })
+    .filter((card) => card.id.startsWith("schedule-event-link-"));
+  const expectedFormats = new Map([
+    ["schedule-event-link-solo", "Solo"],
+    ["schedule-event-link-duo", "Duos"],
+    ["schedule-event-link-trio", "Trios"],
+    ["schedule-event-link-team-unknown", null],
+    ["schedule-event-link-format-unknown", null],
+  ]);
+
+  assert.equal(result.cardCount, expectedFormats.size);
+  for (const card of cards) {
+    const expected = expectedFormats.get(card.id);
+    assert.equal(expectedFormats.has(card.id), true, `Unerwartete Karte ${card.id}`);
+    assert.equal(mapTeamFormat(card.title), expected, `${card.id}: sichtbarer Titel`);
+    assert.equal(mapTeamFormat(card.ariaLabel), expected, `${card.id}: aria-label`);
+  }
+
+  const acceptedByTitle = new Map(result.events.map((event) => [event.title, event]));
+  assert.equal(acceptedByTitle.get("Solo Reload Test Cup")?.team_format, "Solo");
+  assert.equal(acceptedByTitle.get("Trio Cash Cup Battle Royale")?.team_format, "Trios");
+  assert.equal(result.issues.length, 3);
+  assert.deepEqual(
+    result.issues.map(({ id, title, errors }) => ({ id, title, errors })),
+    [
+      {
+        id: "epic:S43_RankedCupReloadDuos:S43_RankedCupReloadDuos_Event1_EU",
+        title: "Reload Ranked Cup (Duo) Battle Royale",
+        errors: ["Spielmodus fehlt oder ist nicht eindeutig angegeben."],
+      },
+      {
+        id: "epic:S43_SquadsVictoryCup:S43_SquadsVictoryCup_Event1_Round1_EU",
+        title: "Victory Cash Cup (Team) Battle Royale",
+        errors: ["Spielformat fehlt oder ist nicht eindeutig angegeben."],
+      },
+      {
+        id: "epic:S43_OnePieceZoroCup:S43_OnePieceZoroCup_EU",
+        title: "ONE PIECE: „ZORRO“-CUP Battle Royale",
         errors: ["Spielformat fehlt oder ist nicht eindeutig angegeben."],
       },
     ],
