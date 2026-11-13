@@ -83,8 +83,30 @@ export default function SettingsScreen() {
   const isSubmittingAuth = submittingAction !== null;
   const [authError, setAuthError] = useState<string | null>(null);
   const [authMessage, setAuthMessage] = useState<string | null>(null);
+  const [confirmationResendAvailableAt, setConfirmationResendAvailableAt] = useState<number | null>(null);
+  const [confirmationResendClock, setConfirmationResendClock] = useState(() => Date.now());
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
   const accountDeletionRequest = useRequestAccountDeletion();
+  const confirmationResendSecondsLeft = confirmationResendAvailableAt === null
+    ? 0
+    : Math.max(0, Math.ceil((confirmationResendAvailableAt - confirmationResendClock) / 1000));
+  const confirmationResendDisabled = isSubmittingAuth || confirmationResendSecondsLeft > 0;
+  const confirmationResendCountdownLabel = confirmationResendSecondsLeft === 1
+    ? 'Erneut senden in 1 Sekunde'
+    : `Erneut senden in ${confirmationResendSecondsLeft} Sekunden`;
+
+  useEffect(() => {
+    if (confirmationResendAvailableAt === null) return;
+
+    const refreshCountdown = () => {
+      const now = Date.now();
+      setConfirmationResendClock(now);
+      if (now >= confirmationResendAvailableAt) setConfirmationResendAvailableAt(null);
+    };
+    refreshCountdown();
+    const timer = setInterval(refreshCountdown, 1000);
+    return () => clearInterval(timer);
+  }, [confirmationResendAvailableAt]);
 
   useEffect(() => {
     if (!supabase) return;
@@ -156,8 +178,14 @@ export default function SettingsScreen() {
         emailConfirmationRedirectTo: getEmailConfirmationRedirectUrl(),
         requestEmailConfirmation,
       });
-      if (result.ok) setAuthMessage(result.message);
-      else setAuthError(result.error);
+      if (result.ok) {
+        setAuthMessage(result.message);
+        setConfirmationResendAvailableAt(
+          Date.now() + result.resendCooldownSeconds * 1000,
+        );
+      } else {
+        setAuthError(result.error);
+      }
     } finally {
       setSubmittingAction(null);
     }
@@ -485,25 +513,31 @@ export default function SettingsScreen() {
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel={
-                    submittingAction === 'resend-confirmation'
+                    isSubmittingAuth
                       ? 'Bestätigungslink wird gesendet'
-                      : 'Bestätigungslink erneut senden'
+                      : confirmationResendSecondsLeft > 0
+                        ? `Bestätigungslink erneut senden in ${confirmationResendSecondsLeft} Sekunden`
+                        : 'Bestätigungslink erneut senden'
                   }
                   accessibilityState={{
-                    disabled: isSubmittingAuth,
+                    disabled: confirmationResendDisabled,
                     busy: submittingAction === 'resend-confirmation',
                   }}
                   testID="resend-confirmation-button"
-                  disabled={isSubmittingAuth}
+                  disabled={confirmationResendDisabled}
                   onPress={() => void resendConfirmation()}
                   style={({ pressed }) => [
                     styles.modeToggle,
-                    pressed && !isSubmittingAuth ? styles.pressed : null,
-                    isSubmittingAuth ? styles.disabled : null,
+                    pressed && !confirmationResendDisabled ? styles.pressed : null,
+                    confirmationResendDisabled ? styles.disabled : null,
                   ]}
                 >
                   <Text style={[styles.modeToggleText, { color: colors.primary }]}>
-                    Bestätigungslink erneut senden
+                    {isSubmittingAuth
+                      ? 'Bestätigungslink wird gesendet'
+                      : confirmationResendSecondsLeft > 0
+                        ? confirmationResendCountdownLabel
+                        : 'Bestätigungslink erneut senden'}
                   </Text>
                 </Pressable>
               ) : null}
@@ -544,25 +578,31 @@ export default function SettingsScreen() {
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel={
-                    submittingAction === 'resend-confirmation'
+                    isSubmittingAuth
                       ? 'Bestätigungslink wird gesendet'
-                      : 'Bestätigungslink erneut senden'
+                      : confirmationResendSecondsLeft > 0
+                        ? `Bestätigungslink erneut senden in ${confirmationResendSecondsLeft} Sekunden`
+                        : 'Bestätigungslink erneut senden'
                   }
                   accessibilityState={{
-                    disabled: isSubmittingAuth,
+                    disabled: confirmationResendDisabled,
                     busy: submittingAction === 'resend-confirmation',
                   }}
                   testID="registration-resend-confirmation-button"
-                  disabled={isSubmittingAuth}
+                  disabled={confirmationResendDisabled}
                   onPress={() => void resendConfirmation()}
                   style={({ pressed }) => [
                     styles.modeToggle,
-                    pressed && !isSubmittingAuth ? styles.pressed : null,
-                    isSubmittingAuth ? styles.disabled : null,
+                    pressed && !confirmationResendDisabled ? styles.pressed : null,
+                    confirmationResendDisabled ? styles.disabled : null,
                   ]}
                 >
                   <Text style={[styles.modeToggleText, { color: colors.primary }]}>
-                    Bestätigungslink erneut senden
+                    {isSubmittingAuth
+                      ? 'Bestätigungslink wird gesendet'
+                      : confirmationResendSecondsLeft > 0
+                        ? confirmationResendCountdownLabel
+                        : 'Bestätigungslink erneut senden'}
                   </Text>
                 </Pressable>
               ) : null}

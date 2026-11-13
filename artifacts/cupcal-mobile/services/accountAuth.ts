@@ -136,6 +136,12 @@ export type AuthOperationResult =
   | { ok: true; message: string; clearPassword?: boolean; emailConfirmationRequired?: boolean }
   | { ok: false; error: string };
 
+export type ResendAccountConfirmationResult =
+  | { ok: true; message: string; resendCooldownSeconds: number }
+  | { ok: false; error: string };
+
+export const ACCOUNT_CONFIRMATION_RESEND_COOLDOWN_SECONDS = 30;
+
 export function watchAuthSession(
   auth: AuthApi,
   callbacks: {
@@ -302,7 +308,7 @@ export async function resendAccountConfirmation(options: {
   email: string;
   emailConfirmationRedirectTo?: string;
   requestEmailConfirmation: (email: string, emailRedirectTo: string) => Promise<void>;
-}): Promise<AuthOperationResult> {
+}): Promise<ResendAccountConfirmationResult> {
   const email = options.email.trim();
   const emailRedirectTo = options.emailConfirmationRedirectTo?.trim();
   if (!email) {
@@ -320,6 +326,7 @@ export async function resendAccountConfirmation(options: {
     return {
       ok: true,
       message: 'Wenn dein Konto noch nicht bestätigt ist, erhältst du in Kürze einen neuen Bestätigungslink.',
+      resendCooldownSeconds: ACCOUNT_CONFIRMATION_RESEND_COOLDOWN_SECONDS,
     };
   } catch (error) {
     return {

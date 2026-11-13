@@ -3,6 +3,7 @@ import { beforeEach, expect, jest, test } from '@jest/globals';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import SettingsScreen from '../app/(tabs)/settings';
 import { supabase } from '@/services/supabase';
+import { ACCOUNT_CONFIRMATION_RESEND_COOLDOWN_SECONDS } from '../services/accountAuth';
 
 type AuthListener = (event: string, session: unknown) => void;
 type MockAuth = Record<string, any>;
@@ -269,7 +270,46 @@ test('sendet nach der Registrierung den Bestätigungslink erneut und zeigt den E
   expect(await view.findByText(
     'Wenn dein Konto noch nicht bestätigt ist, erhältst du in Kürze einen neuen Bestätigungslink.',
   )).toBeTruthy();
-  expect(view.getByTestId('registration-resend-confirmation-button')).toBeTruthy();
+  const resendButton = view.getByTestId('registration-resend-confirmation-button');
+  expect(resendButton.props.accessibilityState).toMatchObject({ disabled: true, busy: false });
+  expect(view.getByText(/Erneut senden in \d+ Sekunden/)).toBeTruthy();
+});
+
+test('sperrt erneute Bestätigungsanfragen mit Countdown und gibt sie danach frei', async () => {
+  const mockedSupabase = jest.requireMock('@/services/supabase') as {
+    requestEmailConfirmation: jest.Mock;
+  };
+  const view = await openSettings();
+  await fireEvent.changeText(view.getByTestId('auth-email-input'), 'test@example.invalid');
+  const button = view.getByTestId('resend-confirmation-button');
+  jest.useFakeTimers();
+
+  try {
+    await fireEvent.press(button);
+    await waitFor(() => expect(button.props.accessibilityState).toEqual({
+      disabled: true,
+      busy: false,
+    }));
+
+    expect(view.getByText(
+      `Erneut senden in ${ACCOUNT_CONFIRMATION_RESEND_COOLDOWN_SECONDS} Sekunden`,
+    )).toBeTruthy();
+    expect(button.props.accessibilityLabel).toBe(
+      `Bestätigungslink erneut senden in ${ACCOUNT_CONFIRMATION_RESEND_COOLDOWN_SECONDS} Sekunden`,
+    );
+
+    await fireEvent.press(button);
+    expect(mockedSupabase.requestEmailConfirmation).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(ACCOUNT_CONFIRMATION_RESEND_COOLDOWN_SECONDS * 1000);
+    });
+
+    expect(button.props.accessibilityState).toMatchObject({ disabled: false, busy: false });
+    expect(view.getByText('Bestätigungslink erneut senden')).toBeTruthy();
+  } finally {
+    jest.useRealTimers();
+  }
 });
 
 test('zeigt einen Fehler beim erneuten Senden direkt nach der Registrierung', async () => {
@@ -291,6 +331,9 @@ test('zeigt einen Fehler beim erneuten Senden direkt nach der Registrierung', as
   expect(view.getByText(
     'Zu viele Versuche in kurzer Zeit. Warte bitte einige Minuten und versuche es dann erneut.',
   )).toBeTruthy();
+  await fireEvent.press(view.getByTestId('auth-mode-toggle'));
+  expect(view.getByTestId('resend-confirmation-button').props.accessibilityState)
+    .toMatchObject({ disabled: false, busy: false });
 });
 
 test('zeigt einen Registrierungsfehler sichtbar an', async () => {
@@ -440,8 +483,8 @@ test('kennzeichnet das erneute Senden des Bestätigungslinks als laufende Anfrag
   });
   await act(async () => finishConfirmation());
   expect(await view.findByTestId('auth-success-message')).toBeTruthy();
-  expect(view.getByTestId('resend-confirmation-button').props.accessibilityState).toEqual({
-    disabled: false,
+  expect(view.getByTestId('resend-confirmation-button').props.accessibilityState).toMatchObject({
+    disabled: true,
     busy: false,
   });
 });

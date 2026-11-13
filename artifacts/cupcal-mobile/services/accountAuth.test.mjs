@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  ACCOUNT_CONFIRMATION_RESEND_COOLDOWN_SECONDS,
   confirmEmailCode,
   emailConfirmationLinkError,
   friendlyAuthError,
@@ -328,6 +329,7 @@ test('fordert einen Bestätigungslink mit der CupCal-Rücksprungadresse erneut a
     assert.deepEqual(result, {
       ok: true,
       message: 'Wenn dein Konto noch nicht bestätigt ist, erhältst du in Kürze einen neuen Bestätigungslink.',
+      resendCooldownSeconds: ACCOUNT_CONFIRMATION_RESEND_COOLDOWN_SECONDS,
     });
   });
 
