@@ -1,5 +1,6 @@
 import { ArrowDown, ArrowRight, Bookmark, CalendarDays, Check, Clock3, Download, Filter, WifiOff } from 'lucide-react';
-import cupcalIcon from './assets/cupcal-icon.png';
+import websiteLogo from './assets/brand/cupcal-website-logo.webp';
+import appLogo from './assets/brand/cupcal-app-logo.webp';
 
 const features = [
   {
@@ -27,11 +28,7 @@ function App() {
     <main className="site-shell">
       <header className="container topbar">
         <a className="brand" href="#start" aria-label="CupCal – zum Anfang" data-testid="link-home">
-          <img src={cupcalIcon} alt="CupCal Kalender-App-Symbol" data-testid="img-cupcal-icon" />
-          <span className="brand-name">
-            <strong>CUPCAL</strong>
-            <span>DEIN WETTKAMPF-KOMPASS</span>
-          </span>
+          <img className="website-logo" src={websiteLogo} alt="CupCal – Kalender für FN" data-testid="img-cupcal-icon" />
         </a>
         <nav className="nav-links" aria-label="Hauptnavigation">
           <a href="#funktionen" data-testid="link-funktionen">Funktionen</a>
@@ -64,7 +61,7 @@ function App() {
           </div>
           <div className="hero-art fade-in fade-delay" aria-label="CupCal App-Symbol und Vorschauhinweise" data-testid="visual-hero">
             <div className="art-orbit" />
-            <img className="hero-icon" src={cupcalIcon} alt="CupCal App-Symbol mit Kalender und Blitz" />
+            <img className="hero-icon" src={appLogo} alt="CupCal-App-Logo mit goldenem Pokal und Kalender auf dunklem Grund" />
             <div className="floating-tag tag-one">
               <CalendarDays aria-hidden="true" />
               <span><strong>Alle Cups</strong><small>an einem Ort</small></span>
