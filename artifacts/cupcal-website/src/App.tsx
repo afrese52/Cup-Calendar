@@ -1,5 +1,5 @@
 import { ArrowDown, ArrowRight, Bookmark, CalendarDays, Check, Clock3, Download, Filter, WifiOff } from 'lucide-react';
-import websiteLogo from './assets/brand/cupcal-website-logo.webp';
+import websiteLogo from './assets/brand/cupcal-website-logo-transparent.webp';
 import appLogo from './assets/brand/cupcal-app-logo.webp';
 
 const features = [
