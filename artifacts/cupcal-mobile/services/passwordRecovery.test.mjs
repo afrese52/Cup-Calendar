@@ -325,6 +325,46 @@ test('ordnet gleichzeitige Wiederherstellungslinks auch bei möglicher umgekehrt
   assert.equal(recovery.isPending(), true);
 });
 
+test('ordnet gleichzeitige Wiederherstellungslinks mit Flow-IDs im Fragment korrekt zu', async () => {
+  let releaseFirstExchange;
+  const firstExchange = new Promise((resolve) => {
+    releaseFirstExchange = resolve;
+  });
+  const calls = [];
+  const recovery = createPasswordRecovery(createAuth({
+    exchangeCodeForSession: (code, options) => {
+      calls.push({ code, options });
+      if (code === 'older-code') return firstExchange;
+      return Promise.resolve({ error: null });
+    },
+  }));
+  const olderUrl =
+    'cupcal-android://auth/reset#code=older-code&type=recovery&flow_id=older-flow';
+  const newerUrl =
+    'cupcal-android://auth/reset#code=newer-code&type=recovery&flow_id=newer-flow';
+
+  const olderRequest = recovery.handlePasswordResetUrl(olderUrl);
+  await Promise.resolve();
+  assert.deepEqual(calls, [{
+    code: 'older-code',
+    options: { flowId: 'older-flow' },
+  }]);
+
+  const newerRequest = recovery.handlePasswordResetUrl(newerUrl);
+  assert.equal(recovery.isPending(), false);
+  await Promise.resolve();
+  assert.equal(calls.length, 1);
+
+  releaseFirstExchange({ error: null });
+  assert.equal(await olderRequest, true);
+  assert.equal(await newerRequest, true);
+  assert.deepEqual(calls, [
+    { code: 'older-code', options: { flowId: 'older-flow' } },
+    { code: 'newer-code', options: { flowId: 'newer-flow' } },
+  ]);
+  assert.equal(recovery.isPending(), true);
+});
+
 test('verarbeitet ältere Reset-Links mit Code im auth/reset-Pfad', async () => {
   let exchangedCode;
   const recovery = createPasswordRecovery(createAuth({
