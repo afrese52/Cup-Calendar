@@ -124,27 +124,54 @@ die Expo-App eingebettet werden.
 Die Kontolöschungs-Weiterleitung enthält zusätzlich `flow` und ein
 Bestätigungstoken als Query-Parameter. Deshalb reicht es nicht, nur die
 Basisadresse einzutragen. Gib in **Authentication → URL Configuration →
-Redirect URLs** folgende Muster frei:
+Redirect URLs** beide Ziele frei. Die Browser-Adresse muss zur gerade
+verwendeten CupCal-Expo-Vorschau gehören; trage deren HTTPS-Host und den
+Bestätigungspfad ein. Das Suffix `**` lässt die von CupCal angehängten
+Löschparameter zu:
 
 ```text
 https://<aktuelle-vorschau-domain>/auth/confirm**
 cupcal-android://auth/confirm**
 ```
 
-Ersetze `<aktuelle-vorschau-domain>` durch die Domain der gerade verwendeten
-Replit-Vorschau. Setze außerdem die **Site URL** auf eine HTTPS-Adresse der
-Web-App, nicht auf `cupcal-android://...`. Wenn Supabase eine
-Browser-Weiterleitung nicht zulässt, kann es stattdessen auf die Site URL
-zurückfallen; die Löschkennzeichnung und das Bestätigungstoken fehlen dann.
-Für reine Vorschautests kann die Site URL vorübergehend die aktuelle
-Vorschau-Adresse sein. Die bestehende Bestätigungsroute wird auch für
-Registrierungslinks verwendet.
+Ersetze `<aktuelle-vorschau-domain>` durch den Host der gerade geöffneten
+Replit-Vorschau. Der native Eintrag muss mit `cupcal-android://auth/confirm`
+beginnen; das Schema `cupcal-android` ist in `app.json` registriert. Setze
+außerdem die **Site URL** auf eine HTTPS-Adresse der Web-App, nicht auf
+`cupcal-android://...`. Falls Supabase das jeweilige Redirect-Ziel nicht
+zulässt, kann es auf die Site URL zurückfallen; dann fehlen die
+Löschkennzeichnung und das Bestätigungstoken und der Link kann das Konto nicht
+löschen. Für reine Vorschautests kann die Site URL vorübergehend die aktuelle
+Vorschau-Adresse sein. Die Bestätigungsroute wird auch für Registrierungslinks
+verwendet.
 
 Der Versand nutzt Supabases **Magic Link**-E-Mailvorlage unter
-**Authentication → Email Templates → Magic Link or OTP**. Betreff und Text
-müssen dort ausdrücklich die endgültige Kontolöschung nennen; die Vorlage muss
-`{{ .ConfirmationURL }}` enthalten. CupCal verwendet diesen Anmeldeweg nicht
-für normale Anmeldungen. Nach erfolgreicher Löschung entfernt Supabase auch
-die an das Konto geknüpften Favoriten und Importhistorie; die öffentlichen
+**Authentication → Email Templates → Magic Link or OTP**. Passe dort Betreff
+und Nachricht an, damit die Mail nicht wie eine normale Anmeldung klingt. Zum
+Beispiel:
+
+**Betreff**
+
+```text
+Bestätige die endgültige Löschung deines CupCal-Kontos
+```
+
+**Nachricht (HTML)**
+
+```html
+<p>Du hast beantragt, dein CupCal-Konto endgültig zu löschen.</p>
+<p>Wenn du fortfährst, werden dein Konto und die damit verbundenen Daten
+unwiderruflich gelöscht. Klicke auf den folgenden Link, um die Löschung
+endgültig auszuführen:</p>
+<p><a href="{{ .ConfirmationURL }}">CupCal-Konto endgültig löschen</a></p>
+<p>Wenn du diese Löschung nicht angefordert hast, ignoriere diese E-Mail.
+Dein Konto wird dann nicht gelöscht.</p>
+```
+
+Der Link muss `{{ .ConfirmationURL }}` verwenden, damit Supabase den von CupCal
+angeforderten Redirect nutzt. Die Löschung wird erst durch Öffnen des Links und
+die serverseitige Bestätigung ausgeführt. CupCal verwendet diesen Anmeldeweg
+nicht für normale Anmeldungen. Nach erfolgreicher Löschung entfernt Supabase
+auch die an das Konto geknüpften Favoriten und Importhistorie; die öffentlichen
 Turniertermine bleiben erhalten.
 
