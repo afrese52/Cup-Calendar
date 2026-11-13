@@ -91,6 +91,50 @@ async function withTestAccounts(run) {
   }
 }
 
+test("anonyme RPC-Aufrufe können Favoriten weder anlegen noch ändern", async () => {
+  await withTestAccounts(async (account) => {
+    const anonymousClient = createClient(supabaseUrl, anonKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+    const admin = createClient(supabaseUrl, serviceRoleKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+    const newEventId = `anonymous-rpc-new-${randomUUID()}`;
+    const existingEventId = `anonymous-rpc-existing-${randomUUID()}`;
+    const updatedAt = new Date(0).toISOString();
+
+    const seed = await account.client.rpc("sync_user_event_bookmark", {
+      p_event_id: existingEventId,
+      p_is_favorite: true,
+      p_updated_at: updatedAt,
+    });
+    assert.ifError(seed.error);
+
+    for (const eventId of [newEventId, existingEventId]) {
+      const result = await anonymousClient.rpc("sync_user_event_bookmark", {
+        p_event_id: eventId,
+        p_is_favorite: false,
+        p_updated_at: updatedAt,
+      });
+      assert.ok(
+        result.error,
+        "Ein nicht angemeldeter Client darf die Favoriten-RPC nicht aufrufen.",
+      );
+    }
+
+    const savedRows = await admin
+      .from("user_event_bookmarks")
+      .select("event_id, is_favorite, revision")
+      .in("event_id", [newEventId, existingEventId]);
+    assert.ifError(savedRows.error);
+    assert.deepEqual(
+      savedRows.data,
+      [{ event_id: existingEventId, is_favorite: true, revision: 1 }],
+      "Anonyme Aufrufe dürfen keine Favoritenzeile erzeugen oder verändern.",
+    );
+  });
+});
+
 test("Supabase-RLS trennt Favoriten-Lese- und Schreibzugriffe", async () => {
   await withTestAccounts(async (accountA, accountB) => {
     const eventA = `isolation-a-${randomUUID()}`;
