@@ -1,6 +1,7 @@
 import React from 'react';
 import { beforeEach, expect, jest, test } from '@jest/globals';
-import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor, within } from '@testing-library/react-native';
+import { Dimensions, StyleSheet } from 'react-native';
 import SettingsScreen from '../app/(tabs)/settings';
 import { supabase } from '@/services/supabase';
 import { ACCOUNT_CONFIRMATION_RESEND_COOLDOWN_SECONDS } from '../services/accountAuth';
@@ -27,8 +28,8 @@ jest.mock('react-native-safe-area-context', () => {
   return { SafeAreaView: View };
 });
 jest.mock('@/components/KeyboardAwareScrollViewCompat', () => {
-  const { View } = require('react-native');
-  return { KeyboardAwareScrollViewCompat: View };
+  const { ScrollView } = require('react-native');
+  return { KeyboardAwareScrollViewCompat: ScrollView };
 });
 jest.mock('@/hooks/useColors', () => ({
   useColors: () => ({
@@ -99,6 +100,8 @@ const testSession = {
   expires_in: 3600,
   user: { id: 'fake-user', email: 'test@example.invalid' },
 };
+const defaultWindowDimensions = Dimensions.get('window');
+const defaultScreenDimensions = Dimensions.get('screen');
 
 function restoreAuthMocks() {
   auth.signInWithPassword.mockReset().mockImplementation(async () => {
@@ -148,6 +151,10 @@ async function enterCredentials(view: RenderedSettings) {
 
 beforeEach(() => {
   restoreAuthMocks();
+  Dimensions.set({
+    window: defaultWindowDimensions,
+    screen: defaultScreenDimensions,
+  });
 });
 
 test('zeigt den Anmeldestatus und Erfolg nach der Anmeldung', async () => {
@@ -373,6 +380,36 @@ test('öffnet den Passwort-zurücksetzen-Modus und fordert den Link mit einer an
   expect(auth.resetPasswordForEmail).toHaveBeenCalledWith('test@example.invalid', {
     redirectTo: 'cupcal-test://auth/reset?flow=cupcal-password-reset',
   });
+});
+
+test('hält Eingabe, Rückmeldung und Zurück-Aktion auf kleinem Display erreichbar', async () => {
+  const compactDimensions = { width: 320, height: 568, scale: 1, fontScale: 1 };
+  Dimensions.set({
+    window: compactDimensions,
+    screen: compactDimensions,
+  });
+  const view = await openSettings();
+  const scrollView = view.getByTestId('settings-scroll-view');
+  const contentStyle = StyleSheet.flatten(scrollView.props.contentContainerStyle);
+
+  expect(scrollView.props.scrollEnabled).toBe(true);
+  expect(StyleSheet.flatten(scrollView.props.style).flex).toBe(1);
+  expect(contentStyle).toMatchObject({
+    flexGrow: 1,
+    paddingHorizontal: 14,
+    paddingTop: 2,
+    paddingBottom: 24,
+  });
+
+  await fireEvent.press(view.getByTestId('forgot-password-button'));
+  await fireEvent.changeText(view.getByTestId('auth-email-input'), 'test@example.invalid');
+  await fireEvent.press(view.getByTestId('auth-submit-button'));
+
+  const compactScreen = within(scrollView);
+  expect(compactScreen.getByTestId('auth-email-input')).toBeTruthy();
+  expect(compactScreen.getByTestId('auth-success-message')).toBeTruthy();
+  expect(compactScreen.getByTestId('auth-mode-toggle')).toBeTruthy();
+  expect(compactScreen.getByText('Zurück zur Anmeldung')).toBeTruthy();
 });
 
 test('zeigt einen verständlichen Fehler beim Anfordern des Wiederherstellungslinks', async () => {

@@ -2,7 +2,16 @@ import { Feather } from '@expo/vector-icons';
 import { useRequestAccountDeletion } from '@workspace/api-client-react';
 import * as Haptics from 'expo-haptics';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { Session } from '@supabase/supabase-js';
 import { useRouter } from 'expo-router';
@@ -73,6 +82,9 @@ export default function SettingsScreen() {
   const colors = useColors();
   const router = useRouter();
   const { storageError } = useCupCal();
+  const { width, height } = useWindowDimensions();
+  const isCompactWidth = width < 360;
+  const isCompactHeight = height < 640;
   const [session, setSession] = useState<Session | null>(null);
   const [isCheckingSession, setIsCheckingSession] = useState(Boolean(supabase));
   const [authMode, setAuthMode] = useState<AuthMode>('sign-in');
@@ -255,10 +267,18 @@ export default function SettingsScreen() {
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]} edges={['top']}>
       <KeyboardAwareScrollViewCompat
+        testID="settings-scroll-view"
+        style={styles.scroll}
         contentContainerStyle={[
           styles.content,
-          { paddingTop: Platform.OS === 'web' ? 67 : 10, paddingBottom: Platform.OS === 'web' ? 100 : 40 },
+          {
+            paddingHorizontal: isCompactWidth ? 14 : 20,
+            paddingTop: Platform.OS === 'web' ? 67 : isCompactHeight ? 2 : 10,
+            paddingBottom: Platform.OS === 'web' ? 100 : isCompactHeight ? 24 : 40,
+          },
         ]}
+        scrollEnabled
+        keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
         bottomOffset={20}
       >
@@ -655,7 +675,8 @@ export default function SettingsScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1 },
-  content: { paddingHorizontal: 20 },
+  scroll: { flex: 1 },
+  content: { flexGrow: 1, paddingHorizontal: 20 },
   eyebrow: { fontSize: 10, fontWeight: '800', letterSpacing: 1.8, marginBottom: 8, marginTop: 12 },
   heading: { fontSize: 30, fontWeight: '700', letterSpacing: -0.7 },
   intro: { fontSize: 13, marginTop: 5, marginBottom: 25 },
