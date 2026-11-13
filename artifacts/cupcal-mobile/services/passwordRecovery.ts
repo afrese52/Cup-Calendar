@@ -81,10 +81,31 @@ export function createPasswordRecovery(auth: PasswordRecoveryAuth) {
   let passwordSavePending = false;
   let lastPasswordResetUrl: string | null = null;
   let lastPasswordResetPromise: Promise<boolean> | null = null;
+  let latestPasswordResetRequest = 0;
+  let passwordResetQueue: Promise<void> = Promise.resolve();
 
-  async function processPasswordResetUrl(url: string): Promise<boolean> {
-    recoverySessionPending = false;
+  function getPasswordResetParams(url: string): {
+    query: URLSearchParams;
+    hash: URLSearchParams;
+    isResetLink: boolean;
+  } {
     const { query, hash } = getResetUrlParams(url);
+    const getParameter = (key: string) => query.get(key) ?? hash.get(key);
+    const isRecoveryType = getParameter('type') === 'recovery';
+    const code = getParameter('code');
+    const isCupCalReset = getParameter('flow') === passwordResetFlowMarker;
+    return {
+      query,
+      hash,
+      isResetLink: isCupCalReset || isRecoveryType || Boolean(code && isPasswordResetRoute(url)),
+    };
+  }
+
+  async function processPasswordResetUrl(
+    url: string,
+    requestId: number,
+  ): Promise<boolean> {
+    const { query, hash } = getPasswordResetParams(url);
     const getParameter = (key: string) => query.get(key) ?? hash.get(key);
     const isRecoveryType = getParameter('type') === 'recovery';
     const code = getParameter('code');
@@ -101,9 +122,13 @@ export function createPasswordRecovery(auth: PasswordRecoveryAuth) {
     }
 
     if (code) {
-      const { error } = await auth.exchangeCodeForSession(code);
+      const flowId = getParameter('flow_id');
+      const { error } = await auth.exchangeCodeForSession(
+        code,
+        flowId ? { flowId } : undefined,
+      );
       if (error) throw error;
-      recoverySessionPending = true;
+      if (requestId === latestPasswordResetRequest) recoverySessionPending = true;
       return true;
     }
 
@@ -118,20 +143,33 @@ export function createPasswordRecovery(auth: PasswordRecoveryAuth) {
       refresh_token: refreshToken,
     });
     if (error) throw error;
-    recoverySessionPending = true;
+    if (requestId === latestPasswordResetRequest) recoverySessionPending = true;
     return true;
   }
 
   function handlePasswordResetUrl(url: string): Promise<boolean> {
+    const { isResetLink } = getPasswordResetParams(url);
+    if (!isResetLink) return Promise.resolve(false);
+
     if (lastPasswordResetUrl === url && lastPasswordResetPromise) {
       return lastPasswordResetPromise;
     }
 
+    const requestId = ++latestPasswordResetRequest;
+    recoverySessionPending = false;
     lastPasswordResetUrl = url;
-    lastPasswordResetPromise = processPasswordResetUrl(url).catch((error: unknown) => {
-      recoverySessionPending = false;
-      throw error;
+    lastPasswordResetPromise = passwordResetQueue.then(async () => {
+      try {
+        return await processPasswordResetUrl(url, requestId);
+      } catch (error) {
+        if (requestId === latestPasswordResetRequest) recoverySessionPending = false;
+        throw error;
+      }
     });
+    passwordResetQueue = lastPasswordResetPromise.then(
+      () => undefined,
+      () => undefined,
+    );
     return lastPasswordResetPromise;
   }
 
