@@ -150,3 +150,117 @@ for (const platform of ['Android', 'iOS']) {
     await restartedClient.auth.dispose();
   });
 }
+
+test('ordnet zwei offene Registrierungslinks den Konten zu und meldet zuletzt das zweite an', async () => {
+  const storage = createPersistentStorage();
+  const signUpRedirects = [];
+  const tokenRequests = [];
+  const accountByCode = new Map([
+    ['account-a-code', {
+      id: '00000000-0000-4000-8000-000000000021',
+      email: 'account-a@example.invalid',
+    }],
+    ['account-b-code', {
+      id: '00000000-0000-4000-8000-000000000022',
+      email: 'account-b@example.invalid',
+    }],
+  ]);
+  const multiAccountFetch = async (input, init) => {
+    const url = new URL(String(input));
+    if (url.pathname.endsWith('/signup')) {
+      signUpRedirects.push(url.searchParams.get('redirect_to'));
+      return new Response(JSON.stringify({
+        id: '00000000-0000-4000-8000-000000000020',
+        email: 'pending@example.invalid',
+        aud: 'authenticated',
+        role: 'authenticated',
+        app_metadata: { provider: 'email', providers: ['email'] },
+        user_metadata: {},
+        identities: [],
+        created_at: new Date(0).toISOString(),
+      }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    if (url.pathname.endsWith('/token')) {
+      const request = JSON.parse(String(init?.body));
+      tokenRequests.push(request);
+      const user = accountByCode.get(request.auth_code);
+      if (!user) return new Response(JSON.stringify({ message: 'Unknown test code' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      });
+      return new Response(JSON.stringify({
+        access_token: accessToken,
+        refresh_token: `confirmed-${user.id}`,
+        token_type: 'bearer',
+        expires_in: 3600,
+        user: {
+          ...user,
+          aud: 'authenticated',
+          role: 'authenticated',
+          app_metadata: { provider: 'email', providers: ['email'] },
+          user_metadata: {},
+          created_at: new Date(0).toISOString(),
+        },
+      }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    return fakeUserFetch(input, init);
+  };
+  const client = createCupCalSupabaseClient(
+    'https://multi-account-confirmation.supabase.co',
+    'test-publishable-key',
+    storage,
+    multiAccountFetch,
+  );
+
+  try {
+    const redirectTo = 'cupcal-android://auth/confirm?flow=cupcal-email-confirmation';
+    const signUpA = await client.auth.signUp({
+      email: 'account-a@example.invalid',
+      password: 'test-password-a',
+      options: { emailRedirectTo: redirectTo },
+    });
+    const signUpB = await client.auth.signUp({
+      email: 'account-b@example.invalid',
+      password: 'test-password-b',
+      options: { emailRedirectTo: redirectTo },
+    });
+
+    assert.equal(signUpA.error, null);
+    assert.equal(signUpB.error, null);
+    const callbackA = new URL(signUpRedirects[0]);
+    const callbackB = new URL(signUpRedirects[1]);
+    const flowIdA = callbackA.searchParams.get('sb_flow_id');
+    const flowIdB = callbackB.searchParams.get('sb_flow_id');
+    assert.ok(flowIdA);
+    assert.ok(flowIdB);
+    assert.notEqual(flowIdA, flowIdB);
+
+    const verifierA = JSON.parse(await storage.getItem(
+      `sb-multi-account-confirmation-auth-token-flow-${flowIdA}-code-verifier`,
+    ));
+    const verifierB = JSON.parse(await storage.getItem(
+      `sb-multi-account-confirmation-auth-token-flow-${flowIdB}-code-verifier`,
+    ));
+    assert.notEqual(verifierA, verifierB);
+
+    const sessionA = await confirmEmailCode(client.auth, 'account-a-code', flowIdA);
+    assert.equal(sessionA.user.id, accountByCode.get('account-a-code').id);
+    assert.equal(tokenRequests[0].code_verifier, verifierA);
+    assert.equal((await client.auth.getSession()).data.session?.user.email, 'account-a@example.invalid');
+
+    const sessionB = await confirmEmailCode(client.auth, 'account-b-code', flowIdB);
+    assert.equal(sessionB.user.id, accountByCode.get('account-b-code').id);
+    assert.equal(tokenRequests[1].code_verifier, verifierB);
+    const finalSession = await client.auth.getSession();
+    assert.equal(finalSession.data.session?.user.id, accountByCode.get('account-b-code').id);
+    assert.equal(finalSession.data.session?.user.email, 'account-b@example.invalid');
+  } finally {
+    await client.auth.dispose();
+  }
+});

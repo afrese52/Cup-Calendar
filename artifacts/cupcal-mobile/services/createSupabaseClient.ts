@@ -19,6 +19,9 @@ export function createCupCalSupabaseClient(
       persistSession: true,
       detectSessionInUrl: false,
       flowType: 'pkce',
+      experimental: {
+        appendPkceFlowIdToRedirects: true,
+      },
     },
     ...(fetchImpl ? { global: { fetch: fetchImpl } } : {}),
   });
