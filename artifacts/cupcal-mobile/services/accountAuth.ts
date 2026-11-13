@@ -21,6 +21,21 @@ export function friendlyAuthError(
   const message = rawMessage.toLowerCase();
   const code = typeof errorDetails.code === 'string' ? errorDetails.code.toLowerCase() : '';
 
+  if (
+    code === 'refresh_token_not_found'
+    || code === 'invalid_refresh_token'
+    || (
+      message.includes('refresh token')
+      && (
+        message.includes('expired')
+        || message.includes('invalid')
+        || message.includes('not found')
+        || message.includes('already used')
+      )
+    )
+  ) {
+    return 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.';
+  }
   if (message.includes('passwortwechsel läuft bereits')) {
     return 'Der Passwortwechsel läuft bereits. Bitte warte, bis er abgeschlossen ist.';
   }

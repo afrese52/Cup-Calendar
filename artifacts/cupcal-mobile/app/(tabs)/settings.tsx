@@ -118,7 +118,10 @@ export default function SettingsScreen() {
         setAuthError(null);
       },
       onError: (error) => {
-        setAuthError(error instanceof Error ? error.message : 'Die Sitzung konnte nicht geladen werden.');
+        setAuthError(friendlyAuthError(
+          error,
+          'Die Sitzung konnte nicht geladen werden. Bitte melde dich erneut an.',
+        ));
       },
       onReady: () => setIsCheckingSession(false),
     });

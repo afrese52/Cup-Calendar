@@ -258,6 +258,13 @@ test('zeigt unbekannte Supabase-Fehler bereinigt mit Code und HTTP-Status', () =
   );
 });
 
+test('erklärt eine abgelaufene Sitzung und fordert zur erneuten Anmeldung auf', () => {
+  assert.equal(
+    friendlyAuthError(new Error('Invalid Refresh Token: Already Used')),
+    'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.',
+  );
+});
+
 test('validiert leere Anmeldedaten ohne Serveraufruf', async () => {
   let called = false;
   const result = await submitAccountAuth(createAuth({
