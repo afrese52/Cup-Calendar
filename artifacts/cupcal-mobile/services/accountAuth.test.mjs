@@ -299,7 +299,7 @@ test('fordert einen Wiederherstellungslink an und zeigt Fehler an', async (t) =>
     assert.equal(requestedEmail, 'test@example.invalid');
     assert.deepEqual(result, {
       ok: true,
-      message: 'Wenn zu dieser E-Mail ein CupCal-Konto besteht, erhältst du in Kürze einen Wiederherstellungslink.',
+      message: 'Wenn zu dieser E-Mail ein CupCal-Konto besteht, erhältst du in Kürze einen Wiederherstellungslink. Der Versand kann etwas dauern. Prüfe auch deinen Spam-Ordner.',
     });
   });
 

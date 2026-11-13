@@ -272,7 +272,7 @@ export async function submitAccountAuth(
       await requestPasswordReset(email);
       return {
         ok: true,
-        message: 'Wenn zu dieser E-Mail ein CupCal-Konto besteht, erhältst du in Kürze einen Wiederherstellungslink.',
+        message: 'Wenn zu dieser E-Mail ein CupCal-Konto besteht, erhältst du in Kürze einen Wiederherstellungslink. Der Versand kann etwas dauern. Prüfe auch deinen Spam-Ordner.',
       };
     }
 

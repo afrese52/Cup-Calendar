@@ -368,7 +368,7 @@ test('öffnet den Passwort-zurücksetzen-Modus und fordert den Link mit einer an
   await fireEvent.press(view.getByTestId('auth-submit-button'));
 
   expect(await view.findByText(
-    'Wenn zu dieser E-Mail ein CupCal-Konto besteht, erhältst du in Kürze einen Wiederherstellungslink.',
+    'Wenn zu dieser E-Mail ein CupCal-Konto besteht, erhältst du in Kürze einen Wiederherstellungslink. Der Versand kann etwas dauern. Prüfe auch deinen Spam-Ordner.',
   )).toBeTruthy();
   expect(auth.resetPasswordForEmail).toHaveBeenCalledWith('test@example.invalid', {
     redirectTo: 'cupcal-test://auth/reset?flow=cupcal-password-reset',
