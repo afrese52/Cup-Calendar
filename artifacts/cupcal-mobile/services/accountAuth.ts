@@ -1,4 +1,5 @@
 import type { Session, SupabaseClient } from '@supabase/supabase-js';
+import { passwordLengthRequirementError } from './passwordRecovery.ts';
 
 type AuthApi = SupabaseClient['auth'];
 
@@ -265,6 +266,11 @@ export async function submitAccountAuth(
         ? 'Bitte gib deine E-Mail-Adresse ein.'
         : 'Bitte gib E-Mail-Adresse und Passwort ein.',
     };
+  }
+
+  if (mode === 'sign-up') {
+    const passwordError = passwordLengthRequirementError(password);
+    if (passwordError) return { ok: false, error: passwordError };
   }
 
   try {

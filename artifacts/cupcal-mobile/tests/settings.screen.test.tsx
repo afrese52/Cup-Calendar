@@ -214,6 +214,7 @@ test('beschriftet E-Mail- und Passwortfelder passend zu Anmeldung und Registrier
   expect(view.getByTestId('auth-password-input').props.accessibilityHint).toBe(
     'Wähle das Passwort für dein CupCal-Konto.',
   );
+  expect(view.getByText('Mindestens 6 Zeichen. Es sind keine weiteren Zeichenregeln erforderlich.')).toBeTruthy();
 });
 
 test('zeigt einen Anmeldefehler sichtbar an', async () => {

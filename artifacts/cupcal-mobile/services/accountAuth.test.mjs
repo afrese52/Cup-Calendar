@@ -192,13 +192,56 @@ test('registriert erfolgreich mit und ohne sofortige Sitzung', async (t) => {
   });
 });
 
+test('prüft die Mindestlänge vor der Registrierung', async (t) => {
+  await t.test('weist ein zu kurzes Passwort ohne Supabase-Aufruf ab', async () => {
+    let called = false;
+    const result = await submitAccountAuth(createAuth({
+      signUp: async () => {
+        called = true;
+        return { data: { session: null }, error: null };
+      },
+    }), {
+      mode: 'sign-up',
+      email: 'test@example.invalid',
+      password: '12345',
+      emailConfirmationRedirectTo: 'cupcal-android://auth/confirm',
+      requestPasswordReset: async () => {},
+    });
+
+    assert.deepEqual(result, {
+      ok: false,
+      error: 'Das Passwort muss mindestens 6 Zeichen lang sein.',
+    });
+    assert.equal(called, false);
+  });
+
+  await t.test('akzeptiert ein Passwort genau an der Mindestlänge', async () => {
+    let receivedPassword;
+    const result = await submitAccountAuth(createAuth({
+      signUp: async ({ password }) => {
+        receivedPassword = password;
+        return { data: { session: savedSession }, error: null };
+      },
+    }), {
+      mode: 'sign-up',
+      email: 'test@example.invalid',
+      password: '123456',
+      emailConfirmationRedirectTo: 'cupcal-android://auth/confirm',
+      requestPasswordReset: async () => {},
+    });
+
+    assert.equal(receivedPassword, '123456');
+    assert.equal(result.ok, true);
+  });
+});
+
 test('zeigt Fehler bei abgelehnter Registrierung verständlich an', async () => {
   const result = await submitAccountAuth(createAuth({
     signUp: async () => ({ data: { session: null }, error: new Error('weak password') }),
   }), {
     mode: 'sign-up',
     email: 'test@example.invalid',
-    password: 'weak',
+    password: '123456',
     emailConfirmationRedirectTo: 'cupcal-android://auth/confirm',
     requestPasswordReset: async () => {},
   });

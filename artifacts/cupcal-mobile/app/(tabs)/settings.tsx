@@ -25,6 +25,7 @@ import {
   submitAccountAuth,
   watchAuthSession,
 } from '@/services/accountAuth';
+import { PASSWORD_MIN_LENGTH } from '@/services/passwordRecovery';
 import {
   getAccountDeletionRedirectUrl,
   getEmailConfirmationRedirectUrl,
@@ -524,6 +525,15 @@ export default function SettingsScreen() {
                     { backgroundColor: colors.input, borderColor: colors.border, color: colors.foreground },
                   ]}
                 />
+              ) : null}
+              {authMode === 'sign-up' ? (
+                <Text
+                  accessibilityRole="text"
+                  testID="auth-password-requirement"
+                  style={[styles.accountSubtitle, { color: colors.mutedForeground }]}
+                >
+                  Mindestens {PASSWORD_MIN_LENGTH} Zeichen. Es sind keine weiteren Zeichenregeln erforderlich.
+                </Text>
               ) : null}
               {authError ? (
                 <Text

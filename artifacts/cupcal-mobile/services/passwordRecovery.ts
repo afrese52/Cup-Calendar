@@ -9,7 +9,7 @@ export const PASSWORD_MIN_LENGTH = 6;
 
 const passwordResetFlowMarker = 'cupcal-password-reset';
 
-function newPasswordRequirementError(password: string): string | null {
+export function passwordLengthRequirementError(password: string): string | null {
   return [...password].length < PASSWORD_MIN_LENGTH
     ? `Das Passwort muss mindestens ${PASSWORD_MIN_LENGTH} Zeichen lang sein.`
     : null;
@@ -180,7 +180,7 @@ export function createPasswordRecovery(auth: PasswordRecoveryAuth) {
     },
     handlePasswordResetUrl,
     async saveNewPassword(password: string): Promise<void> {
-      const passwordError = newPasswordRequirementError(password);
+      const passwordError = passwordLengthRequirementError(password);
       if (passwordError) throw new Error(passwordError);
       if (passwordSavePending) {
         throw new Error('Der Passwortwechsel läuft bereits. Bitte warte, bis er abgeschlossen ist.');
