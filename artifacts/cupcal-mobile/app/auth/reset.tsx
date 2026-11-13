@@ -1,7 +1,7 @@
 import { Feather } from '@expo/vector-icons';
 import * as Linking from 'expo-linking';
 import { router } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
@@ -23,6 +23,7 @@ export default function ResetPasswordScreen() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const isSavingRef = useRef(false);
   const [isSaved, setIsSaved] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -94,6 +95,8 @@ export default function ResetPasswordScreen() {
   }, []);
 
   const submitNewPassword = async () => {
+    if (isSavingRef.current) return;
+
     if (!password || !confirmPassword) {
       setErrorMessage('Bitte gib dein neues Passwort zweimal ein.');
       return;
@@ -103,6 +106,7 @@ export default function ResetPasswordScreen() {
       return;
     }
 
+    isSavingRef.current = true;
     setIsSaving(true);
     setErrorMessage(null);
     try {
@@ -114,6 +118,7 @@ export default function ResetPasswordScreen() {
       setIsRecoveryReady(isPasswordRecoveryPending());
       setErrorMessage(friendlyAuthError(error, 'Das Passwort konnte nicht gespeichert werden.'));
     } finally {
+      isSavingRef.current = false;
       setIsSaving(false);
     }
   };
@@ -196,6 +201,7 @@ export default function ResetPasswordScreen() {
         {!isCheckingLink && isRecoveryReady && !isSaved ? (
           <Pressable
             accessibilityRole="button"
+            accessibilityState={{ disabled: isSaving, busy: isSaving }}
             testID="reset-password-submit-button"
             disabled={isSaving}
             onPress={() => void submitNewPassword()}

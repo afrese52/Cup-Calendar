@@ -1,6 +1,6 @@
 import React from 'react';
 import { beforeEach, expect, jest, test } from '@jest/globals';
-import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 
 const mockSaveNewPassword = jest.fn(async (_password: string) => {});
 
@@ -88,4 +88,30 @@ test('behält Formular und Eingaben nach einem Verbindungsfehler für einen erne
 
   await waitFor(() => expect(view.getByText('Passwort geändert')).toBeTruthy());
   expect(mockSaveNewPassword).toHaveBeenCalledTimes(2);
+});
+
+test('sperrt schnelle wiederholte Speicherversuche bis die Passwortänderung abgeschlossen ist', async () => {
+  let finishSave!: () => void;
+  mockSaveNewPassword.mockImplementation(
+    () => new Promise<void>((resolve) => { finishSave = resolve; }),
+  );
+  const view = await render(<ResetPasswordScreen />);
+
+  await waitFor(() => expect(view.getByTestId('reset-password-submit-button')).toBeTruthy());
+  await fireEvent.changeText(view.getByTestId('reset-password-input'), 'Mein-neues-Passwort-123');
+  await fireEvent.changeText(view.getByTestId('reset-password-confirm-input'), 'Mein-neues-Passwort-123');
+
+  await fireEvent.press(view.getByTestId('reset-password-submit-button'));
+  await fireEvent.press(view.getByTestId('reset-password-submit-button'));
+  await fireEvent.press(view.getByTestId('reset-password-submit-button'));
+
+  expect(mockSaveNewPassword).toHaveBeenCalledTimes(1);
+  expect(view.getByTestId('reset-password-submit-button').props.accessibilityState).toEqual({
+    disabled: true,
+    busy: true,
+  });
+  expect(view.getByText('Wird gespeichert …')).toBeTruthy();
+
+  await act(async () => finishSave());
+  expect(await view.findByText('Passwort geändert')).toBeTruthy();
 });
