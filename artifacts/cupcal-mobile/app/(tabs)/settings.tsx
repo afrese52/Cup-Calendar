@@ -31,6 +31,7 @@ const DISCLAIMER =
   'Teile der verwendeten Materialien sind Marken und/oder urheberrechtlich geschützte Werke von Epic Games, Inc. Alle Rechte vorbehalten. Dieses Material ist inoffiziell und wird nicht von Epic Games unterstützt.';
 
 type AuthMode = 'sign-in' | 'sign-up' | 'forgot-password';
+type AuthAction = 'submit' | 'resend-confirmation' | 'sign-out' | 'delete-account';
 
 function SettingRow({
   icon,
@@ -77,7 +78,8 @@ export default function SettingsScreen() {
   const [authMode, setAuthMode] = useState<AuthMode>('sign-in');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [isSubmittingAuth, setIsSubmittingAuth] = useState(false);
+  const [submittingAction, setSubmittingAction] = useState<AuthAction | null>(null);
+  const isSubmittingAuth = submittingAction !== null;
   const [authError, setAuthError] = useState<string | null>(null);
   const [authMessage, setAuthMessage] = useState<string | null>(null);
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
@@ -112,7 +114,7 @@ export default function SettingsScreen() {
       return;
     }
 
-    setIsSubmittingAuth(true);
+    setSubmittingAction('submit');
     setAuthError(null);
     setAuthMessage(null);
     try {
@@ -132,40 +134,46 @@ export default function SettingsScreen() {
     } catch (error) {
       setAuthError(friendlyAuthError(error, 'Die Registrierung oder Anmeldung ist fehlgeschlagen. Bitte versuche es erneut.'));
     } finally {
-      setIsSubmittingAuth(false);
+      setSubmittingAction(null);
     }
   };
 
   const resendConfirmation = async () => {
     if (!supabase) return;
 
-    setIsSubmittingAuth(true);
+    setSubmittingAction('resend-confirmation');
     setAuthError(null);
     setAuthMessage(null);
-    const result = await resendAccountConfirmation({
-      email,
-      emailConfirmationRedirectTo: getEmailConfirmationRedirectUrl(),
-      requestEmailConfirmation,
-    });
-    if (result.ok) setAuthMessage(result.message);
-    else setAuthError(result.error);
-    setIsSubmittingAuth(false);
+    try {
+      const result = await resendAccountConfirmation({
+        email,
+        emailConfirmationRedirectTo: getEmailConfirmationRedirectUrl(),
+        requestEmailConfirmation,
+      });
+      if (result.ok) setAuthMessage(result.message);
+      else setAuthError(result.error);
+    } finally {
+      setSubmittingAction(null);
+    }
   };
 
   const signOut = async () => {
     if (!supabase) return;
 
-    setIsSubmittingAuth(true);
+    setSubmittingAction('sign-out');
     setAuthError(null);
     setAuthMessage(null);
-    const result = await signOutAccount(supabase.auth);
-    if (result.ok) {
-      setAuthMessage(result.message);
-      if (result.clearPassword) setPassword('');
-    } else {
-      setAuthError(result.error);
+    try {
+      const result = await signOutAccount(supabase.auth);
+      if (result.ok) {
+        setAuthMessage(result.message);
+        if (result.clearPassword) setPassword('');
+      } else {
+        setAuthError(result.error);
+      }
+    } finally {
+      setSubmittingAction(null);
     }
-    setIsSubmittingAuth(false);
   };
 
   const sendAccountDeletionLink = async () => {
@@ -174,7 +182,7 @@ export default function SettingsScreen() {
       return;
     }
 
-    setIsSubmittingAuth(true);
+    setSubmittingAction('delete-account');
     setAuthError(null);
     setAuthMessage(null);
     try {
@@ -196,9 +204,16 @@ export default function SettingsScreen() {
         ),
       );
     } finally {
-      setIsSubmittingAuth(false);
+      setSubmittingAction(null);
     }
   };
+
+  const authSubmitLabel =
+    authMode === 'forgot-password'
+      ? 'Link anfordern'
+      : authMode === 'sign-in'
+        ? 'Anmelden'
+        : 'Konto erstellen';
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]} edges={['top']}>
@@ -235,6 +250,11 @@ export default function SettingsScreen() {
               </View>
               <Pressable
                 accessibilityRole="button"
+                accessibilityLabel={submittingAction === 'sign-out' ? 'Abmeldung läuft' : 'Abmelden'}
+                accessibilityState={{
+                  disabled: isSubmittingAuth,
+                  busy: submittingAction === 'sign-out',
+                }}
                 testID="sign-out-button"
                 disabled={isSubmittingAuth}
                 onPress={() => void signOut()}
@@ -265,6 +285,11 @@ export default function SettingsScreen() {
                   </Text>
                   <Pressable
                     accessibilityRole="button"
+                    accessibilityLabel="Bestätigungslink senden"
+                    accessibilityState={{
+                      disabled: isSubmittingAuth,
+                      busy: submittingAction === 'delete-account',
+                    }}
                     testID="delete-account-confirm-button"
                     disabled={isSubmittingAuth}
                     onPress={() => void sendAccountDeletionLink()}
@@ -285,6 +310,7 @@ export default function SettingsScreen() {
                   </Pressable>
                   <Pressable
                     accessibilityRole="button"
+                    accessibilityState={{ disabled: isSubmittingAuth }}
                     testID="delete-account-cancel-button"
                     disabled={isSubmittingAuth}
                     onPress={() => setShowDeleteConfirmation(false)}
@@ -296,6 +322,7 @@ export default function SettingsScreen() {
               ) : (
                 <Pressable
                   accessibilityRole="button"
+                  accessibilityState={{ disabled: isSubmittingAuth }}
                   testID="delete-account-button"
                   disabled={isSubmittingAuth}
                   onPress={() => {
@@ -342,6 +369,11 @@ export default function SettingsScreen() {
               </Text>
               <TextInput
                 accessibilityLabel="E-Mail-Adresse"
+                accessibilityHint={
+                  authMode === 'forgot-password'
+                    ? 'Gib die E-Mail-Adresse für den Wiederherstellungslink ein.'
+                    : 'Gib die E-Mail-Adresse für dein CupCal-Konto ein.'
+                }
                 testID="auth-email-input"
                 autoCapitalize="none"
                 autoComplete="email"
@@ -361,7 +393,14 @@ export default function SettingsScreen() {
               />
               {authMode !== 'forgot-password' ? (
                 <TextInput
-                  accessibilityLabel="Passwort"
+                  accessibilityLabel={
+                    authMode === 'sign-up' ? 'Passwort für das neue Konto' : 'Passwort'
+                  }
+                  accessibilityHint={
+                    authMode === 'sign-up'
+                      ? 'Wähle das Passwort für dein CupCal-Konto.'
+                      : 'Gib dein CupCal-Passwort ein.'
+                  }
                   testID="auth-password-input"
                   autoCapitalize="none"
                   autoComplete={authMode === 'sign-in' ? 'current-password' : 'new-password'}
@@ -381,12 +420,30 @@ export default function SettingsScreen() {
                 />
               ) : null}
               {authError ? (
-                <Text accessibilityRole="alert" style={[styles.authNotice, { color: colors.destructive }]}>
+                <Text
+                  accessibilityRole="alert"
+                  accessibilityLiveRegion="assertive"
+                  testID="auth-error-message"
+                  style={[styles.authNotice, { color: colors.destructive }]}
+                >
                   {authError}
                 </Text>
               ) : null}
               <Pressable
                 accessibilityRole="button"
+                accessibilityLabel={
+                  submittingAction === 'submit'
+                    ? authMode === 'forgot-password'
+                      ? 'Passwortlink wird angefordert'
+                      : authMode === 'sign-in'
+                        ? 'Anmeldung läuft'
+                        : 'Registrierung läuft'
+                    : authSubmitLabel
+                }
+                accessibilityState={{
+                  disabled: isSubmittingAuth,
+                  busy: submittingAction === 'submit',
+                }}
                 testID="auth-submit-button"
                 disabled={isSubmittingAuth}
                 onPress={() => void submitAuth()}
@@ -398,18 +455,13 @@ export default function SettingsScreen() {
                 ]}
               >
                 <Text style={[styles.primaryButtonText, { color: colors.primaryForeground }]}>
-                  {isSubmittingAuth
-                    ? 'Einen Moment …'
-                    : authMode === 'forgot-password'
-                      ? 'Link anfordern'
-                      : authMode === 'sign-in'
-                        ? 'Anmelden'
-                        : 'Konto erstellen'}
+                  {submittingAction === 'submit' ? 'Einen Moment …' : authSubmitLabel}
                 </Text>
               </Pressable>
               {authMode === 'sign-in' ? (
                 <Pressable
                   accessibilityRole="button"
+                  accessibilityState={{ disabled: isSubmittingAuth }}
                   testID="forgot-password-button"
                   disabled={isSubmittingAuth}
                   onPress={() => {
@@ -425,6 +477,15 @@ export default function SettingsScreen() {
               {authMode === 'sign-in' ? (
                 <Pressable
                   accessibilityRole="button"
+                  accessibilityLabel={
+                    submittingAction === 'resend-confirmation'
+                      ? 'Bestätigungslink wird gesendet'
+                      : 'Bestätigungslink erneut senden'
+                  }
+                  accessibilityState={{
+                    disabled: isSubmittingAuth,
+                    busy: submittingAction === 'resend-confirmation',
+                  }}
                   testID="resend-confirmation-button"
                   disabled={isSubmittingAuth}
                   onPress={() => void resendConfirmation()}
@@ -441,6 +502,7 @@ export default function SettingsScreen() {
               ) : null}
               <Pressable
                 accessibilityRole="button"
+                accessibilityState={{ disabled: isSubmittingAuth }}
                 testID="auth-mode-toggle"
                 disabled={isSubmittingAuth}
                 onPress={() => {
@@ -461,12 +523,22 @@ export default function SettingsScreen() {
             </>
           )}
           {authMessage ? (
-            <Text accessibilityRole="alert" style={[styles.authNotice, { color: colors.success }]}>
+            <Text
+              accessibilityRole="alert"
+              accessibilityLiveRegion="polite"
+              testID="auth-success-message"
+              style={[styles.authNotice, { color: colors.success }]}
+            >
               {authMessage}
             </Text>
           ) : null}
           {authError && session ? (
-            <Text accessibilityRole="alert" style={[styles.authNotice, { color: colors.destructive }]}>
+            <Text
+              accessibilityRole="alert"
+              accessibilityLiveRegion="assertive"
+              testID="auth-error-message"
+              style={[styles.authNotice, { color: colors.destructive }]}
+            >
               {authError}
             </Text>
           ) : null}

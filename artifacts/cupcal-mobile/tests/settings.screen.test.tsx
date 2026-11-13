@@ -155,8 +155,28 @@ test('zeigt den Anmeldestatus und Erfolg nach der Anmeldung', async () => {
 
   await fireEvent.press(view.getByTestId('auth-submit-button'));
 
-  expect(await view.findByText('Du bist angemeldet.')).toBeTruthy();
+  const successMessage = await view.findByTestId('auth-success-message');
+  expect(successMessage.props.accessibilityRole).toBe('alert');
+  expect(successMessage.props.accessibilityLiveRegion).toBe('polite');
+  expect(successMessage.props.children).toBe('Du bist angemeldet.');
   expect(view.getByText('Angemeldet')).toBeTruthy();
+});
+
+test('beschriftet E-Mail- und Passwortfelder passend zu Anmeldung und Registrierung', async () => {
+  const view = await openSettings();
+  expect(view.getByTestId('auth-email-input').props.accessibilityLabel).toBe('E-Mail-Adresse');
+  expect(view.getByTestId('auth-email-input').props.accessibilityHint).toBe(
+    'Gib die E-Mail-Adresse für dein CupCal-Konto ein.',
+  );
+  expect(view.getByTestId('auth-password-input').props.accessibilityLabel).toBe('Passwort');
+
+  await fireEvent.press(view.getByTestId('auth-mode-toggle'));
+  expect(view.getByTestId('auth-password-input').props.accessibilityLabel).toBe(
+    'Passwort für das neue Konto',
+  );
+  expect(view.getByTestId('auth-password-input').props.accessibilityHint).toBe(
+    'Wähle das Passwort für dein CupCal-Konto.',
+  );
 });
 
 test('zeigt einen Anmeldefehler sichtbar an', async () => {
@@ -168,9 +188,12 @@ test('zeigt einen Anmeldefehler sichtbar an', async () => {
 
   await fireEvent.press(view.getByTestId('auth-submit-button'));
 
-  expect(await view.findByText(
+  const errorMessage = await view.findByTestId('auth-error-message');
+  expect(errorMessage.props.accessibilityRole).toBe('alert');
+  expect(errorMessage.props.accessibilityLiveRegion).toBe('assertive');
+  expect(errorMessage.props.children).toBe(
     'E-Mail-Adresse oder Passwort stimmen nicht. Prüfe deine Eingaben oder fordere einen neuen Passwort-Link an.',
-  )).toBeTruthy();
+  );
 });
 
 test('zeigt Ladezustand und sperrt die Anmeldeschaltfläche während der Anfrage', async () => {
@@ -185,7 +208,11 @@ test('zeigt Ladezustand und sperrt die Anmeldeschaltfläche während der Anfrage
 
   await waitFor(() => {
     expect(view.getByText('Einen Moment …')).toBeTruthy();
-    expect(view.getByTestId('auth-submit-button').props.accessibilityState.disabled).toBe(true);
+    expect(view.getByTestId('auth-submit-button').props.accessibilityState).toEqual({
+      disabled: true,
+      busy: true,
+    });
+    expect(view.getByTestId('auth-submit-button').props.accessibilityLabel).toBe('Anmeldung läuft');
   });
   await act(async () => finishSignIn({ error: null }));
   expect(await view.findByText('Du bist angemeldet.')).toBeTruthy();
@@ -198,9 +225,12 @@ test('registriert ein Konto und zeigt die Bestätigungsmeldung', async () => {
 
   await fireEvent.press(view.getByTestId('auth-submit-button'));
 
-  expect(await view.findByText(
+  const successMessage = await view.findByTestId('auth-success-message');
+  expect(successMessage.props.accessibilityRole).toBe('alert');
+  expect(successMessage.props.accessibilityLiveRegion).toBe('polite');
+  expect(successMessage.props.children).toBe(
     'Dein Konto ist erstellt. Bitte bestätige deine E-Mail-Adresse über den Link in deinem Postfach.',
-  )).toBeTruthy();
+  );
   expect(view.getByTestId('auth-password-input').props.value).toBe('');
 });
 
@@ -215,9 +245,12 @@ test('zeigt einen Registrierungsfehler sichtbar an', async () => {
 
   await fireEvent.press(view.getByTestId('auth-submit-button'));
 
-  expect(await view.findByText(
+  const errorMessage = await view.findByTestId('auth-error-message');
+  expect(errorMessage.props.accessibilityRole).toBe('alert');
+  expect(errorMessage.props.accessibilityLiveRegion).toBe('assertive');
+  expect(errorMessage.props.children).toBe(
     'Das Passwort ist zu kurz oder zu unsicher. Bitte wähle ein stärkeres Passwort.',
-  )).toBeTruthy();
+  );
 });
 
 test('öffnet den Passwort-zurücksetzen-Modus und fordert den Link mit einer anonymen Erfolgsmeldung an', async () => {
@@ -226,6 +259,9 @@ test('öffnet den Passwort-zurücksetzen-Modus und fordert den Link mit einer an
 
   expect(view.getByText('Passwort zurücksetzen')).toBeTruthy();
   expect(view.queryByTestId('auth-password-input')).toBeNull();
+  expect(view.getByTestId('auth-email-input').props.accessibilityHint).toBe(
+    'Gib die E-Mail-Adresse für den Wiederherstellungslink ein.',
+  );
   await fireEvent.changeText(view.getByTestId('auth-email-input'), ' test@example.invalid ');
   await fireEvent.press(view.getByTestId('auth-submit-button'));
 
@@ -265,14 +301,24 @@ test('zeigt den Ladezustand und sperrt die Schaltflächen während der Linkanfra
 
   await waitFor(() => {
     expect(view.getByText('Einen Moment …')).toBeTruthy();
-    expect(view.getByTestId('auth-submit-button').props.accessibilityState.disabled).toBe(true);
-    expect(view.getByTestId('auth-mode-toggle').props.accessibilityState.disabled).toBe(true);
+    expect(view.getByTestId('auth-submit-button').props.accessibilityState).toEqual({
+      disabled: true,
+      busy: true,
+    });
+    expect(view.getByTestId('auth-submit-button').props.accessibilityLabel).toBe(
+      'Passwortlink wird angefordert',
+    );
+    expect(view.getByTestId('auth-mode-toggle').props.accessibilityState).toEqual({
+      disabled: true,
+    });
   });
   await act(async () => finishReset({ error: null }));
 
-  expect(await view.findByText(
-    'Wenn zu dieser E-Mail ein CupCal-Konto besteht, erhältst du in Kürze einen Wiederherstellungslink.',
-  )).toBeTruthy();
+  expect(await view.findByTestId('auth-success-message')).toBeTruthy();
+  expect(view.getByTestId('auth-submit-button').props.accessibilityState).toEqual({
+    disabled: false,
+    busy: false,
+  });
 });
 
 test('fordert im Kontobereich einen neuen Bestätigungslink an', async () => {
@@ -308,6 +354,37 @@ test('zeigt einen Fehler beim erneuten Anfordern des Bestätigungslinks', async 
   expect(await view.findByText(
     'Zu viele Versuche in kurzer Zeit. Warte bitte einige Minuten und versuche es dann erneut.',
   )).toBeTruthy();
+});
+
+test('kennzeichnet das erneute Senden des Bestätigungslinks als laufende Anfrage', async () => {
+  const mockedSupabase = jest.requireMock('@/services/supabase') as {
+    requestEmailConfirmation: jest.Mock;
+  };
+  let finishConfirmation!: () => void;
+  mockedSupabase.requestEmailConfirmation.mockImplementation(
+    () => new Promise<void>((resolve) => {
+      finishConfirmation = resolve;
+    }),
+  );
+  const view = await openSettings();
+  await fireEvent.changeText(view.getByTestId('auth-email-input'), 'test@example.invalid');
+  await fireEvent.press(view.getByTestId('resend-confirmation-button'));
+
+  await waitFor(() => {
+    expect(view.getByTestId('resend-confirmation-button').props.accessibilityState).toEqual({
+      disabled: true,
+      busy: true,
+    });
+    expect(view.getByTestId('resend-confirmation-button').props.accessibilityLabel).toBe(
+      'Bestätigungslink wird gesendet',
+    );
+  });
+  await act(async () => finishConfirmation());
+  expect(await view.findByTestId('auth-success-message')).toBeTruthy();
+  expect(view.getByTestId('resend-confirmation-button').props.accessibilityState).toEqual({
+    disabled: false,
+    busy: false,
+  });
 });
 
 test('meldet über die Einstellungsseite ab und zeigt den Erfolg', async () => {
