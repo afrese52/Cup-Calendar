@@ -3,8 +3,8 @@ name: Supabase-PKCE auf nativen Geräten
 description: PKCE-Verifier und Flow-Zuordnung in Supabase-Deep-Link-Callbacks.
 ---
 
-Native Deep-Link-Callbacks sollten den `flow_id`-Parameter aus dem Supabase-Redirect an `exchangeCodeForSession(code, { flowId })` weiterreichen. Der SDK-Client kann auf Android und iOS den Callback nicht aus einer Browser-URL auslesen; ohne explizite Flow-ID fällt er auf den Verifier-Speicher für ältere einzelne Flows zurück.
+Bei Supabase Auth JS enthält die PKCE-Flow-ID bei aktivierter Option `appendPkceFlowIdToRedirects` den Query-Parameter `sb_flow_id`; ältere Integrationen können `flow_id` verwenden. Native Deep-Link-Callbacks müssen den tatsächlich empfangenen Wert an `exchangeCodeForSession(code, { flowId })` weiterreichen.
 
-**Why:** Neuere Supabase-Auth-SDKs speichern mehrere parallele PKCE-Verifier in separaten Slots. Ein Codeaustausch ohne die zugehörige Flow-ID kann den falschen Verifier auswählen und einen gültigen Einmalcode verbrauchen.
+**Why:** Neuere Supabase-Auth-SDKs speichern mehrere parallele PKCE-Verifier in separaten Slots. Ohne Flow-ID-Korrelation kann ein Code mit dem falschen Verifier ausgetauscht werden. Die SDK-Option hängt `sb_flow_id` an Redirects an, ist standardmäßig aber deaktiviert und der zusätzliche Query-Parameter muss von der Redirect-Allowlist zugelassen werden.
 
-**How to apply:** Bei E-Mail-Bestätigung, Passwortwiederherstellung oder anderen PKCE-Deep-Links die `flow_id`-Query aus der Callback-URL zusammen mit dem Code an den Auth-SDK-Austausch übergeben. Den gemeinsamen Client auf `flowType: 'pkce'` setzen und die Sitzungen im nativen AsyncStorage halten.
+**How to apply:** Bei E-Mail-Bestätigung, Passwortwiederherstellung oder anderen PKCE-Deep-Links den empfangenen `sb_flow_id`- oder älteren `flow_id`-Wert zusammen mit dem Code an den SDK-Austausch geben. Die Flow-ID-Option nur aktivieren, wenn die Redirect-Allowlist den zusätzlichen Parameter erlaubt. Den gemeinsamen Client auf `flowType: 'pkce'` setzen und Sitzungen auf nativen Geräten in AsyncStorage halten.
