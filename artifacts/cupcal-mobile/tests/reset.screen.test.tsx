@@ -3,13 +3,29 @@ import { beforeEach, expect, jest, test } from '@jest/globals';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 
 const mockSaveNewPassword = jest.fn(async (_password: string) => {});
+let mockPreventRemoveEnabled = false;
+let mockPreventRemoveCallback: ((options: {
+  data: { action: unknown };
+  repeat: () => void;
+}) => void) | undefined;
+const mockUsePreventRemove = jest.fn((
+  preventRemove: boolean,
+  callback?: (options: { data: { action: unknown }; repeat: () => void }) => void,
+) => {
+  mockPreventRemoveEnabled = preventRemove;
+  mockPreventRemoveCallback = callback;
+  return jest.fn();
+});
 
 jest.mock('@expo/vector-icons', () => ({ Feather: () => null }));
 jest.mock('expo-linking', () => ({
   getInitialURL: jest.fn(async () => null),
   addEventListener: () => ({ remove: jest.fn() }),
 }));
-jest.mock('expo-router', () => ({ router: { replace: jest.fn() } }));
+jest.mock('expo-router', () => ({
+  router: { replace: jest.fn() },
+  usePreventRemove: mockUsePreventRemove,
+}));
 jest.mock('react-native-safe-area-context', () => {
   const { View } = require('react-native');
   return { SafeAreaView: View };
@@ -67,6 +83,9 @@ const { default: ResetPasswordScreen } = require('../app/auth/reset') as {
 
 beforeEach(() => {
   mockSaveNewPassword.mockReset().mockRejectedValue(new Error('Network request failed'));
+  mockUsePreventRemove.mockClear();
+  mockPreventRemoveEnabled = false;
+  mockPreventRemoveCallback = undefined;
 });
 
 test('zeigt die geltende Passwortlänge vor dem Speichern', async () => {
@@ -167,4 +186,34 @@ test('sperrt schnelle wiederholte Speicherversuche bis die Passwortänderung abg
 
   await act(async () => finishSave());
   expect(await view.findByText('Passwort geändert')).toBeTruthy();
+});
+
+test('verhindert das Verlassen, solange die Passwortänderung noch gespeichert wird', async () => {
+  let finishSave!: () => void;
+  mockSaveNewPassword.mockImplementation(
+    () => new Promise<void>((resolve) => { finishSave = resolve; }),
+  );
+  const view = await render(<ResetPasswordScreen />);
+
+  await waitFor(() => expect(view.getByTestId('reset-password-submit-button')).toBeTruthy());
+  await fireEvent.changeText(view.getByTestId('reset-password-input'), 'Mein-neues-Passwort-123');
+  await fireEvent.changeText(view.getByTestId('reset-password-confirm-input'), 'Mein-neues-Passwort-123');
+  await fireEvent.press(view.getByTestId('reset-password-submit-button'));
+
+  expect(mockPreventRemoveEnabled).toBe(true);
+  expect(mockPreventRemoveCallback).toBeDefined();
+  const repeatBlockedNavigation = jest.fn();
+  mockPreventRemoveCallback?.({
+    data: { action: { type: 'GO_BACK' } },
+    repeat: repeatBlockedNavigation,
+  });
+
+  expect(repeatBlockedNavigation).not.toHaveBeenCalled();
+  expect(view.getByText('Neues Passwort')).toBeTruthy();
+  expect(view.getByText('Wird gespeichert …')).toBeTruthy();
+
+  await act(async () => finishSave());
+
+  expect(await view.findByText('Passwort geändert')).toBeTruthy();
+  expect(mockPreventRemoveEnabled).toBe(false);
 });

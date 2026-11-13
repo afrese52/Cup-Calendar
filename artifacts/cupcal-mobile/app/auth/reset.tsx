@@ -1,6 +1,6 @@
 import { Feather } from '@expo/vector-icons';
 import * as Linking from 'expo-linking';
-import { router } from 'expo-router';
+import { router, usePreventRemove } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -26,6 +26,8 @@ export default function ResetPasswordScreen() {
   const isSavingRef = useRef(false);
   const [isSaved, setIsSaved] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  usePreventRemove(isSaving, () => {});
 
   useEffect(() => {
     if (!supabase) {
