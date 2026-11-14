@@ -252,6 +252,12 @@ export interface MhtImportHistoryEntry {
   insertedCount: number;
   updatedCount: number;
   skippedCount: number;
+  /** @nullable */
+  skippedWarningCount: number | null;
+  /** @nullable */
+  skippedPastCount: number | null;
+  /** @nullable */
+  skippedInvalidCount: number | null;
 }
 
 export interface MhtImportHistoryResponse {

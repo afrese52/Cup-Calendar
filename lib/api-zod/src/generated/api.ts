@@ -128,7 +128,10 @@ export const GetAdminImportHistoryResponse = zod.object({
   "sourceHint": zod.string().nullable(),
   "insertedCount": zod.number().int(),
   "updatedCount": zod.number().int(),
-  "skippedCount": zod.number().int()
+  "skippedCount": zod.number().int(),
+  "skippedWarningCount": zod.number().int().nullable(),
+  "skippedPastCount": zod.number().int().nullable(),
+  "skippedInvalidCount": zod.number().int().nullable()
 }))
 })
 

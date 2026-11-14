@@ -394,11 +394,29 @@ Content-Type: text/html; charset=utf-8
       }
     }
 
-    if (request.url?.startsWith("/rest/v1/admin_import_history") && request.method === "POST") {
-      historyRow = JSON.parse(body);
-      response.statusCode = 201;
-      response.end("");
-      return;
+    if (request.url?.startsWith("/rest/v1/admin_import_history")) {
+      if (request.method === "POST") {
+        historyRow = JSON.parse(body);
+        response.statusCode = 201;
+        response.end("");
+        return;
+      }
+      if (request.method === "GET") {
+        response.end(JSON.stringify([{
+          id: 1,
+          imported_at: "2026-11-14T12:00:00.000Z",
+          admin_user_id: "admin-import-counts-test-user",
+          admin_email: "admin@cupcal.test",
+          source_hint: "www.fortnite.com",
+          inserted_count: historyRow.inserted_count,
+          updated_count: historyRow.updated_count,
+          skipped_count: historyRow.skipped_count,
+          skipped_warning_count: historyRow.skipped_warning_count,
+          skipped_past_count: historyRow.skipped_past_count,
+          skipped_invalid_count: historyRow.skipped_invalid_count,
+        }]));
+        return;
+      }
     }
 
     response.statusCode = 404;
@@ -449,10 +467,34 @@ Content-Type: text/html; charset=utf-8
     assert.equal(historyRow.inserted_count, 1);
     assert.equal(historyRow.updated_count, 0);
     assert.equal(historyRow.skipped_count, 3);
+    assert.equal(historyRow.skipped_warning_count, 1);
+    assert.equal(historyRow.skipped_past_count, 1);
+    assert.equal(historyRow.skipped_invalid_count, 1);
     assert.equal(
       historyRow.skipped_count,
       result.skippedWarningCount + result.skippedPastCount + result.skippedInvalidCount,
     );
+
+    const historyResponse = await fetch(
+      `http://127.0.0.1:${apiServer.address().port}/api/v1/admin/events/import/history`,
+      { headers: { Authorization: "Bearer valid-import-counts-token" } },
+    );
+    assert.equal(historyResponse.status, 200);
+    assert.deepEqual(await historyResponse.json(), {
+      entries: [{
+        id: 1,
+        importedAt: "2026-11-14T12:00:00.000Z",
+        adminUserId: "admin-import-counts-test-user",
+        adminEmail: "admin@cupcal.test",
+        sourceHint: "www.fortnite.com",
+        insertedCount: 1,
+        updatedCount: 0,
+        skippedCount: 3,
+        skippedWarningCount: 1,
+        skippedPastCount: 1,
+        skippedInvalidCount: 1,
+      }],
+    });
   } finally {
     if (apiServer?.listening) await closeServer(apiServer);
     if (fakeSupabase.listening) await closeServer(fakeSupabase);
@@ -581,6 +623,9 @@ test("records only approved import metadata and never stores uploaded content", 
     insertedCount: 2,
     updatedCount: 1,
     skippedCount: 4,
+    skippedWarningCount: 2,
+    skippedPastCount: 1,
+    skippedInvalidCount: 1,
   }, admin);
 
   assert.deepEqual(inserted, {
@@ -590,6 +635,9 @@ test("records only approved import metadata and never stores uploaded content", 
     inserted_count: 2,
     updated_count: 1,
     skipped_count: 4,
+    skipped_warning_count: 2,
+    skipped_past_count: 1,
+    skipped_invalid_count: 1,
   });
   assert.equal("file_content" in inserted, false);
   assert.equal("service_role_key" in inserted, false);
@@ -614,6 +662,9 @@ test("marks an import-history write failure without exposing database details", 
       insertedCount: 2,
       updatedCount: 1,
       skippedCount: 4,
+      skippedWarningCount: 2,
+      skippedPastCount: 1,
+      skippedInvalidCount: 1,
     }, admin),
     (error) => {
       assert.equal(error.name, "ImportHistoryWriteError");
@@ -634,6 +685,18 @@ test("lists recent imports without returning unselected database fields", async 
     inserted_count: 2,
     updated_count: 1,
     skipped_count: 4,
+    skipped_warning_count: 2,
+    skipped_past_count: 1,
+    skipped_invalid_count: 1,
+  }, {
+    id: 2,
+    imported_at: "2026-11-10T12:00:00.000Z",
+    admin_user_id: "2d81b842-8d9c-4de3-8411-6787a91e68e9",
+    admin_email: "admin@example.org",
+    source_hint: null,
+    inserted_count: 1,
+    updated_count: 0,
+    skipped_count: 3,
   }];
   let selected;
   let ordered;
@@ -662,9 +725,34 @@ test("lists recent imports without returning unselected database fields", async 
 
   const entries = await listRecentMhtImports(20, admin);
 
-  assert.deepEqual(entries, result);
+  assert.deepEqual(entries, [{
+    id: 1,
+    importedAt: "2026-11-11T12:00:00.000Z",
+    adminUserId: "2d81b842-8d9c-4de3-8411-6787a91e68e9",
+    adminEmail: "admin@example.org",
+    sourceHint: "fortnite.com",
+    insertedCount: 2,
+    updatedCount: 1,
+    skippedCount: 4,
+    skippedWarningCount: 2,
+    skippedPastCount: 1,
+    skippedInvalidCount: 1,
+  }, {
+    id: 2,
+    importedAt: "2026-11-10T12:00:00.000Z",
+    adminUserId: "2d81b842-8d9c-4de3-8411-6787a91e68e9",
+    adminEmail: "admin@example.org",
+    sourceHint: null,
+    insertedCount: 1,
+    updatedCount: 0,
+    skippedCount: 3,
+    skippedWarningCount: null,
+    skippedPastCount: null,
+    skippedInvalidCount: null,
+  }]);
   assert.equal(selected.includes("file_content"), false);
   assert.equal(selected.includes("service_role_key"), false);
+  assert.ok(selected.includes("skipped_warning_count"));
   assert.deepEqual(ordered, { column: "imported_at", options: { ascending: false } });
   assert.equal(limited, 20);
 });

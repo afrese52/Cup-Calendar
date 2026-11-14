@@ -403,7 +403,10 @@ components:
         insertedCount: { type: integer }
         updatedCount: { type: integer }
         skippedCount: { type: integer }
-      required: [id, importedAt, adminUserId, adminEmail, sourceHint, insertedCount, updatedCount, skippedCount]
+        skippedWarningCount: { type: ["integer", "null"] }
+        skippedPastCount: { type: ["integer", "null"] }
+        skippedInvalidCount: { type: ["integer", "null"] }
+      required: [id, importedAt, adminUserId, adminEmail, sourceHint, insertedCount, updatedCount, skippedCount, skippedWarningCount, skippedPastCount, skippedInvalidCount]
     MhtImportHistoryResponse:
       type: object
       properties:

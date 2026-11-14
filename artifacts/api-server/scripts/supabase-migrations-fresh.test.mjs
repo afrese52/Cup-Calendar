@@ -178,6 +178,22 @@ test("alle Supabase-Migrationen laufen auf einer frischen Datenbank durch", asyn
 
   assert.equal(
     psql(`
+      SELECT string_agg(column_name, ',' ORDER BY column_name)
+      FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name = 'admin_import_history'
+        AND column_name = ANY (ARRAY[
+          'skipped_invalid_count',
+          'skipped_past_count',
+          'skipped_warning_count'
+        ]);
+    `),
+    "skipped_invalid_count,skipped_past_count,skipped_warning_count",
+    "Die Importhistorie muss die drei Ausschlusskategorien speichern.",
+  );
+
+  assert.equal(
+    psql(`
       SELECT string_agg(c.relname || ':' || c.relrowsecurity::text, ',' ORDER BY c.relname)
       FROM pg_class AS c
       JOIN pg_namespace AS n ON n.oid = c.relnamespace

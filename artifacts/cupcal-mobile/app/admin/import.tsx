@@ -665,6 +665,17 @@ export default function AdminImportScreen() {
                     <Text style={[styles.historyCounts, { color: colors.foreground }]}>
                       {entry.insertedCount} neu · {entry.updatedCount} aktualisiert · {entry.skippedCount} übersprungen
                     </Text>
+                    {entry.skippedWarningCount == null
+                      || entry.skippedPastCount == null
+                      || entry.skippedInvalidCount == null ? (
+                      <Text style={[styles.detailCopy, { color: colors.mutedForeground }]}>
+                        Für diesen älteren Eintrag ist keine Aufschlüsselung gespeichert.
+                      </Text>
+                    ) : (
+                      <Text style={[styles.detailCopy, { color: colors.mutedForeground }]}>
+                        Davon {entry.skippedWarningCount} mit unklarer Zuordnung, {entry.skippedPastCount} vergangene Termine und {entry.skippedInvalidCount} fehlerhafte Karten.
+                      </Text>
+                    )}
                   </View>
                 ))
               ) : (

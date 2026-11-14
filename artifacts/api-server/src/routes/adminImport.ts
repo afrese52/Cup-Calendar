@@ -299,6 +299,9 @@ router.post(
         insertedCount,
         updatedCount,
         skippedCount: skippedCounts.skippedCount,
+        skippedWarningCount: skippedCounts.skippedWarningCount,
+        skippedPastCount: skippedCounts.skippedPastCount,
+        skippedInvalidCount: skippedCounts.skippedInvalidCount,
       });
 
       res.json({

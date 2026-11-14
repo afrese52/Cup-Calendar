@@ -507,6 +507,9 @@ test('zeigt Admins die gespeicherte Importhistorie mit Konto, Quelle und Zähler
         insertedCount: 2,
         updatedCount: 1,
         skippedCount: 4,
+        skippedWarningCount: 2,
+        skippedPastCount: 1,
+        skippedInvalidCount: 1,
       }],
     },
     isLoading: false,
@@ -518,6 +521,37 @@ test('zeigt Admins die gespeicherte Importhistorie mit Konto, Quelle und Zähler
   expect(screen.getByText('Admin: admin@example.org')).toBeTruthy();
   expect(screen.getByText('fortnite.com')).toBeTruthy();
   expect(screen.getByText('2 neu · 1 aktualisiert · 4 übersprungen')).toBeTruthy();
+  expect(screen.getByText(
+    'Davon 2 mit unklarer Zuordnung, 1 vergangene Termine und 1 fehlerhafte Karten.',
+  )).toBeTruthy();
+});
+
+test('zeigt bei älteren Historieneinträgen weiterhin die Gesamtzahl ohne erfundene Aufschlüsselung', async () => {
+  mockImportHistory.mockReturnValue({
+    data: {
+      entries: [{
+        id: 20,
+        importedAt: '2026-11-10T12:00:00.000Z',
+        adminUserId: '2d81b842-8d9c-4de3-8411-6787a91e68e9',
+        adminEmail: 'admin@example.org',
+        sourceHint: null,
+        insertedCount: 1,
+        updatedCount: 0,
+        skippedCount: 3,
+        skippedWarningCount: null,
+        skippedPastCount: null,
+        skippedInvalidCount: null,
+      }],
+    },
+    isLoading: false,
+    isError: false,
+  });
+  const screen = await openImportScreen();
+
+  expect(screen.getByText('1 neu · 0 aktualisiert · 3 übersprungen')).toBeTruthy();
+  expect(screen.getByText(
+    'Für diesen älteren Eintrag ist keine Aufschlüsselung gespeichert.',
+  )).toBeTruthy();
 });
 
 test('zeigt fehlerhafte Karten getrennt im Importergebnis an', async () => {

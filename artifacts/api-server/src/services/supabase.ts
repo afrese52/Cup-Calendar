@@ -74,13 +74,16 @@ export function getMhtEventChanges(
 
 export interface MhtImportHistoryEntry {
   id: number;
-  imported_at: string;
-  admin_user_id: string;
-  admin_email: string;
-  source_hint: string | null;
-  inserted_count: number;
-  updated_count: number;
-  skipped_count: number;
+  importedAt: string;
+  adminUserId: string;
+  adminEmail: string;
+  sourceHint: string | null;
+  insertedCount: number;
+  updatedCount: number;
+  skippedCount: number;
+  skippedWarningCount: number | null;
+  skippedPastCount: number | null;
+  skippedInvalidCount: number | null;
 }
 
 export interface MhtImportHistoryInput {
@@ -90,6 +93,9 @@ export interface MhtImportHistoryInput {
   insertedCount: number;
   updatedCount: number;
   skippedCount: number;
+  skippedWarningCount: number;
+  skippedPastCount: number;
+  skippedInvalidCount: number;
 }
 
 export class ImportHistoryWriteError extends Error {
@@ -168,6 +174,9 @@ export async function recordMhtImportHistory(
       inserted_count: input.insertedCount,
       updated_count: input.updatedCount,
       skipped_count: input.skippedCount,
+      skipped_warning_count: input.skippedWarningCount,
+      skipped_past_count: input.skippedPastCount,
+      skipped_invalid_count: input.skippedInvalidCount,
     });
   if (error) {
     throw new ImportHistoryWriteError();
@@ -180,11 +189,24 @@ export async function listRecentMhtImports(
 ): Promise<MhtImportHistoryEntry[]> {
   const { data, error } = await admin
     .from("admin_import_history")
-    .select("id, imported_at, admin_user_id, admin_email, source_hint, inserted_count, updated_count, skipped_count")
+    .select("id, imported_at, admin_user_id, admin_email, source_hint, inserted_count, updated_count, skipped_count, skipped_warning_count, skipped_past_count, skipped_invalid_count")
     .order("imported_at", { ascending: false })
     .limit(limit);
   if (error) {
     throw new Error("Die Importhistorie konnte nicht geladen werden.");
   }
-  return (data ?? []) as MhtImportHistoryEntry[];
+  return (data ?? []).map((row) => ({
+    id: row.id,
+    importedAt: row.imported_at,
+    adminUserId: row.admin_user_id,
+    adminEmail: row.admin_email,
+    sourceHint: row.source_hint,
+    insertedCount: row.inserted_count,
+    updatedCount: row.updated_count,
+    skippedCount: row.skipped_count,
+    // Older rows predate the breakdown and keep NULL for these columns.
+    skippedWarningCount: row.skipped_warning_count ?? null,
+    skippedPastCount: row.skipped_past_count ?? null,
+    skippedInvalidCount: row.skipped_invalid_count ?? null,
+  }));
 }
