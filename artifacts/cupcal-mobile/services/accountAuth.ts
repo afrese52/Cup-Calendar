@@ -1,7 +1,12 @@
 import type { Session, SupabaseClient } from '@supabase/supabase-js';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { passwordLengthRequirementError } from './passwordRecovery.ts';
 
 type AuthApi = SupabaseClient['auth'];
+const storage = (AsyncStorage as typeof AsyncStorage & { default?: typeof AsyncStorage }).default
+  ?? AsyncStorage;
+export const ACCOUNT_CONFIRMATION_RESEND_AVAILABLE_AT_KEY =
+  'cupcal.account-confirmation-resend-available-at.v1';
 
 export type AccountAuthMode = 'sign-in' | 'sign-up' | 'forgot-password';
 
@@ -157,6 +162,29 @@ export type ResendAccountConfirmationResult =
   | { ok: false; error: string };
 
 export const ACCOUNT_CONFIRMATION_RESEND_COOLDOWN_SECONDS = 30;
+
+export async function loadAccountConfirmationResendAvailableAt(
+  now = Date.now(),
+): Promise<number | null> {
+  const stored = await storage.getItem(ACCOUNT_CONFIRMATION_RESEND_AVAILABLE_AT_KEY);
+  if (stored === null) return null;
+
+  const availableAt = Number(stored);
+  if (!Number.isSafeInteger(availableAt) || availableAt <= now) {
+    await storage.removeItem(ACCOUNT_CONFIRMATION_RESEND_AVAILABLE_AT_KEY);
+    return null;
+  }
+  return availableAt;
+}
+
+export async function saveAccountConfirmationResendAvailableAt(
+  availableAt: number,
+): Promise<void> {
+  if (!Number.isSafeInteger(availableAt)) {
+    throw new Error('Die Ablaufzeit der Bestätigungswartezeit ist ungültig.');
+  }
+  await storage.setItem(ACCOUNT_CONFIRMATION_RESEND_AVAILABLE_AT_KEY, String(availableAt));
+}
 
 export function watchAuthSession(
   auth: AuthApi,

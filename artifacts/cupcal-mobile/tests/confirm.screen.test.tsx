@@ -12,6 +12,13 @@ const mockDeletionConfirm = jest.fn(async (_input: {
 }) => undefined);
 
 jest.mock('@expo/vector-icons', () => ({ Feather: () => null }));
+jest.mock('@react-native-async-storage/async-storage', () => ({
+  default: {
+    getItem: jest.fn(async () => null),
+    setItem: jest.fn(async () => {}),
+    removeItem: jest.fn(async () => {}),
+  },
+}));
 jest.mock('@workspace/api-client-react', () => ({
   useConfirmAccountDeletion: () => ({ mutateAsync: mockDeletionConfirm }),
 }));

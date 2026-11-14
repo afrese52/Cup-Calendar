@@ -19,8 +19,10 @@ import { useRouter } from 'expo-router';
 import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
 import { useColors } from '@/hooks/useColors';
 import {
+  loadAccountConfirmationResendAvailableAt,
   friendlyAuthError,
   resendAccountConfirmation,
+  saveAccountConfirmationResendAvailableAt,
   signOutAccount,
   submitAccountAuth,
   watchAuthSession,
@@ -101,15 +103,37 @@ export default function SettingsScreen() {
   const [authMessage, setAuthMessage] = useState<string | null>(null);
   const [confirmationResendAvailableAt, setConfirmationResendAvailableAt] = useState<number | null>(null);
   const [confirmationResendClock, setConfirmationResendClock] = useState(() => Date.now());
+  const [confirmationResendCooldownLoaded, setConfirmationResendCooldownLoaded] = useState(false);
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
   const accountDeletionRequest = useRequestAccountDeletion();
   const confirmationResendSecondsLeft = confirmationResendAvailableAt === null
     ? 0
     : Math.max(0, Math.ceil((confirmationResendAvailableAt - confirmationResendClock) / 1000));
-  const confirmationResendDisabled = isSubmittingAuth || confirmationResendSecondsLeft > 0;
+  const confirmationResendDisabled =
+    isSubmittingAuth || !confirmationResendCooldownLoaded || confirmationResendSecondsLeft > 0;
   const confirmationResendCountdownLabel = confirmationResendSecondsLeft === 1
     ? 'Erneut senden in 1 Sekunde'
     : `Erneut senden in ${confirmationResendSecondsLeft} Sekunden`;
+
+  useEffect(() => {
+    let active = true;
+    void loadAccountConfirmationResendAvailableAt().then((availableAt) => {
+      if (!active) return;
+      setConfirmationResendAvailableAt(availableAt);
+      setConfirmationResendClock(Date.now());
+      setConfirmationResendCooldownLoaded(true);
+    }).catch(() => {
+      if (!active) return;
+      setConfirmationResendAvailableAt(null);
+      setConfirmationResendCooldownLoaded(true);
+      setAuthError(
+        'Die lokale Wartezeit konnte nicht geladen werden. Serverseitige Versandlimits gelten weiterhin.',
+      );
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (confirmationResendAvailableAt === null) return;
@@ -210,7 +234,7 @@ export default function SettingsScreen() {
   };
 
   const resendConfirmation = async () => {
-    if (!supabase) return;
+    if (!supabase || !confirmationResendCooldownLoaded || confirmationResendSecondsLeft > 0) return;
 
     setSubmittingAction('resend-confirmation');
     setAuthError(null);
@@ -223,9 +247,16 @@ export default function SettingsScreen() {
       });
       if (result.ok) {
         setAuthMessage(result.message);
-        setConfirmationResendAvailableAt(
-          Date.now() + result.resendCooldownSeconds * 1000,
-        );
+        const availableAt = Date.now() + result.resendCooldownSeconds * 1000;
+        setConfirmationResendAvailableAt(availableAt);
+        setConfirmationResendClock(Date.now());
+        try {
+          await saveAccountConfirmationResendAvailableAt(availableAt);
+        } catch {
+          setAuthError(
+            'Die Anfrage wurde gesendet, aber die Wartezeit konnte auf diesem Gerät nicht gespeichert werden. Serverseitige Versandlimits gelten weiterhin.',
+          );
+        }
       } else {
         setAuthError(result.error);
       }
@@ -599,7 +630,9 @@ export default function SettingsScreen() {
                   accessibilityLabel={
                     isSubmittingAuth
                       ? 'Bestätigungslink wird gesendet'
-                      : confirmationResendSecondsLeft > 0
+                      : !confirmationResendCooldownLoaded
+                        ? 'Bestätigungswartezeit wird geladen'
+                        : confirmationResendSecondsLeft > 0
                         ? `Bestätigungslink erneut senden in ${confirmationResendSecondsLeft} Sekunden`
                         : 'Bestätigungslink erneut senden'
                   }
@@ -619,7 +652,9 @@ export default function SettingsScreen() {
                   <Text style={[styles.modeToggleText, { color: colors.primary }]}>
                     {isSubmittingAuth
                       ? 'Bestätigungslink wird gesendet'
-                      : confirmationResendSecondsLeft > 0
+                      : !confirmationResendCooldownLoaded
+                        ? 'Bestätigungswartezeit wird geladen'
+                        : confirmationResendSecondsLeft > 0
                         ? confirmationResendCountdownLabel
                         : 'Bestätigungslink erneut senden'}
                   </Text>
@@ -664,7 +699,9 @@ export default function SettingsScreen() {
                   accessibilityLabel={
                     isSubmittingAuth
                       ? 'Bestätigungslink wird gesendet'
-                      : confirmationResendSecondsLeft > 0
+                      : !confirmationResendCooldownLoaded
+                        ? 'Bestätigungswartezeit wird geladen'
+                        : confirmationResendSecondsLeft > 0
                         ? `Bestätigungslink erneut senden in ${confirmationResendSecondsLeft} Sekunden`
                         : 'Bestätigungslink erneut senden'
                   }
@@ -684,7 +721,9 @@ export default function SettingsScreen() {
                   <Text style={[styles.modeToggleText, { color: colors.primary }]}>
                     {isSubmittingAuth
                       ? 'Bestätigungslink wird gesendet'
-                      : confirmationResendSecondsLeft > 0
+                      : !confirmationResendCooldownLoaded
+                        ? 'Bestätigungswartezeit wird geladen'
+                        : confirmationResendSecondsLeft > 0
                         ? confirmationResendCountdownLabel
                         : 'Bestätigungslink erneut senden'}
                   </Text>

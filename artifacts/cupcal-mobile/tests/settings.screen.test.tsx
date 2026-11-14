@@ -4,13 +4,31 @@ import { act, fireEvent, render, waitFor, within } from '@testing-library/react-
 import { AccessibilityInfo, Dimensions, Platform, StyleSheet } from 'react-native';
 import SettingsScreen from '../app/(tabs)/settings';
 import { supabase } from '@/services/supabase';
-import { ACCOUNT_CONFIRMATION_RESEND_COOLDOWN_SECONDS } from '../services/accountAuth';
+import {
+  ACCOUNT_CONFIRMATION_RESEND_AVAILABLE_AT_KEY,
+  ACCOUNT_CONFIRMATION_RESEND_COOLDOWN_SECONDS,
+} from '../services/accountAuth';
 
 type AuthListener = (event: string, session: unknown) => void;
 type MockAuth = Record<string, any>;
 type RenderedSettings = Awaited<ReturnType<typeof render>>;
 
 jest.mock('@expo/vector-icons', () => ({ Feather: () => null }));
+jest.mock('@react-native-async-storage/async-storage', () => {
+  const values = new Map<string, string>();
+  return {
+    __values: values,
+    default: {
+      getItem: jest.fn(async (key: string) => values.get(key) ?? null),
+      setItem: jest.fn(async (key: string, value: string) => {
+        values.set(key, value);
+      }),
+      removeItem: jest.fn(async (key: string) => {
+        values.delete(key);
+      }),
+    },
+  };
+});
 jest.mock('@workspace/api-client-react', () => {
   const request = jest.fn(async () => ({
     confirmationToken: 'signed.confirmation.token',
@@ -147,6 +165,10 @@ function restoreAuthMocks() {
 async function openSettings() {
   const view = await render(<SettingsScreen />);
   await waitFor(() => expect(view.getByText('Bei CupCal anmelden')).toBeTruthy());
+  await waitFor(() => {
+    expect(view.getByTestId('resend-confirmation-button').props.accessibilityLabel)
+      .not.toBe('Bestätigungswartezeit wird geladen');
+  });
   return view;
 }
 
@@ -157,6 +179,10 @@ async function enterCredentials(view: RenderedSettings) {
 
 beforeEach(() => {
   restoreAuthMocks();
+  const storageMock = jest.requireMock('@react-native-async-storage/async-storage') as {
+    __values: Map<string, string>;
+  };
+  storageMock.__values.clear();
   sendAccessibilityFocus.mockClear();
   announceForAccessibility.mockClear();
   Dimensions.set({
@@ -340,11 +366,17 @@ test('sendet nach geänderter E-Mail-Adresse weiter an die registrierte Adresse'
   const resendButton = view.getByTestId('registration-resend-confirmation-button');
   expect(resendButton.props.accessibilityState).toMatchObject({ disabled: true, busy: false });
   expect(view.getByText(/Erneut senden in \d+ Sekunden/)).toBeTruthy();
+  await act(async () => {
+    view.unmount();
+  });
 });
 
 test('sperrt erneute Bestätigungsanfragen mit Countdown und gibt sie danach frei', async () => {
   const mockedSupabase = jest.requireMock('@/services/supabase') as {
     requestEmailConfirmation: jest.Mock;
+  };
+  const storageMock = jest.requireMock('@react-native-async-storage/async-storage') as {
+    __values: Map<string, string>;
   };
   const view = await openSettings();
   await fireEvent.changeText(view.getByTestId('auth-email-input'), 'test@example.invalid');
@@ -361,6 +393,8 @@ test('sperrt erneute Bestätigungsanfragen mit Countdown und gibt sie danach fre
     expect(view.getByText(
       `Erneut senden in ${ACCOUNT_CONFIRMATION_RESEND_COOLDOWN_SECONDS} Sekunden`,
     )).toBeTruthy();
+    expect(storageMock.__values.get(ACCOUNT_CONFIRMATION_RESEND_AVAILABLE_AT_KEY))
+      .toBe(String(Date.now() + ACCOUNT_CONFIRMATION_RESEND_COOLDOWN_SECONDS * 1000));
     expect(button.props.accessibilityLabel).toBe(
       `Bestätigungslink erneut senden in ${ACCOUNT_CONFIRMATION_RESEND_COOLDOWN_SECONDS} Sekunden`,
     );
@@ -375,6 +409,9 @@ test('sperrt erneute Bestätigungsanfragen mit Countdown und gibt sie danach fre
     expect(button.props.accessibilityState).toMatchObject({ disabled: false, busy: false });
     expect(view.getByText('Bestätigungslink erneut senden')).toBeTruthy();
   } finally {
+    await act(async () => {
+      view.unmount();
+    });
     jest.useRealTimers();
   }
 });
@@ -685,5 +722,32 @@ test('sendet nach Bestätigung einen zeitlich befristeten Löschlink an das ange
         'cupcal-test://auth/confirm?flow=cupcal-account-deletion&deletion_token=signed.confirmation.token',
       shouldCreateUser: false,
     },
+  });
+});
+
+test('stellt die Bestätigungswartezeit nach einem neuen Einstellungsbildschirm wieder her', async () => {
+  const mockedSupabase = jest.requireMock('@/services/supabase') as {
+    requestEmailConfirmation: jest.Mock;
+  };
+  const storageMock = jest.requireMock('@react-native-async-storage/async-storage') as {
+    __values: Map<string, string>;
+  };
+  const view = await openSettings();
+  await fireEvent.changeText(view.getByTestId('auth-email-input'), 'test@example.invalid');
+  await fireEvent.press(view.getByTestId('resend-confirmation-button'));
+  expect(storageMock.__values.has(ACCOUNT_CONFIRMATION_RESEND_AVAILABLE_AT_KEY)).toBe(true);
+  await act(async () => {
+    view.unmount();
+  });
+
+  const restartedView = await openSettings();
+  const button = restartedView.getByTestId('resend-confirmation-button');
+  expect(button.props.accessibilityState).toMatchObject({ disabled: true, busy: false });
+  expect(restartedView.getByText(/Erneut senden in \d+ Sekunden/)).toBeTruthy();
+
+  await fireEvent.press(button);
+  expect(mockedSupabase.requestEmailConfirmation).toHaveBeenCalledTimes(1);
+  await act(async () => {
+    restartedView.unmount();
   });
 });
