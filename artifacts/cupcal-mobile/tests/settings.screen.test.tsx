@@ -698,6 +698,68 @@ test.each([
   }
 });
 
+test('macht spätere An- und Abmeldungen im zugänglichen Kontostatus sichtbar', async () => {
+  auth.getSession.mockResolvedValue({ data: { session: null }, error: null });
+  const view = await render(<SettingsScreen />);
+  await waitFor(() => {
+    expect(view.getByTestId('account-session-status').props.children).toBe('Bei CupCal anmelden');
+  });
+
+  await act(async () => mockSupabase.__emitAuthStateChange('SIGNED_IN', testSession));
+
+  const signedInStatus = view.getByTestId('account-session-status');
+  expect(signedInStatus.props.children).toBe('Angemeldet');
+  expect(signedInStatus.props.accessible).toBe(true);
+  expect(signedInStatus.props.accessibilityRole).toBe('text');
+  expect(signedInStatus.props.accessibilityLiveRegion).toBe('polite');
+  expect(view.getByText('test@example.invalid')).toBeTruthy();
+
+  await act(async () => mockSupabase.__emitAuthStateChange('SIGNED_OUT', null));
+
+  const signedOutStatus = view.getByTestId('account-session-status');
+  expect(signedOutStatus.props.children).toBe('Bei CupCal anmelden');
+  expect(signedOutStatus.props.accessible).toBe(true);
+  expect(signedOutStatus.props.accessibilityRole).toBe('text');
+  expect(signedOutStatus.props.accessibilityLiveRegion).toBe('polite');
+});
+
+test('kündigt auf iOS echte Sitzungswechsel an, aber keine Token-Erneuerung', async () => {
+  const originalPlatformOS = Platform.OS;
+  Object.defineProperty(Platform, 'OS', { configurable: true, value: 'ios' });
+
+  try {
+    auth.getSession.mockResolvedValue({ data: { session: testSession }, error: null });
+    const view = await render(<SettingsScreen />);
+    await waitFor(() => {
+      expect(view.getByTestId('account-session-status').props.children).toBe('Angemeldet');
+    });
+    announceForAccessibility.mockClear();
+
+    const refreshedSession = {
+      ...testSession,
+      access_token: 'refreshed-fake-token',
+      expires_in: 7200,
+    };
+    await act(async () => mockSupabase.__emitAuthStateChange('TOKEN_REFRESHED', refreshedSession));
+    expect(view.getByTestId('account-session-status').props.children).toBe('Angemeldet');
+    expect(announceForAccessibility).not.toHaveBeenCalled();
+
+    await act(async () => mockSupabase.__emitAuthStateChange('SIGNED_OUT', null));
+    expect(view.getByTestId('account-session-status').props.children).toBe('Bei CupCal anmelden');
+    expect(announceForAccessibility).toHaveBeenCalledTimes(1);
+    expect(announceForAccessibility).toHaveBeenLastCalledWith('Abgemeldet. Bei CupCal anmelden.');
+
+    await act(async () => mockSupabase.__emitAuthStateChange('SIGNED_IN', testSession));
+    expect(view.getByTestId('account-session-status').props.children).toBe('Angemeldet');
+    expect(announceForAccessibility).toHaveBeenCalledTimes(2);
+    expect(announceForAccessibility).toHaveBeenLastCalledWith(
+      'Angemeldet. test@example.invalid',
+    );
+  } finally {
+    Object.defineProperty(Platform, 'OS', { configurable: true, value: originalPlatformOS });
+  }
+});
+
 test('zeigt einen Abmeldefehler sichtbar an', async () => {
   auth.getSession.mockResolvedValue({ data: { session: testSession }, error: null });
   auth.signOut.mockResolvedValue({ error: new Error('Abmeldung fehlgeschlagen') });
