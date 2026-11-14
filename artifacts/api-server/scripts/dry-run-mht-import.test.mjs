@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { createServer } from "node:http";
+import { createRequire } from "node:module";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { pathToFileURL, fileURLToPath } from "node:url";
 import test from "node:test";
+import { build } from "esbuild";
 import {
   extractMhtHtml,
   getSnapshotFreshness,
@@ -15,7 +21,7 @@ function makeMht(html, { region = "EU", date = "Mon, 09 Nov 2026 23:37:49 GMT" }
     [
       "From: <Saved by Blink>",
       `Snapshot-Content-Location: https://www.fortnite.com/competitive/schedule?region=${region}`,
-      `Date: ${date}`,
+      ...(date === null ? [] : [`Date: ${date}`]),
       `Content-Type: multipart/related; boundary="${boundary}"`,
       "",
       `--${boundary}`,
@@ -29,6 +35,167 @@ function makeMht(html, { region = "EU", date = "Mon, 09 Nov 2026 23:37:49 GMT" }
     ].join("\r\n"),
   );
 }
+
+function listen(server) {
+  return new Promise((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", () => {
+      server.off("error", reject);
+      resolve(`http://127.0.0.1:${server.address().port}`);
+    });
+  });
+}
+
+function closeServer(server) {
+  return new Promise((resolve, reject) => {
+    server.close((error) => error ? reject(error) : resolve());
+  });
+}
+
+async function loadApiApp() {
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), "cupcal-api-preview-test-"));
+  const bundlePath = path.join(tempDir, "app.mjs");
+  const previousRequire = globalThis.require;
+  globalThis.require = createRequire(import.meta.url);
+  try {
+    await build({
+      entryPoints: [fileURLToPath(new URL("../src/app.ts", import.meta.url))],
+      bundle: true,
+      format: "esm",
+      platform: "node",
+      outfile: bundlePath,
+      logLevel: "silent",
+      banner: {
+        js: "import { createRequire as createBundleRequire } from 'node:module'; globalThis.require = createBundleRequire(import.meta.url);",
+      },
+    });
+  } finally {
+    if (previousRequire === undefined) delete globalThis.require;
+    else globalThis.require = previousRequire;
+  }
+
+  try {
+    const { default: app } = await import(pathToFileURL(bundlePath).href);
+    return { app, tempDir };
+  } catch (error) {
+    await rm(tempDir, { recursive: true, force: true });
+    throw error;
+  }
+}
+
+test("liefert Snapshot-Alter und Warnstatus über den authentifizierten Admin-Vorschau-Endpunkt", async () => {
+  const originalEnv = new Map(
+    ["NODE_ENV", "SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "CUPCAL_IMPORT_ADMIN_EMAILS"]
+      .map((key) => [key, process.env[key]]),
+  );
+  const previousRequire = globalThis.require;
+  const fakeSupabase = createServer((request, response) => {
+    response.setHeader("Content-Type", "application/json");
+    if (request.url === "/auth/v1/user") {
+      if (request.headers.authorization !== "Bearer valid-admin-preview-token") {
+        response.statusCode = 401;
+        response.end(JSON.stringify({ message: "Invalid test session" }));
+        return;
+      }
+      response.end(JSON.stringify({
+        id: "admin-preview-test-user",
+        email: "admin@cupcal.test",
+      }));
+      return;
+    }
+    if (request.url?.startsWith("/rest/v1/fortnite_events")) {
+      response.end("[]");
+      return;
+    }
+    response.statusCode = 404;
+    response.end(JSON.stringify({ message: "Unexpected test request" }));
+  });
+  let fakeSupabaseUrl;
+  let apiServer;
+  let tempDir;
+
+  try {
+    fakeSupabaseUrl = await listen(fakeSupabase);
+    process.env["NODE_ENV"] = "production";
+    process.env["SUPABASE_URL"] = fakeSupabaseUrl;
+    process.env["SUPABASE_SERVICE_ROLE_KEY"] = "test-service-role-key";
+    process.env["CUPCAL_IMPORT_ADMIN_EMAILS"] = "admin@cupcal.test";
+
+    const loaded = await loadApiApp();
+    tempDir = loaded.tempDir;
+    apiServer = loaded.app.listen(0, "127.0.0.1");
+    await new Promise((resolve, reject) => {
+      apiServer.once("error", reject);
+      apiServer.once("listening", resolve);
+    });
+    const apiUrl = `http://127.0.0.1:${apiServer.address().port}`;
+    const eventDate = new Intl.DateTimeFormat("en-GB", {
+      timeZone: "UTC",
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    }).format(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000));
+    const html = `
+      <html><body><h2>${eventDate}</h2>
+        <a id="schedule-event-link-preview-age"
+          href="/competitive/events/PreviewAgeCup?round=PreviewAgeRound"
+          aria-label="19:00–20:00 Uhr - Battle Royale Solo Cash Cup">
+          <span>Battle Royale Solo Cash Cup</span>
+        </a>
+      </body></html>`;
+
+    async function preview(date) {
+      const startedAt = Date.now();
+      const response = await fetch(`${apiUrl}/api/v1/admin/events/import/preview`, {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer valid-admin-preview-token",
+          "Content-Type": "text/plain; charset=utf-8",
+        },
+        body: makeMht(html, { date }),
+      });
+      const completedAt = Date.now();
+      const result = await response.json();
+      assert.equal(response.status, 200, JSON.stringify(result));
+      return {
+        result,
+        startedAt,
+        completedAt,
+      };
+    }
+
+    const freshDate = new Date().toUTCString();
+    const fresh = await preview(freshDate);
+    const freshSnapshot = Date.parse(fresh.result.snapshotAt);
+    assert.equal(fresh.result.isSnapshotStale, false);
+    assert.ok(fresh.result.snapshotAgeMs >= fresh.startedAt - freshSnapshot);
+    assert.ok(fresh.result.snapshotAgeMs <= fresh.completedAt - freshSnapshot);
+    assert.ok(fresh.result.snapshotAgeMs <= MAX_SNAPSHOT_AGE_MS);
+
+    const staleDate = new Date(Date.now() - MAX_SNAPSHOT_AGE_MS - 5_000).toUTCString();
+    const stale = await preview(staleDate);
+    const staleSnapshot = Date.parse(stale.result.snapshotAt);
+    assert.equal(stale.result.isSnapshotStale, true);
+    assert.ok(stale.result.snapshotAgeMs > MAX_SNAPSHOT_AGE_MS);
+    assert.ok(stale.result.snapshotAgeMs >= stale.startedAt - staleSnapshot);
+    assert.ok(stale.result.snapshotAgeMs <= stale.completedAt - staleSnapshot);
+
+    const timeless = await preview(null);
+    assert.equal(timeless.result.snapshotAt, null);
+    assert.equal(timeless.result.snapshotAgeMs, null);
+    assert.equal(timeless.result.isSnapshotStale, false);
+  } finally {
+    if (apiServer?.listening) await closeServer(apiServer);
+    if (fakeSupabase.listening) await closeServer(fakeSupabase);
+    if (tempDir) await rm(tempDir, { recursive: true, force: true });
+    if (previousRequire === undefined) delete globalThis.require;
+    else globalThis.require = previousRequire;
+    for (const [key, value] of originalEnv) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+});
 
 test("liest Eventkarten und wandelt die Berliner Ortszeit nach UTC um", () => {
   const html = `
