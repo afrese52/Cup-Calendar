@@ -181,6 +181,41 @@ test('behält Formular und Eingaben nach einer Passwort-Ablehnung für eine Korr
   expect(mockSaveNewPassword).toHaveBeenCalledTimes(1);
 });
 
+test('speichert nach einer Passwort-Ablehnung beide korrigierten Eingaben erfolgreich', async () => {
+  mockSaveNewPassword
+    .mockReset()
+    .mockRejectedValueOnce(
+      Object.assign(new Error('Password is too weak'), { code: 'weak_password' }),
+    )
+    .mockResolvedValueOnce(undefined);
+  const view = await render(<ResetPasswordScreen />);
+
+  await waitFor(() => expect(view.getByTestId('reset-password-submit-button')).toBeTruthy());
+  await fireEvent.changeText(view.getByTestId('reset-password-input'), 'kurz');
+  await fireEvent.changeText(view.getByTestId('reset-password-confirm-input'), 'kurz');
+  await fireEvent.press(view.getByTestId('reset-password-submit-button'));
+
+  const errorMessage = await view.findByText(
+    'Das Passwort ist zu kurz oder zu unsicher. Bitte wähle ein stärkeres Passwort.',
+  );
+  expect(errorMessage.props.accessibilityRole).toBe('alert');
+
+  await fireEvent.changeText(view.getByTestId('reset-password-input'), 'Mein-neues-Passwort-123');
+  await fireEvent.changeText(view.getByTestId('reset-password-confirm-input'), 'Mein-neues-Passwort-123');
+  expect(view.getByTestId('reset-password-input').props.value).toBe('Mein-neues-Passwort-123');
+  expect(view.getByTestId('reset-password-confirm-input').props.value).toBe('Mein-neues-Passwort-123');
+
+  await fireEvent.press(view.getByTestId('reset-password-submit-button'));
+
+  expect(await view.findByText('Passwort geändert')).toBeTruthy();
+  expect(view.getByText(
+    'Dein neues Passwort ist gespeichert. Du kannst dich jetzt mit diesem Passwort anmelden.',
+  )).toBeTruthy();
+  expect(mockSaveNewPassword).toHaveBeenCalledTimes(2);
+  expect(mockSaveNewPassword).toHaveBeenNthCalledWith(1, 'kurz');
+  expect(mockSaveNewPassword).toHaveBeenNthCalledWith(2, 'Mein-neues-Passwort-123');
+});
+
 test('sperrt schnelle wiederholte Speicherversuche bis die Passwortänderung abgeschlossen ist', async () => {
   let finishSave!: () => void;
   mockSaveNewPassword.mockImplementation(
