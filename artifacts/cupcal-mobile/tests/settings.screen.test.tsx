@@ -275,6 +275,31 @@ test('registriert ein Konto und zeigt die Bestätigungsmeldung', async () => {
   expect(view.getByTestId('auth-password-input').props.value).toBe('');
 });
 
+test('blendet den erneuten Versand nach bestätigter Sitzung aus und zeigt das Konto', async () => {
+  const view = await openSettings();
+  await fireEvent.press(view.getByTestId('auth-mode-toggle'));
+  await enterCredentials(view);
+
+  await fireEvent.press(view.getByTestId('auth-submit-button'));
+  expect(await view.findByTestId('registration-resend-confirmation-button')).toBeTruthy();
+
+  const confirmedSession = {
+    ...testSession,
+    user: {
+      ...testSession.user,
+      email_confirmed_at: '2026-11-14T12:00:00.000Z',
+    },
+  };
+  await act(async () => {
+    mockSupabase.__emitAuthStateChange('SIGNED_IN', confirmedSession);
+  });
+
+  expect(view.queryByTestId('registration-resend-confirmation-button')).toBeNull();
+  expect(view.getByTestId('account-session-status').props.children).toBe('Angemeldet');
+  expect(view.getByText('test@example.invalid')).toBeTruthy();
+  expect(view.getByTestId('sign-out-button')).toBeTruthy();
+});
+
 test('zeigt nach einer Registrierung ohne Bestätigungsbedarf keine erneute Versandaktion', async () => {
   auth.signUp.mockResolvedValue({
     data: { session: testSession },
