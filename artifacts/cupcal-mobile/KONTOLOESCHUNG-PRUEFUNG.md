@@ -89,6 +89,33 @@ den Transport, nicht automatisch den in einer Vorlage festgelegten Link.
 Auch ein Send Email Hook ist keine App-seitig aktivierbare Umgehung einer
 fehlenden Supabase-Berechtigung.
 
+## Implementierter IONOS-Hook-Endpunkt
+
+Nach ausdrücklicher Freigabe und Auswahl von IONOS Maildiensten wurde im
+API-Server ein Supabase Send Email Hook-Endpunkt ergänzt. Er prüft die
+Standard-Webhooks-Signatur über den unveränderten Request-Body und sendet
+E-Mails über `smtp.ionos.de` mit SSL/TLS auf Port 465. Der vollständige Wert
+aus `email_data.redirect_to` wird als einzelner URL-Parameter an den
+Supabase-HTTPS-Verifizierungslink übergeben; Browser- und
+`cupcal-android://`-Rücksprünge bleiben dabei erhalten. Tokens und
+SMTP-Fehlerdetails werden nicht protokolliert.
+
+Der Hook verarbeitet die dokumentierten Verifizierungsarten, Einladungen,
+Passwort-Wiederherstellungen, E-Mailänderungen (einschließlich beider
+Bestätigungen bei sicherem E-Mailwechsel) sowie die dokumentierten
+Sicherheitsbenachrichtigungen ohne Verifizierungstoken.
+
+**Noch nicht aktiviert:** Die Supabase-Auth-Einstellung wurde nicht geändert.
+Im Workspace ist keine Supabase-Verwaltungsintegration verfügbar; die
+vorhandenen App-Zugangsdaten bieten keinen bestätigten Zugriff auf die
+Dashboard-Hook-Konfiguration. Für diesen Workspace liegt außerdem keine
+veröffentlichte HTTPS-URL vor, die Supabase als externen Hook erreichen
+könnte. Vor echtem Versand müssen IONOS-Mailboxdaten und das von Supabase
+erzeugte Hook-Geheimnis sicher in den Replit-Secrets hinterlegt sowie die
+öffentliche HTTPS-URL des bereitgestellten API-Servers im Supabase-Dashboard
+eingetragen werden. Eine App-Veröffentlichung oder
+Auth-Konfigurationsänderung wurde nicht vorgenommen.
+
 ## Sicherheitsprüfungen ohne echte Kontolöschung
 
 Die lokalen Tests prüfen:

@@ -2,6 +2,7 @@ import express, { type Express } from "express";
 import cors from "cors";
 import pinoHttp from "pino-http";
 import router from "./routes";
+import authEmailHookRouter from "./routes/authEmailHook";
 import { logger } from "./lib/logger";
 import { MAX_MHT_UPLOAD_BYTES } from "./lib/uploadLimits";
 
@@ -27,6 +28,8 @@ app.use(
   }),
 );
 app.use(cors());
+// Supabase signs the exact raw JSON body, so this endpoint must run before express.json().
+app.use("/api", authEmailHookRouter);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
