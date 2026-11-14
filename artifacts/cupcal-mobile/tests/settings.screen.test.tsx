@@ -290,7 +290,7 @@ test('zeigt nach einer Registrierung ohne Bestätigungsbedarf keine erneute Vers
   expect(view.queryByTestId('registration-resend-confirmation-button')).toBeNull();
 });
 
-test('sendet nach der Registrierung den Bestätigungslink erneut und zeigt den Erfolg', async () => {
+test('sendet nach geänderter E-Mail-Adresse weiter an die registrierte Adresse', async () => {
   const mockedSupabase = jest.requireMock('@/services/supabase') as {
     requestEmailConfirmation: jest.Mock;
   };
@@ -299,6 +299,9 @@ test('sendet nach der Registrierung den Bestätigungslink erneut und zeigt den E
   await enterCredentials(view);
   await fireEvent.press(view.getByTestId('auth-submit-button'));
   await view.findByTestId('registration-resend-confirmation-button');
+
+  await fireEvent.changeText(view.getByTestId('auth-email-input'), 'changed@example.invalid');
+  expect(view.getByTestId('auth-email-input').props.value).toBe('changed@example.invalid');
 
   await fireEvent.press(view.getByTestId('registration-resend-confirmation-button'));
 
