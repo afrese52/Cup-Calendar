@@ -38,6 +38,21 @@ async function waitForSignal(signal, message) {
   }
 }
 
+async function assertNoSignal(signal, message, duration = 2_000) {
+  let timeout;
+  try {
+    const received = await Promise.race([
+      signal,
+      new Promise((resolve) => {
+        timeout = setTimeout(() => resolve(null), duration);
+      }),
+    ]);
+    assert.equal(received, null, message);
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 async function createTestAccount(admin, label, accounts) {
   const email = `cupcal-isolation-${randomUUID()}@example.com`;
   const password = `${randomUUID()}Aa1!`;
@@ -293,6 +308,9 @@ test("RPC schützt Konten und synchronisiert eine zweite Gerätesitzung", async 
     assert.ifError(secondDeviceSignIn.error);
     assert.equal(secondDeviceSignIn.data.user?.id, accountA.id);
 
+    const anonymousClient = createClient(supabaseUrl, anonKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
     let resolveSubscribed;
     let rejectSubscription;
     const subscribed = new Promise((resolve, reject) => {
@@ -302,6 +320,16 @@ test("RPC schützt Konten und synchronisiert eine zweite Gerätesitzung", async 
     let resolveRealtimeChange;
     const realtimeChange = new Promise((resolve) => {
       resolveRealtimeChange = resolve;
+    });
+    let resolveAnonymousSubscribed;
+    let rejectAnonymousSubscription;
+    const anonymousSubscribed = new Promise((resolve, reject) => {
+      resolveAnonymousSubscribed = resolve;
+      rejectAnonymousSubscription = reject;
+    });
+    let resolveAnonymousChange;
+    const anonymousRealtimeChange = new Promise((resolve) => {
+      resolveAnonymousChange = resolve;
     });
     const realtimeEventId = `same-account-device-${randomUUID()}`;
     const realtimeChannel = secondDevice
@@ -326,12 +354,42 @@ test("RPC schützt Konten und synchronisiert eine zweite Gerätesitzung", async 
           rejectSubscription(error ?? new Error(`Realtime-Status: ${status}`));
         }
       });
+    const anonymousRealtimeChannel = anonymousClient
+      .channel(`anonymous-bookmark-test-${randomUUID()}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "user_event_bookmarks",
+          filter: `user_id=eq.${accountA.id}`,
+        },
+        (payload) => {
+          if (payload.new?.event_id === realtimeEventId) {
+            resolveAnonymousChange(payload);
+          }
+        },
+      )
+      .subscribe((status, error) => {
+        if (status === "SUBSCRIBED") resolveAnonymousSubscribed();
+        if (["CHANNEL_ERROR", "TIMED_OUT"].includes(status)) {
+          rejectAnonymousSubscription(
+            error ?? new Error(`Anonymer Realtime-Status: ${status}`),
+          );
+        }
+      });
 
     try {
-      await waitForSignal(
-        subscribed,
-        "Zweites Gerät konnte Realtime nicht abonnieren. Prüfe Migration 0004.",
-      );
+      await Promise.all([
+        waitForSignal(
+          subscribed,
+          "Zweites Gerät konnte Realtime nicht abonnieren. Prüfe Migration 0004.",
+        ),
+        waitForSignal(
+          anonymousSubscribed,
+          "Anonymer Client konnte Realtime nicht abonnieren.",
+        ),
+      ]);
       const realtimeSync = await sync(accountA.client, realtimeEventId, true);
       assert.ifError(realtimeSync.error);
       const received = await waitForSignal(
@@ -340,6 +398,10 @@ test("RPC schützt Konten und synchronisiert eine zweite Gerätesitzung", async 
       );
       assert.equal(received.new.user_id, accountA.id);
       assert.equal(received.new.is_favorite, true);
+      await assertNoSignal(
+        anonymousRealtimeChange,
+        "Anonymer Client erhielt eine Favoritenänderung.",
+      );
 
       const fromSecondDevice = await secondDevice
         .from("user_event_bookmarks")
@@ -350,7 +412,10 @@ test("RPC schützt Konten und synchronisiert eine zweite Gerätesitzung", async 
       assert.ifError(fromSecondDevice.error);
       assert.equal(fromSecondDevice.data?.is_favorite, true);
     } finally {
-      await secondDevice.removeChannel(realtimeChannel);
+      await Promise.all([
+        secondDevice.removeChannel(realtimeChannel),
+        anonymousClient.removeChannel(anonymousRealtimeChannel),
+      ]);
     }
 
     const firstSyncA = await sync(accountA.client, eventA, true);
