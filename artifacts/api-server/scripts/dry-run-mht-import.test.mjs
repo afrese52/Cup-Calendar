@@ -489,6 +489,8 @@ test("prüft Spielformate an echten, anonymisierten MHT-Turnierkarten", async ()
     ["schedule-event-link-team-official-squads", "Squads"],
     ["schedule-event-link-team-unconfirmed", null],
     ["schedule-event-link-format-unknown", null],
+    ["schedule-event-link-fncs", "Solo"],
+    ["schedule-event-link-community", "Duos"],
   ]);
 
   assert.equal(result.cardCount, expectedFormats.size);
@@ -496,8 +498,11 @@ test("prüft Spielformate an echten, anonymisierten MHT-Turnierkarten", async ()
     const expected = expectedFormats.get(card.id);
     assert.equal(expectedFormats.has(card.id), true, `Unerwartete Karte ${card.id}`);
     const eventSlug = new URL(card.href).pathname.match(/\/events\/([^/]+)/)?.[1] ?? "";
-    assert.equal(mapTeamFormat(card.title, eventSlug), expected, `${card.id}: Titel und Eventkennung`);
-    assert.equal(mapTeamFormat(card.ariaLabel, eventSlug), expected, `${card.id}: aria-label und Eventkennung`);
+    assert.equal(
+      mapTeamFormat(`${card.title} ${card.ariaLabel}`, eventSlug),
+      expected,
+      `${card.id}: Kartenname, aria-label und Eventkennung`,
+    );
   }
 
   const acceptedByTitle = new Map(result.events.map((event) => [event.title, event]));
@@ -513,6 +518,12 @@ test("prüft Spielformate an echten, anonymisierten MHT-Turnierkarten", async ()
   assert.equal(
     acceptedByTitle.get("Reload Ranked Cup (Duo) Battle Royale")?.game_mode,
     "Reload",
+  );
+  assert.equal(acceptedByTitle.get("FNCS Solos Reload Heats")?.tournament_type, "FNCS");
+  assert.equal(acceptedByTitle.get("OG Community Cup")?.tournament_type, "Community");
+  assert.deepEqual(
+    [...new Set(result.events.map((event) => event.tournament_type))].sort(),
+    ["Cash Cup", "Community", "FNCS", "Ranked Cup"],
   );
   assert.equal(result.issues.length, 3);
   assert.deepEqual(
@@ -535,7 +546,7 @@ test("prüft Spielformate an echten, anonymisierten MHT-Turnierkarten", async ()
       },
     ],
   );
-  assert.equal(result.events.length, 4);
+  assert.equal(result.events.length, 6);
 });
 
 test("meldet unvollständige Karten, statt sie als importierbar auszugeben", () => {

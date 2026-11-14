@@ -1,4 +1,4 @@
-From: <Saved tournament schedule>
+From: <Saved tournament schedule cards>
 Snapshot-Content-Location: https://www.fortnite.com/competitive/schedule?region=EU
 Date: Mon, 09 Nov 2026 23:37:49 GMT
 Content-Type: multipart/related; boundary="CupCalAnonymizedSchedule"
@@ -16,6 +16,8 @@ Content-Transfer-Encoding: 8bit
       S43_RankedCupReloadDuos labels the event Reload and its category Battle Royale;
       S43_ReloadZBDuosCashCup labels the variant Zero Build.
       The official S43_SquadsVictoryCup event slug identifies the Team card as Squads.
+      Representative FNCS and Community cards are included from the official EU schedule:
+      S43_FNCSSoloReload_HeatsStage and S33_OGCommunityCup.
     -->
     <h2>10. November 2026</h2>
     <a id="schedule-event-link-solo"
@@ -40,6 +42,14 @@ Content-Transfer-Encoding: 8bit
     <a id="schedule-event-link-reload-zero-build"
        href="https://www.fortnite.com/competitive/events/S43_ReloadZBDuosCashCup?round=S43_ReloadZBDuosCashCup_Event1Round2_EU"
        aria-label="09:00–11:30 Uhr - Reload ZB Duos Cash Cup Zero Build – Wettkampfabschnitt 1 - Runde 2">Reload ZB Duos Cash Cup Zero Build</a>
+    <h2>14. November 2026</h2>
+    <a id="schedule-event-link-fncs"
+       href="https://www.fortnite.com/competitive/events/S43_FNCSSoloReload_HeatsStage?round=S43_FNCSSoloReload_HeatsStage_Heat1_EU"
+       aria-label="18:00–21:00 Uhr - FNCS Solos Reload Heats Battle Royale – Wettkampfabschnitt 1 - Heat 1">FNCS Solos Reload Heats</a>
+    <h2>19. Januar 2025</h2>
+    <a id="schedule-event-link-community"
+       href="https://www.fortnite.com/competitive/events/S33_OGCommunityCup?round=S33_OGCommunityCup_EU"
+       aria-label="19:00–22:00 Uhr - OG Community Cup Duos Battle Royale – Wettkampfabschnitt 1">OG Community Cup</a>
   </body>
 </html>
 --CupCalAnonymizedSchedule--
