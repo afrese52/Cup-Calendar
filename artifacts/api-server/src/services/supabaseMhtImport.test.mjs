@@ -60,6 +60,57 @@ async function loadApiApp() {
   }
 }
 
+async function loadAdminImportApiApp() {
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), "cupcal-admin-import-counts-api-test-"));
+  const bundlePath = path.join(tempDir, "app.mjs");
+  const previousRequire = globalThis.require;
+  globalThis.require = createRequire(import.meta.url);
+  try {
+    await build({
+      stdin: {
+        contents: `
+          import express from "express";
+          import { createAdminImportRouter } from "./routes/adminImport.ts";
+          import { parseMhtSchedule } from "../scripts/dry-run-mht-import.mjs";
+
+          const app = express();
+          app.use("/api", createAdminImportRouter({
+            scheduleParser(sourceText) {
+              const schedule = parseMhtSchedule(Buffer.from(sourceText, "utf8"), {
+                timeZone: "Europe/Berlin",
+              });
+              const warningEvent = schedule.events.find(
+                (item) => item.id === "epic:WarningDuos:WarningRound",
+              );
+              if (warningEvent) warningEvent.review_warnings = ["Zuordnung manuell prüfen"];
+              return schedule;
+            },
+          }));
+          export default app;
+        `,
+        resolveDir: path.dirname(fileURLToPath(new URL("../app.ts", import.meta.url))),
+        sourcefile: "admin-import-counts-api-test.ts",
+      },
+      bundle: true,
+      format: "esm",
+      platform: "node",
+      outfile: bundlePath,
+      logLevel: "silent",
+      banner: {
+        js: "import { createRequire as createBundleRequire } from 'node:module'; globalThis.require = createBundleRequire(import.meta.url);",
+      },
+    });
+    const { default: app } = await import(pathToFileURL(bundlePath).href);
+    return { app, tempDir };
+  } catch (error) {
+    await rm(tempDir, { recursive: true, force: true });
+    throw error;
+  } finally {
+    if (previousRequire === undefined) delete globalThis.require;
+    else globalThis.require = previousRequire;
+  }
+}
+
 function event(overrides = {}) {
   return {
     id: "epic:cup:round-1",
@@ -266,6 +317,142 @@ test("gibt Zeitänderungen im authentifizierten Import-Vorschau-Endpunkt zurück
     assert.ok(queriedIds[0]?.includes(unchangedEvent.id));
     assert.ok(queriedIds[0]?.includes(changedEvent.id));
     assert.ok(queriedIds[0]?.includes(newEvent.id));
+  } finally {
+    if (apiServer?.listening) await closeServer(apiServer);
+    if (fakeSupabase.listening) await closeServer(fakeSupabase);
+    if (tempDir) await rm(tempDir, { recursive: true, force: true });
+    for (const [key, value] of originalEnv) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+});
+
+test("gibt alle Ausschlusskategorien am Import-Endpunkt getrennt zurück und speichert ihre Summe", async () => {
+  const originalEnv = new Map(
+    ["NODE_ENV", "SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "CUPCAL_IMPORT_ADMIN_EMAILS"]
+      .map((key) => [key, process.env[key]]),
+  );
+  const sourceText = `From: <Saved tournament schedule>
+Snapshot-Content-Location: https://www.fortnite.com/competitive/schedule?region=EU
+Date: Sat, 14 Nov 2026 12:00:00 GMT
+Content-Type: multipart/related; boundary="CupCalImportCountsTest"
+
+--CupCalImportCountsTest
+Content-Type: text/html; charset=utf-8
+
+<!doctype html>
+<html><body>
+  <h2>13. November 2026</h2>
+  <a id="schedule-event-link-past"
+    href="https://www.fortnite.com/competitive/events/PastSolo?round=PastRound"
+    aria-label="19:00–20:00 Uhr - Battle Royale Solo Cash Cup">Battle Royale Solo Cash Cup</a>
+  <h2>15. November 2026</h2>
+  <a id="schedule-event-link-clean"
+    href="https://www.fortnite.com/competitive/events/CleanSolo?round=CleanRound"
+    aria-label="19:00–20:00 Uhr - Battle Royale Solo Cash Cup">Battle Royale Solo Cash Cup</a>
+  <a id="schedule-event-link-warning"
+    href="https://www.fortnite.com/competitive/events/WarningDuos?round=WarningRound"
+    aria-label="19:00–20:00 Uhr - Battle Royale Duos Cash Cup">Battle Royale Duos Cash Cup</a>
+  <a id="schedule-event-link-invalid"
+    href="https://www.fortnite.com/competitive/events/InvalidSolo?round=InvalidRound"
+    aria-label="Battle Royale Solo Cash Cup">Battle Royale Solo Cash Cup ohne lesbare Zeit</a>
+</body></html>
+--CupCalImportCountsTest--
+`;
+  let upsertRows = [];
+  let historyRow;
+  const fakeSupabase = createServer(async (request, response) => {
+    const chunks = [];
+    for await (const chunk of request) chunks.push(chunk);
+    const body = Buffer.concat(chunks).toString("utf8");
+    response.setHeader("Content-Type", "application/json");
+
+    if (request.url === "/auth/v1/user") {
+      if (request.headers.authorization !== "Bearer valid-import-counts-token") {
+        response.statusCode = 401;
+        response.end(JSON.stringify({ message: "Invalid test session" }));
+        return;
+      }
+      response.end(JSON.stringify({
+        id: "admin-import-counts-test-user",
+        email: "admin@cupcal.test",
+      }));
+      return;
+    }
+
+    if (request.url?.startsWith("/rest/v1/fortnite_events")) {
+      if (request.method === "GET") {
+        response.end("[]");
+        return;
+      }
+      if (request.method === "POST") {
+        upsertRows = JSON.parse(body);
+        response.statusCode = 201;
+        response.end("");
+        return;
+      }
+    }
+
+    if (request.url?.startsWith("/rest/v1/admin_import_history") && request.method === "POST") {
+      historyRow = JSON.parse(body);
+      response.statusCode = 201;
+      response.end("");
+      return;
+    }
+
+    response.statusCode = 404;
+    response.end(JSON.stringify({ message: "Unexpected test request" }));
+  });
+  let apiServer;
+  let tempDir;
+
+  try {
+    const fakeSupabaseUrl = await listen(fakeSupabase);
+    process.env["NODE_ENV"] = "production";
+    process.env["SUPABASE_URL"] = fakeSupabaseUrl;
+    process.env["SUPABASE_SERVICE_ROLE_KEY"] = "test-service-role-key";
+    process.env["CUPCAL_IMPORT_ADMIN_EMAILS"] = "admin@cupcal.test";
+
+    const loaded = await loadAdminImportApiApp();
+    tempDir = loaded.tempDir;
+    apiServer = loaded.app.listen(0, "127.0.0.1");
+    await new Promise((resolve, reject) => {
+      apiServer.once("error", reject);
+      apiServer.once("listening", resolve);
+    });
+
+    const response = await fetch(
+      `http://127.0.0.1:${apiServer.address().port}/api/v1/admin/events/import?confirmStaleSnapshot=true`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer valid-import-counts-token",
+          "Content-Type": "text/plain; charset=utf-8",
+        },
+        body: sourceText,
+      },
+    );
+    const result = await response.json();
+
+    assert.equal(response.status, 200, JSON.stringify(result));
+    assert.deepEqual(result, {
+      importedCount: 1,
+      insertedCount: 1,
+      updatedCount: 0,
+      skippedWarningCount: 1,
+      skippedPastCount: 1,
+      skippedInvalidCount: 1,
+      skippedCount: 3,
+    });
+    assert.deepEqual(upsertRows.map((row) => row.id), ["epic:CleanSolo:CleanRound"]);
+    assert.equal(historyRow.inserted_count, 1);
+    assert.equal(historyRow.updated_count, 0);
+    assert.equal(historyRow.skipped_count, 3);
+    assert.equal(
+      historyRow.skipped_count,
+      result.skippedWarningCount + result.skippedPastCount + result.skippedInvalidCount,
+    );
   } finally {
     if (apiServer?.listening) await closeServer(apiServer);
     if (fakeSupabase.listening) await closeServer(fakeSupabase);

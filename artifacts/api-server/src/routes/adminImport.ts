@@ -14,7 +14,6 @@ import {
 import { MAX_MHT_UPLOAD_BYTES } from "../lib/uploadLimits";
 import { getMhtImportSkippedCounts } from "../services/mhtImportCounts";
 
-const router: IRouter = Router();
 const uploadText = express.text({ type: "text/plain", limit: MAX_MHT_UPLOAD_BYTES });
 const requestBodySchema = z.string().min(1, "Die Datei ist leer.").max(MAX_MHT_UPLOAD_BYTES);
 const IMPORT_HISTORY_LIMIT = 20;
@@ -165,8 +164,11 @@ async function findExistingEvents(
   }
 }
 
-async function buildPreview(sourceText: string) {
-  const schedule = parseSchedule(sourceText);
+async function buildPreview(
+  sourceText: string,
+  scheduleParser: typeof parseSchedule = parseSchedule,
+) {
+  const schedule = scheduleParser(sourceText);
   const plan = getSafeUpcomingEvents(schedule.events, schedule.snapshotAt);
   const existingEvents = await findExistingEvents(plan.importable.map((event) => event.id));
 
@@ -207,6 +209,12 @@ async function buildPreview(sourceText: string) {
   };
 }
 
+export function createAdminImportRouter(options: {
+  scheduleParser?: typeof parseSchedule;
+} = {}): IRouter {
+  const router: IRouter = Router();
+  const scheduleParser = options.scheduleParser ?? parseSchedule;
+
 router.get("/v1/admin/import-access", async (req, res): Promise<void> => {
   const user = await resolveSignedInUser(req);
   if ("error" in user) {
@@ -234,7 +242,7 @@ router.post(
     const sourceText = parseUploadBody(req, res);
     if (sourceText === null) return;
     try {
-      const preview = await buildPreview(sourceText);
+      const preview = await buildPreview(sourceText, scheduleParser);
       const { schedule: _schedule, importableEvents: _events, skippedPastCount: _skipped, ...response } = preview;
       res.json(response);
     } catch (error) {
@@ -259,7 +267,7 @@ router.post(
     if (sourceText === null) return;
 
     try {
-      const preview = await buildPreview(sourceText);
+      const preview = await buildPreview(sourceText, scheduleParser);
       if (!preview.schedule.snapshotAt) {
         res.status(400).json({ error: "Der Snapshot-Zeitpunkt fehlt. Diese Datei kann nicht importiert werden." });
         return;
@@ -325,4 +333,7 @@ router.get("/v1/admin/events/import/history", requireImportAdmin, async (req, re
   }
 });
 
-export default router;
+  return router;
+}
+
+export default createAdminImportRouter();
