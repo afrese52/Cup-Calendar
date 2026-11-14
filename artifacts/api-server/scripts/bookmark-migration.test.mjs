@@ -375,4 +375,19 @@ test("0002 übernimmt Favoriten aus Profil- und Event-gebundenen Tabellen", asyn
     `${legacyAccountId}:legacy-event-one|${legacyAccountId}:offline-event-not-in-fortnite-events|${otherAccountId}:legacy-event-two`,
     "RLS muss den eigenen Bestand erhalten, fremde Schreibzugriffe sperren und Offline-IDs zulassen.",
   );
+
+  psql(`
+    DELETE FROM public.fortnite_events
+    WHERE id = 'legacy-event-one';
+  `, legacyDatabase);
+
+  assert.equal(
+    psql(`
+      SELECT count(*)::text
+      FROM public.user_event_bookmarks
+      WHERE user_id = '${legacyAccountId}' AND event_id = 'legacy-event-one';
+    `, legacyDatabase),
+    "1",
+    "Das Löschen eines früher referenzierten Turniers darf den migrierten Favoriten nicht entfernen.",
+  );
 });
