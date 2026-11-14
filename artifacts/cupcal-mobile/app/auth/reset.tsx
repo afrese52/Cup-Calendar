@@ -2,7 +2,16 @@ import { Feather } from '@expo/vector-icons';
 import * as Linking from 'expo-linking';
 import { router, usePreventRemove } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
-import { Alert, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  AccessibilityInfo,
+  Alert,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
 import { useColors } from '@/hooks/useColors';
@@ -129,17 +138,29 @@ export default function ResetPasswordScreen() {
     isSavingRef.current = true;
     setIsSaving(true);
     setErrorMessage(null);
+    if (Platform.OS === 'ios') {
+      AccessibilityInfo.announceForAccessibility('Passwort wird gespeichert …');
+    }
     try {
       await saveNewPassword(password);
       setIsSaved(true);
       setPassword('');
       setConfirmPassword('');
+      if (Platform.OS === 'ios') {
+        AccessibilityInfo.announceForAccessibility(
+          'Dein neues Passwort ist gespeichert. Du kannst dich jetzt mit diesem Passwort anmelden.',
+        );
+      }
     } catch (error) {
       setIsRecoveryReady(isPasswordRecoveryPending());
-      setErrorMessage(friendlyAuthError(
+      const message = friendlyAuthError(
         error,
         'Das Passwort konnte nicht gespeichert werden. Bitte versuche es erneut oder fordere in den Einstellungen einen neuen Wiederherstellungslink an.',
-      ));
+      );
+      setErrorMessage(message);
+      if (Platform.OS === 'ios') {
+        AccessibilityInfo.announceForAccessibility(message);
+      }
     } finally {
       isSavingRef.current = false;
       setIsSaving(false);
@@ -221,7 +242,12 @@ export default function ResetPasswordScreen() {
         ) : null}
 
         {errorMessage ? (
-          <Text accessibilityRole="alert" style={[styles.notice, { color: colors.destructive }]}>
+          <Text
+            accessible
+            accessibilityRole="alert"
+            accessibilityLiveRegion="assertive"
+            style={[styles.notice, { color: colors.destructive }]}
+          >
             {errorMessage}
           </Text>
         ) : null}
@@ -229,6 +255,7 @@ export default function ResetPasswordScreen() {
         {!isCheckingLink && isRecoveryReady && !isSaved ? (
           <Pressable
             accessibilityRole="button"
+            accessibilityLiveRegion={isSaving ? 'polite' : undefined}
             accessibilityState={{ disabled: isSaving, busy: isSaving }}
             testID="reset-password-submit-button"
             disabled={isSaving}

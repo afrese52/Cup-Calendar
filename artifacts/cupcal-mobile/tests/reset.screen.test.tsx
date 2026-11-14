@@ -1,7 +1,7 @@
 import React from 'react';
 import { beforeEach, expect, jest, test } from '@jest/globals';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
-import { Alert } from 'react-native';
+import { AccessibilityInfo, Alert, Platform } from 'react-native';
 
 const mockSaveNewPassword = jest.fn(async (_password: string) => {});
 let mockPreventRemoveEnabled = false;
@@ -152,7 +152,9 @@ test('behält Formular und Eingaben nach einem Verbindungsfehler für einen erne
   const errorMessage = await view.findByText(
     'Keine Verbindung möglich. Prüfe deine Internetverbindung und versuche es erneut.',
   );
+  expect(errorMessage.props.accessible).toBe(true);
   expect(errorMessage.props.accessibilityRole).toBe('alert');
+  expect(errorMessage.props.accessibilityLiveRegion).toBe('assertive');
   expect(errorMessage.props.children).toContain('versuche es erneut');
   expect(view.getByTestId('reset-password-input').props.value).toBe('Mein-neues-Passwort-123');
   expect(view.getByTestId('reset-password-confirm-input').props.value).toBe('Mein-neues-Passwort-123');
@@ -275,29 +277,43 @@ test('speichert nach einer Passwort-Ablehnung beide korrigierten Eingaben erfolg
 });
 
 test('sperrt schnelle wiederholte Speicherversuche bis die Passwortänderung abgeschlossen ist', async () => {
+  const originalPlatformOS = Platform.OS;
+  Object.defineProperty(Platform, 'OS', { configurable: true, value: 'ios' });
+  const announceSpy = jest.spyOn(AccessibilityInfo, 'announceForAccessibility').mockImplementation(() => {});
   let finishSave!: () => void;
   mockSaveNewPassword.mockImplementation(
     () => new Promise<void>((resolve) => { finishSave = resolve; }),
   );
-  const view = await render(<ResetPasswordScreen />);
+  try {
+    const view = await render(<ResetPasswordScreen />);
 
-  await waitFor(() => expect(view.getByTestId('reset-password-submit-button')).toBeTruthy());
-  await fireEvent.changeText(view.getByTestId('reset-password-input'), 'Mein-neues-Passwort-123');
-  await fireEvent.changeText(view.getByTestId('reset-password-confirm-input'), 'Mein-neues-Passwort-123');
+    await waitFor(() => expect(view.getByTestId('reset-password-submit-button')).toBeTruthy());
+    await fireEvent.changeText(view.getByTestId('reset-password-input'), 'Mein-neues-Passwort-123');
+    await fireEvent.changeText(view.getByTestId('reset-password-confirm-input'), 'Mein-neues-Passwort-123');
 
-  await fireEvent.press(view.getByTestId('reset-password-submit-button'));
-  await fireEvent.press(view.getByTestId('reset-password-submit-button'));
-  await fireEvent.press(view.getByTestId('reset-password-submit-button'));
+    await fireEvent.press(view.getByTestId('reset-password-submit-button'));
+    await fireEvent.press(view.getByTestId('reset-password-submit-button'));
+    await fireEvent.press(view.getByTestId('reset-password-submit-button'));
 
-  expect(mockSaveNewPassword).toHaveBeenCalledTimes(1);
-  expect(view.getByTestId('reset-password-submit-button').props.accessibilityState).toEqual({
-    disabled: true,
-    busy: true,
-  });
-  expect(view.getByText('Wird gespeichert …')).toBeTruthy();
+    expect(mockSaveNewPassword).toHaveBeenCalledTimes(1);
+    const savingButton = view.getByTestId('reset-password-submit-button');
+    expect(savingButton.props.accessibilityState).toEqual({
+      disabled: true,
+      busy: true,
+    });
+    expect(savingButton.props.accessibilityLiveRegion).toBe('polite');
+    expect(view.getByText('Wird gespeichert …')).toBeTruthy();
+    expect(announceSpy).toHaveBeenCalledWith('Passwort wird gespeichert …');
 
-  await act(async () => finishSave());
-  expect(await view.findByText('Passwort geändert')).toBeTruthy();
+    await act(async () => finishSave());
+    expect(await view.findByText('Passwort geändert')).toBeTruthy();
+    expect(announceSpy).toHaveBeenLastCalledWith(
+      'Dein neues Passwort ist gespeichert. Du kannst dich jetzt mit diesem Passwort anmelden.',
+    );
+  } finally {
+    announceSpy.mockRestore();
+    Object.defineProperty(Platform, 'OS', { configurable: true, value: originalPlatformOS });
+  }
 });
 
 test('verhindert das Verlassen, solange die Passwortänderung noch gespeichert wird', async () => {
