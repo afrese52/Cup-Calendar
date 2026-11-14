@@ -104,6 +104,7 @@ export default function SettingsScreen() {
   const [confirmationResendAvailableAt, setConfirmationResendAvailableAt] = useState<number | null>(null);
   const [confirmationResendClock, setConfirmationResendClock] = useState(() => Date.now());
   const [confirmationResendCooldownLoaded, setConfirmationResendCooldownLoaded] = useState(false);
+  const announcedResendCooldownCompletionRef = useRef<number | null>(null);
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
   const accountDeletionRequest = useRequestAccountDeletion();
   const confirmationResendSecondsLeft = confirmationResendAvailableAt === null
@@ -114,6 +115,13 @@ export default function SettingsScreen() {
   const confirmationResendCountdownLabel = confirmationResendSecondsLeft === 1
     ? 'Erneut senden in 1 Sekunde'
     : `Erneut senden in ${confirmationResendSecondsLeft} Sekunden`;
+  const confirmationResendAccessibilityLabel = isSubmittingAuth
+    ? 'Bestätigungslink wird gesendet'
+    : !confirmationResendCooldownLoaded
+      ? 'Bestätigungswartezeit wird geladen'
+      : confirmationResendSecondsLeft > 0
+        ? 'Bestätigungslink erneut senden. Die Wartezeit läuft.'
+        : 'Bestätigungslink erneut senden';
 
   useEffect(() => {
     let active = true;
@@ -141,7 +149,17 @@ export default function SettingsScreen() {
     const refreshCountdown = () => {
       const now = Date.now();
       setConfirmationResendClock(now);
-      if (now >= confirmationResendAvailableAt) setConfirmationResendAvailableAt(null);
+      if (now >= confirmationResendAvailableAt) {
+        setConfirmationResendAvailableAt(null);
+        if (announcedResendCooldownCompletionRef.current !== confirmationResendAvailableAt) {
+          announcedResendCooldownCompletionRef.current = confirmationResendAvailableAt;
+          if (Platform.OS !== 'web') {
+            AccessibilityInfo.announceForAccessibility(
+              'Die Wartezeit ist vorbei. Du kannst jetzt einen neuen Bestätigungslink anfordern.',
+            );
+          }
+        }
+      }
     };
     refreshCountdown();
     const timer = setInterval(refreshCountdown, 1000);
@@ -250,6 +268,14 @@ export default function SettingsScreen() {
         const availableAt = Date.now() + result.resendCooldownSeconds * 1000;
         setConfirmationResendAvailableAt(availableAt);
         setConfirmationResendClock(Date.now());
+        if (Platform.OS !== 'web') {
+          const duration = result.resendCooldownSeconds === 1
+            ? '1 Sekunde'
+            : `${result.resendCooldownSeconds} Sekunden`;
+          AccessibilityInfo.announceForAccessibility(
+            `Der Bestätigungslink wurde gesendet. Du kannst in ${duration} erneut einen anfordern.`,
+          );
+        }
         try {
           await saveAccountConfirmationResendAvailableAt(availableAt);
         } catch {
@@ -627,15 +653,7 @@ export default function SettingsScreen() {
               {authMode === 'sign-in' ? (
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityLabel={
-                    isSubmittingAuth
-                      ? 'Bestätigungslink wird gesendet'
-                      : !confirmationResendCooldownLoaded
-                        ? 'Bestätigungswartezeit wird geladen'
-                        : confirmationResendSecondsLeft > 0
-                        ? `Bestätigungslink erneut senden in ${confirmationResendSecondsLeft} Sekunden`
-                        : 'Bestätigungslink erneut senden'
-                  }
+                  accessibilityLabel={confirmationResendAccessibilityLabel}
                   accessibilityState={{
                     disabled: confirmationResendDisabled,
                     busy: submittingAction === 'resend-confirmation',
@@ -696,15 +714,7 @@ export default function SettingsScreen() {
               {registrationConfirmationEmail && !session ? (
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityLabel={
-                    isSubmittingAuth
-                      ? 'Bestätigungslink wird gesendet'
-                      : !confirmationResendCooldownLoaded
-                        ? 'Bestätigungswartezeit wird geladen'
-                        : confirmationResendSecondsLeft > 0
-                        ? `Bestätigungslink erneut senden in ${confirmationResendSecondsLeft} Sekunden`
-                        : 'Bestätigungslink erneut senden'
-                  }
+                  accessibilityLabel={confirmationResendAccessibilityLabel}
                   accessibilityState={{
                     disabled: confirmationResendDisabled,
                     busy: submittingAction === 'resend-confirmation',

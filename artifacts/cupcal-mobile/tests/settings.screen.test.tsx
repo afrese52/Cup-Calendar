@@ -381,6 +381,7 @@ test('sperrt erneute Bestätigungsanfragen mit Countdown und gibt sie danach fre
   const view = await openSettings();
   await fireEvent.changeText(view.getByTestId('auth-email-input'), 'test@example.invalid');
   const button = view.getByTestId('resend-confirmation-button');
+  announceForAccessibility.mockClear();
   jest.useFakeTimers();
 
   try {
@@ -396,8 +397,21 @@ test('sperrt erneute Bestätigungsanfragen mit Countdown und gibt sie danach fre
     expect(storageMock.__values.get(ACCOUNT_CONFIRMATION_RESEND_AVAILABLE_AT_KEY))
       .toBe(String(Date.now() + ACCOUNT_CONFIRMATION_RESEND_COOLDOWN_SECONDS * 1000));
     expect(button.props.accessibilityLabel).toBe(
-      `Bestätigungslink erneut senden in ${ACCOUNT_CONFIRMATION_RESEND_COOLDOWN_SECONDS} Sekunden`,
+      'Bestätigungslink erneut senden. Die Wartezeit läuft.',
     );
+    expect(announceForAccessibility).toHaveBeenCalledTimes(1);
+    expect(announceForAccessibility).toHaveBeenNthCalledWith(
+      1,
+      `Der Bestätigungslink wurde gesendet. Du kannst in ${ACCOUNT_CONFIRMATION_RESEND_COOLDOWN_SECONDS} Sekunden erneut einen anfordern.`,
+    );
+
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(5000);
+    });
+    expect(button.props.accessibilityLabel).toBe(
+      'Bestätigungslink erneut senden. Die Wartezeit läuft.',
+    );
+    expect(announceForAccessibility).toHaveBeenCalledTimes(1);
 
     await fireEvent.press(button);
     expect(mockedSupabase.requestEmailConfirmation).toHaveBeenCalledTimes(1);
@@ -407,7 +421,13 @@ test('sperrt erneute Bestätigungsanfragen mit Countdown und gibt sie danach fre
     });
 
     expect(button.props.accessibilityState).toMatchObject({ disabled: false, busy: false });
+    expect(button.props.accessibilityLabel).toBe('Bestätigungslink erneut senden');
     expect(view.getByText('Bestätigungslink erneut senden')).toBeTruthy();
+    expect(announceForAccessibility).toHaveBeenCalledTimes(2);
+    expect(announceForAccessibility).toHaveBeenNthCalledWith(
+      2,
+      'Die Wartezeit ist vorbei. Du kannst jetzt einen neuen Bestätigungslink anfordern.',
+    );
   } finally {
     await act(async () => {
       view.unmount();
