@@ -18,20 +18,51 @@ export interface MhtImportEvent {
   review_warnings: string[];
 }
 
-export interface ExistingMhtEventTimes {
+export interface ExistingMhtEvent {
+  title: string;
+  game_mode: string;
+  team_format: string;
+  tournament_type: string;
+  category: string;
   start_time: string;
   end_time: string;
 }
 
-export function getMhtEventTimeChanges(
-  event: Pick<MhtImportEvent, "start_time" | "end_time">,
-  existing: ExistingMhtEventTimes | null,
-): { previousStartTime: string | null; previousEndTime: string | null } {
+export function getMhtEventChanges(
+  event: Pick<
+    MhtImportEvent,
+    "title" | "game_mode" | "team_format" | "tournament_type" | "category" | "start_time" | "end_time"
+  >,
+  existing: ExistingMhtEvent | null,
+): {
+  previousTitle: string | null;
+  previousGameMode: string | null;
+  previousTeamFormat: string | null;
+  previousTournamentType: string | null;
+  previousCategory: string | null;
+  previousStartTime: string | null;
+  previousEndTime: string | null;
+} {
   if (!existing) {
-    return { previousStartTime: null, previousEndTime: null };
+    return {
+      previousTitle: null,
+      previousGameMode: null,
+      previousTeamFormat: null,
+      previousTournamentType: null,
+      previousCategory: null,
+      previousStartTime: null,
+      previousEndTime: null,
+    };
   }
 
   return {
+    previousTitle: existing.title === event.title ? null : existing.title,
+    previousGameMode: existing.game_mode === event.game_mode ? null : existing.game_mode,
+    previousTeamFormat: existing.team_format === event.team_format ? null : existing.team_format,
+    previousTournamentType: existing.tournament_type === event.tournament_type
+      ? null
+      : existing.tournament_type,
+    previousCategory: existing.category === event.category ? null : existing.category,
     previousStartTime: Date.parse(existing.start_time) === Date.parse(event.start_time)
       ? null
       : existing.start_time,

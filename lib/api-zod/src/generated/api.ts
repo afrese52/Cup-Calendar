@@ -83,6 +83,11 @@ export const PreviewMhtImportResponse = zod.object({
   "category": zod.enum(['Turnier', 'Liga', 'Qualifikation', 'Trainingsrunde']),
   "warnings": zod.array(zod.string()),
   "willUpdate": zod.boolean(),
+  "previousTitle": zod.string().nullable().describe('Previous title when it differs from the imported value'),
+  "previousGameMode": zod.string().nullable().describe('Previous game mode when it differs from the imported value'),
+  "previousTeamFormat": zod.string().nullable().describe('Previous team format when it differs from the imported value'),
+  "previousTournamentType": zod.string().nullable().describe('Previous tournament type when it differs from the imported value'),
+  "previousCategory": zod.string().nullable().describe('Previous category when it differs from the imported value'),
   "previousStartTime": zod.coerce.date().nullable().describe('Previous start time when it differs from the imported value'),
   "previousEndTime": zod.coerce.date().nullable().describe('Previous end time when it differs from the imported value')
 })),

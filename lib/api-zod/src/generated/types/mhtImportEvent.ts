@@ -22,6 +22,31 @@ export interface MhtImportEvent {
   warnings: string[];
   willUpdate: boolean;
   /**
+     * Previous title when it differs from the imported value
+     * @nullable
+     */
+  previousTitle: string | null;
+  /**
+     * Previous game mode when it differs from the imported value
+     * @nullable
+     */
+  previousGameMode: string | null;
+  /**
+     * Previous team format when it differs from the imported value
+     * @nullable
+     */
+  previousTeamFormat: string | null;
+  /**
+     * Previous tournament type when it differs from the imported value
+     * @nullable
+     */
+  previousTournamentType: string | null;
+  /**
+     * Previous category when it differs from the imported value
+     * @nullable
+     */
+  previousCategory: string | null;
+  /**
      * Previous start time when it differs from the imported value
      * @nullable
      */

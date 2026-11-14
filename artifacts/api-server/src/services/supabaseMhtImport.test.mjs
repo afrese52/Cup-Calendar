@@ -10,7 +10,7 @@ import { build } from "esbuild";
 import { parseMhtSchedule } from "../../scripts/dry-run-mht-import.mjs";
 import {
   buildMhtEventUpsertRows,
-  getMhtEventTimeChanges,
+  getMhtEventChanges,
   listRecentMhtImports,
   recordMhtImportHistory,
   upsertMhtEvents,
@@ -79,17 +79,53 @@ function event(overrides = {}) {
   };
 }
 
-test("meldet für neue Termine und unveränderte Zeiten keine Zeitänderung", () => {
+test("meldet bei neuen und unveränderten Terminen keine geänderten Details", () => {
   const imported = event();
 
-  assert.deepEqual(getMhtEventTimeChanges(imported, null), {
+  assert.deepEqual(getMhtEventChanges(imported, null), {
+    previousTitle: null,
+    previousGameMode: null,
+    previousTeamFormat: null,
+    previousTournamentType: null,
+    previousCategory: null,
     previousStartTime: null,
     previousEndTime: null,
   });
-  assert.deepEqual(getMhtEventTimeChanges(imported, {
+  assert.deepEqual(getMhtEventChanges(imported, {
+    title: imported.title,
+    game_mode: imported.game_mode,
+    team_format: imported.team_format,
+    tournament_type: imported.tournament_type,
+    category: imported.category,
     start_time: "2026-11-12T19:00:00+01:00",
     end_time: "2026-11-12T21:00:00+01:00",
   }), {
+    previousTitle: null,
+    previousGameMode: null,
+    previousTeamFormat: null,
+    previousTournamentType: null,
+    previousCategory: null,
+    previousStartTime: null,
+    previousEndTime: null,
+  });
+});
+
+test("liefert nur die bisherigen Werte geänderter Turnierdetails", () => {
+  const imported = event();
+  assert.deepEqual(getMhtEventChanges(imported, {
+    title: "Alter Titel",
+    game_mode: "Reload",
+    team_format: "Duos",
+    tournament_type: "FNCS",
+    category: "Liga",
+    start_time: "2026-11-12T18:00:00.000Z",
+    end_time: "2026-11-12T20:00:00.000Z",
+  }), {
+    previousTitle: "Alter Titel",
+    previousGameMode: "Reload",
+    previousTeamFormat: "Duos",
+    previousTournamentType: "FNCS",
+    previousCategory: "Liga",
     previousStartTime: null,
     previousEndTime: null,
   });
@@ -126,15 +162,29 @@ test("gibt Zeitänderungen im authentifizierten Import-Vorschau-Endpunkt zurück
     }
     if (request.url?.startsWith("/rest/v1/fortnite_events")) {
       const url = new URL(request.url, "http://supabase.test");
+      assert.equal(
+        url.searchParams.get("select"),
+        "id,title,game_mode,team_format,tournament_type,category,start_time,end_time",
+      );
       queriedIds.push(url.searchParams.get("id"));
       response.end(JSON.stringify([
         {
           id: unchangedEvent.id,
+          title: unchangedEvent.title,
+          game_mode: unchangedEvent.game_mode,
+          team_format: unchangedEvent.team_format,
+          tournament_type: unchangedEvent.tournament_type,
+          category: unchangedEvent.category,
           start_time: unchangedEvent.start_time,
           end_time: unchangedEvent.end_time,
         },
         {
           id: changedEvent.id,
+          title: "Alter Turniertitel",
+          game_mode: "Reload",
+          team_format: "Duos",
+          tournament_type: "FNCS",
+          category: "Liga",
           start_time: previousChangedStart,
           end_time: previousChangedEnd,
         },
@@ -185,14 +235,29 @@ test("gibt Zeitänderungen im authentifizierten Import-Vorschau-Endpunkt zurück
     assert.ok(changed, "Die Vorschau enthält den geänderten Termin.");
 
     assert.equal(newEvent.willUpdate, false);
+    assert.equal(newEvent.previousTitle, null);
+    assert.equal(newEvent.previousGameMode, null);
+    assert.equal(newEvent.previousTeamFormat, null);
+    assert.equal(newEvent.previousTournamentType, null);
+    assert.equal(newEvent.previousCategory, null);
     assert.equal(newEvent.previousStartTime, null);
     assert.equal(newEvent.previousEndTime, null);
 
     assert.equal(unchanged.willUpdate, true);
+    assert.equal(unchanged.previousTitle, null);
+    assert.equal(unchanged.previousGameMode, null);
+    assert.equal(unchanged.previousTeamFormat, null);
+    assert.equal(unchanged.previousTournamentType, null);
+    assert.equal(unchanged.previousCategory, null);
     assert.equal(unchanged.previousStartTime, null);
     assert.equal(unchanged.previousEndTime, null);
 
     assert.equal(changed.willUpdate, true);
+    assert.equal(changed.previousTitle, "Alter Turniertitel");
+    assert.equal(changed.previousGameMode, "Reload");
+    assert.equal(changed.previousTeamFormat, "Duos");
+    assert.equal(changed.previousTournamentType, "FNCS");
+    assert.equal(changed.previousCategory, "Liga");
     assert.equal(changed.startTime, changedEvent.start_time);
     assert.equal(changed.endTime, changedEvent.end_time);
     assert.equal(changed.previousStartTime, previousChangedStart);
@@ -213,18 +278,36 @@ test("gibt Zeitänderungen im authentifizierten Import-Vorschau-Endpunkt zurück
 });
 
 test("gibt nur die jeweils geänderte bisherige Zeit zurück", () => {
-  assert.deepEqual(getMhtEventTimeChanges(event(), {
+  const imported = event();
+  const existing = {
+    title: imported.title,
+    game_mode: imported.game_mode,
+    team_format: imported.team_format,
+    tournament_type: imported.tournament_type,
+    category: imported.category,
     start_time: "2026-11-12T17:00:00.000Z",
     end_time: "2026-11-12T20:00:00.000Z",
-  }), {
+  };
+  assert.deepEqual(getMhtEventChanges(imported, existing), {
+    previousTitle: null,
+    previousGameMode: null,
+    previousTeamFormat: null,
+    previousTournamentType: null,
+    previousCategory: null,
     previousStartTime: "2026-11-12T17:00:00.000Z",
     previousEndTime: null,
   });
 
-  assert.deepEqual(getMhtEventTimeChanges(event(), {
+  assert.deepEqual(getMhtEventChanges(imported, {
+    ...existing,
     start_time: "2026-11-12T18:00:00.000Z",
     end_time: "2026-11-12T21:00:00.000Z",
   }), {
+    previousTitle: null,
+    previousGameMode: null,
+    previousTeamFormat: null,
+    previousTournamentType: null,
+    previousCategory: null,
     previousStartTime: null,
     previousEndTime: "2026-11-12T21:00:00.000Z",
   });

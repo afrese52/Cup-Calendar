@@ -4,11 +4,12 @@ import { getSnapshotFreshness, parseMhtSchedule } from "../../scripts/dry-run-mh
 import { getAdminImportAccess, getSafeUpcomingEvents, parseAdminEmailAllowlist } from "../services/adminImportAccess";
 import {
   getSupabaseAdmin,
-  getMhtEventTimeChanges,
+  getMhtEventChanges,
   ImportHistoryWriteError,
   listRecentMhtImports,
   recordMhtImportHistory,
   upsertMhtEvents,
+  type ExistingMhtEvent,
 } from "../services/supabase";
 import { MAX_MHT_UPLOAD_BYTES } from "../lib/uploadLimits";
 import { getMhtImportSkippedCounts } from "../services/mhtImportCounts";
@@ -140,19 +141,25 @@ function rejectUnconfirmedStaleSnapshot(
 
 async function findExistingEvents(
   eventIds: string[],
-): Promise<Map<string, { start_time: string; end_time: string }>> {
+): Promise<Map<string, ExistingMhtEvent>> {
   if (eventIds.length === 0) return new Map();
   try {
     const { data, error } = await getSupabaseAdmin()
       .from("fortnite_events")
-      .select("id, start_time, end_time")
+      .select("id, title, game_mode, team_format, tournament_type, category, start_time, end_time")
       .in("id", eventIds);
     if (error) throw error;
     return new Map((data ?? []).map((row: {
       id: string;
-      start_time: string;
-      end_time: string;
-    }) => [row.id, { start_time: row.start_time, end_time: row.end_time }]));
+    } & ExistingMhtEvent) => [row.id, {
+      title: row.title,
+      game_mode: row.game_mode,
+      team_format: row.team_format,
+      tournament_type: row.tournament_type,
+      category: row.category,
+      start_time: row.start_time,
+      end_time: row.end_time,
+    }]));
   } catch (error) {
     throw new ExistingEventsQueryError(error);
   }
@@ -188,7 +195,7 @@ async function buildPreview(sourceText: string) {
       category: event.category,
       warnings: event.review_warnings,
       willUpdate: plan.importable.includes(event) && existingEvents.has(event.id),
-      ...getMhtEventTimeChanges(event, existingEvents.get(event.id) ?? null),
+      ...getMhtEventChanges(event, existingEvents.get(event.id) ?? null),
     })),
     issues: schedule.issues.map((issue) => ({
       title: issue.title ?? null,

@@ -83,6 +83,18 @@ function getImportPeriod(preview: MhtImportPreview) {
   };
 }
 
+function hasPreviewChanges(event: MhtImportPreview['events'][number]) {
+  return Boolean(
+    event.previousStartTime
+    || event.previousEndTime
+    || event.previousTitle
+    || event.previousGameMode
+    || event.previousTeamFormat
+    || event.previousTournamentType
+    || event.previousCategory,
+  );
+}
+
 function resultCopy(result: MhtImportResult) {
   return `${result.importedCount} Termine gespeichert: ${result.insertedCount} neu, ${result.updatedCount} aktualisiert. ${result.skippedWarningCount} mit unklarer Zuordnung, ${result.skippedPastCount} vergangene Termine und ${result.skippedInvalidCount} fehlerhafte Karten wurden übersprungen.`;
 }
@@ -320,17 +332,14 @@ export default function AdminImportScreen() {
   const isCheckingAccess = isCheckingSession || (Boolean(accessToken) && accessQuery.isLoading);
   const importPeriod = preview ? getImportPeriod(preview) : null;
   const visiblePreviewEvents = preview
-    ? [
-        ...new Map(
-          [
-            ...preview.events.slice(0, 20),
-            ...preview.events.filter((event) => event.warnings.length > 0),
-          ].map((event) => [event.id, event]),
-        ).values(),
-      ]
+    ? preview.events.filter((event, index) => (
+        index < 20 || event.warnings.length > 0 || hasPreviewChanges(event)
+      ))
     : [];
   const omittedUnwarnedEvents = preview
-    ? preview.events.slice(20).filter((event) => event.warnings.length === 0).length
+    ? preview.events.slice(20).filter((event) => (
+        event.warnings.length === 0 && !hasPreviewChanges(event)
+      )).length
     : 0;
 
   return (
@@ -520,6 +529,25 @@ export default function AdminImportScreen() {
                             <Text style={[styles.eventMeta, { color: colors.mutedForeground }]}>
                               {formatImportTime(event.startTime, preview.timeZone)} · {event.teamFormat} · {event.gameMode}
                             </Text>
+                            {event.previousTitle
+                              || event.previousGameMode
+                              || event.previousTeamFormat
+                              || event.previousTournamentType
+                              || event.previousCategory ? (
+                                <Text
+                                  testID={`event-detail-changes-${event.id}`}
+                                  style={[styles.timeChangeText, { color: colors.categoryLeague }]}
+                                >
+                                  Details geändert:
+                                  {event.previousTitle ? ` Titel „${event.previousTitle}“ → „${event.title}“` : ''}
+                                  {event.previousTeamFormat ? ` Spielformat ${event.previousTeamFormat} → ${event.teamFormat}` : ''}
+                                  {event.previousGameMode ? ` Spielmodus ${event.previousGameMode} → ${event.gameMode}` : ''}
+                                  {event.previousTournamentType
+                                    ? ` Turniertyp ${event.previousTournamentType} → ${event.tournamentType}`
+                                    : ''}
+                                  {event.previousCategory ? ` Kategorie ${event.previousCategory} → ${event.category}` : ''}
+                                </Text>
+                              ) : null}
                             {event.previousStartTime || event.previousEndTime ? (
                               <Text
                                 testID={`event-time-changes-${event.id}`}

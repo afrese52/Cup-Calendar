@@ -260,7 +260,7 @@ test('meldet ein unbekanntes Snapshot-Alter, ohne es als veraltet auszugeben', a
   expect(screen.getByText('Alter nicht bestimmbar', { exact: false })).toBeTruthy();
 });
 
-test('zeigt geänderte Zeiten in der Vorschau, aber keine Änderungen für neue oder gleiche Termine', async () => {
+test('zeigt geänderte Zeiten und Turnierdetails, aber keine Änderungen für neue oder gleiche Termine', async () => {
   mockGetDocumentAsync.mockResolvedValue(selectedFile('plan.mht'));
   mockPreviewImport.mockResolvedValue({
     ...preview,
@@ -273,6 +273,11 @@ test('zeigt geänderte Zeiten in der Vorschau, aber keine Änderungen für neue 
         title: 'Neuer Termin',
         startTime: '2026-11-12T18:00:00.000Z',
         endTime: '2026-11-12T20:00:00.000Z',
+        previousTitle: null,
+        previousGameMode: null,
+        previousTeamFormat: null,
+        previousTournamentType: null,
+        previousCategory: null,
         previousStartTime: null,
         previousEndTime: null,
         gameMode: 'Battle Royale',
@@ -287,6 +292,11 @@ test('zeigt geänderte Zeiten in der Vorschau, aber keine Änderungen für neue 
         title: 'Unveränderter Termin',
         startTime: '2026-11-12T18:00:00.000Z',
         endTime: '2026-11-12T20:00:00.000Z',
+        previousTitle: null,
+        previousGameMode: null,
+        previousTeamFormat: null,
+        previousTournamentType: null,
+        previousCategory: null,
         previousStartTime: null,
         previousEndTime: null,
         gameMode: 'Battle Royale',
@@ -301,6 +311,11 @@ test('zeigt geänderte Zeiten in der Vorschau, aber keine Änderungen für neue 
         title: 'Termin mit Zeitänderung',
         startTime: '2026-11-12T18:00:00.000Z',
         endTime: '2026-11-12T20:00:00.000Z',
+        previousTitle: 'Alter Titel',
+        previousGameMode: 'Reload',
+        previousTeamFormat: 'Duos',
+        previousTournamentType: 'FNCS',
+        previousCategory: 'Liga',
         previousStartTime: '2026-11-12T17:00:00.000Z',
         previousEndTime: '2026-11-12T21:00:00.000Z',
         gameMode: 'Battle Royale',
@@ -322,6 +337,70 @@ test('zeigt geänderte Zeiten in der Vorschau, aber keine Änderungen für neue 
   expect(screen.getByText(/Ende 12\.11\.2026, 22:00 → 12\.11\.2026, 21:00/)).toBeTruthy();
   expect(screen.queryByTestId('event-time-changes-new-event')).toBeNull();
   expect(screen.queryByTestId('event-time-changes-same-event')).toBeNull();
+  expect(screen.getByTestId('event-detail-changes-changed-event')).toBeTruthy();
+  expect(screen.getByText(/Titel „Alter Titel“ → „Termin mit Zeitänderung“/)).toBeTruthy();
+  expect(screen.getByText(/Spielformat Duos → Solo/)).toBeTruthy();
+  expect(screen.getByText(/Spielmodus Reload → Battle Royale/)).toBeTruthy();
+  expect(screen.getByText(/Turniertyp FNCS → Cash Cup/)).toBeTruthy();
+  expect(screen.getByText(/Kategorie Liga → Turnier/)).toBeTruthy();
+  expect(screen.queryByTestId('event-detail-changes-new-event')).toBeNull();
+  expect(screen.queryByTestId('event-detail-changes-same-event')).toBeNull();
+});
+
+test('zeigt auch geänderte Termine außerhalb der ersten zwanzig Vorschauzeilen', async () => {
+  mockGetDocumentAsync.mockResolvedValue(selectedFile('plan.mht'));
+  mockPreviewImport.mockResolvedValue({
+    ...preview,
+    importableCount: 21,
+    events: [
+      ...Array.from({ length: 20 }, (_, index) => ({
+        id: `event-${index + 1}`,
+        title: `Turnier ${index + 1}`,
+        startTime: '2026-11-12T18:00:00.000Z',
+        endTime: '2026-11-12T20:00:00.000Z',
+        previousTitle: null,
+        previousGameMode: null,
+        previousTeamFormat: null,
+        previousTournamentType: null,
+        previousCategory: null,
+        previousStartTime: null,
+        previousEndTime: null,
+        gameMode: 'Battle Royale',
+        teamFormat: 'Solo',
+        tournamentType: 'Cash Cup',
+        category: 'Turnier',
+        warnings: [],
+        willUpdate: false,
+      })),
+      {
+        id: 'changed-outside-limit',
+        title: 'Turnier mit geänderter Kategorie',
+        startTime: '2026-11-12T18:00:00.000Z',
+        endTime: '2026-11-12T20:00:00.000Z',
+        previousTitle: null,
+        previousGameMode: null,
+        previousTeamFormat: null,
+        previousTournamentType: null,
+        previousCategory: 'Liga',
+        previousStartTime: null,
+        previousEndTime: null,
+        gameMode: 'Battle Royale',
+        teamFormat: 'Solo',
+        tournamentType: 'Cash Cup',
+        category: 'Turnier',
+        warnings: [],
+        willUpdate: true,
+      },
+    ],
+  });
+  const screen = await openImportScreen();
+
+  await fireEvent.press(screen.getByTestId('choose-import-file-button'));
+  await fireEvent.press(screen.getByTestId('preview-import-file-button'));
+
+  expect(await screen.findByTestId('event-detail-changes-changed-outside-limit')).toBeTruthy();
+  expect(screen.getByText(/Kategorie Liga → Turnier/)).toBeTruthy();
+  expect(screen.queryByText(/weitere Termine ohne Warnung/)).toBeNull();
 });
 
 test('meldet einen Abbruch verständlich und lässt die Auswahl erneut zu', async () => {
@@ -452,6 +531,11 @@ test('zeigt fehlerhafte Karten getrennt im Importergebnis an', async () => {
       title: 'Turnier',
       startTime: '2026-11-12T18:00:00.000Z',
       endTime: '2026-11-12T20:00:00.000Z',
+      previousTitle: null,
+      previousGameMode: null,
+      previousTeamFormat: null,
+      previousTournamentType: null,
+      previousCategory: null,
       gameMode: 'Battle Royale',
       teamFormat: 'Solo',
       tournamentType: 'Cash Cup',
