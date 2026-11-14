@@ -1,6 +1,7 @@
 import React from 'react';
 import { beforeEach, expect, jest, test } from '@jest/globals';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+import { Alert } from 'react-native';
 
 const mockSaveNewPassword = jest.fn(async (_password: string) => {});
 let mockPreventRemoveEnabled = false;
@@ -327,4 +328,55 @@ test('verhindert das Verlassen, solange die Passwortänderung noch gespeichert w
 
   expect(await view.findByText('Passwort geändert')).toBeTruthy();
   expect(mockPreventRemoveEnabled).toBe(false);
+});
+
+test('behält eingegebene Passwörter, wenn das Verlassen abgebrochen wird', async () => {
+  const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+  const view = await render(<ResetPasswordScreen />);
+
+  await waitFor(() => expect(view.getByTestId('reset-password-submit-button')).toBeTruthy());
+  await fireEvent.changeText(view.getByTestId('reset-password-input'), 'Mein-neues-Passwort');
+  await fireEvent.changeText(view.getByTestId('reset-password-confirm-input'), 'Mein-neues-Passwort');
+
+  expect(mockPreventRemoveEnabled).toBe(true);
+  const repeatBlockedNavigation = jest.fn();
+  mockPreventRemoveCallback?.({
+    data: { action: { type: 'GO_BACK' } },
+    repeat: repeatBlockedNavigation,
+  });
+
+  expect(alertSpy).toHaveBeenCalledWith(
+    'Passwort nicht gespeichert',
+    'Wenn du jetzt gehst, gehen deine Eingaben verloren.',
+    expect.any(Array),
+  );
+  const buttons = alertSpy.mock.calls[0]?.[2];
+  buttons?.find((button) => button.text === 'Weiter bearbeiten')?.onPress?.();
+
+  expect(repeatBlockedNavigation).not.toHaveBeenCalled();
+  expect(view.getByTestId('reset-password-input').props.value).toBe('Mein-neues-Passwort');
+  expect(view.getByTestId('reset-password-confirm-input').props.value).toBe('Mein-neues-Passwort');
+  expect(mockPreventRemoveEnabled).toBe(true);
+  alertSpy.mockRestore();
+});
+
+test('verlässt den Bildschirm nach Bestätigung und verwirft die Passwort-Eingaben', async () => {
+  const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+  const view = await render(<ResetPasswordScreen />);
+
+  await waitFor(() => expect(view.getByTestId('reset-password-submit-button')).toBeTruthy());
+  await fireEvent.changeText(view.getByTestId('reset-password-input'), 'Mein-neues-Passwort');
+
+  expect(mockPreventRemoveEnabled).toBe(true);
+  const repeatBlockedNavigation = jest.fn();
+  mockPreventRemoveCallback?.({
+    data: { action: { type: 'GO_BACK' } },
+    repeat: repeatBlockedNavigation,
+  });
+
+  const buttons = alertSpy.mock.calls[0]?.[2];
+  buttons?.find((button) => button.text === 'Verwerfen')?.onPress?.();
+
+  expect(repeatBlockedNavigation).toHaveBeenCalledTimes(1);
+  alertSpy.mockRestore();
 });

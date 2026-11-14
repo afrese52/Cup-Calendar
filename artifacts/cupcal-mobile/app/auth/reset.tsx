@@ -2,7 +2,7 @@ import { Feather } from '@expo/vector-icons';
 import * as Linking from 'expo-linking';
 import { router, usePreventRemove } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
-import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
 import { useColors } from '@/hooks/useColors';
@@ -27,7 +27,25 @@ export default function ResetPasswordScreen() {
   const [isSaved, setIsSaved] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  usePreventRemove(isSaving, () => {});
+  const hasUnsavedPassword = !isSaved && Boolean(password || confirmPassword);
+
+  usePreventRemove(isSaving || hasUnsavedPassword, ({ repeat }) => {
+    if (isSaving) return;
+
+    const title = 'Passwort nicht gespeichert';
+    const message = 'Wenn du jetzt gehst, gehen deine Eingaben verloren.';
+    if (Platform.OS === 'web') {
+      if (typeof window !== 'undefined' && window.confirm(`${title}\n\n${message}`)) {
+        repeat();
+      }
+      return;
+    }
+
+    Alert.alert(title, message, [
+      { text: 'Weiter bearbeiten', style: 'cancel' },
+      { text: 'Verwerfen', style: 'destructive', onPress: repeat },
+    ]);
+  });
 
   useEffect(() => {
     if (!supabase) {
