@@ -82,6 +82,7 @@ export function friendlyAuthError(
   if (
     code === 'over_email_send_rate_limit'
     || code === 'over_request_rate_limit'
+    || errorDetails.status === 429
     || message.includes('email rate limit exceeded')
     || message.includes('rate limit')
     || message.includes('too many requests')
@@ -135,6 +136,13 @@ export function friendlyAuthError(
     || message.includes('failed to fetch')
   ) {
     return 'Keine Verbindung möglich. Prüfe deine Internetverbindung und versuche es erneut.';
+  }
+  if (
+    typeof errorDetails.status === 'number'
+    && errorDetails.status >= 500
+    && errorDetails.status < 600
+  ) {
+    return 'Supabase ist vorübergehend nicht verfügbar. Warte bitte kurz und versuche es dann erneut.';
   }
 
   if (rawMessage || code || typeof errorDetails.status === 'number') {

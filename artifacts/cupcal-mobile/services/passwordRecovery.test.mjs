@@ -245,6 +245,42 @@ test('behält die Wiederherstellungssitzung nach einem Netzwerkfehler für den e
   assert.equal(recovery.isPending(), false);
 });
 
+test('behält die Wiederherstellungssitzung nach einer vorübergehenden Drosselung', async () => {
+  let updateAttempts = 0;
+  const recovery = createPasswordRecovery(createAuth({
+    updateUser: async () => {
+      updateAttempts += 1;
+      if (updateAttempts === 1) {
+        return {
+          error: Object.assign(new Error('Too many requests'), {
+            code: 'over_request_rate_limit',
+            status: 429,
+          }),
+        };
+      }
+      return { error: null };
+    },
+  }));
+  recovery.markRecoverySession(true);
+
+  await assert.rejects(
+    recovery.saveNewPassword('strong-new-password'),
+    /Too many requests/i,
+  );
+  assert.equal(recovery.isPending(), true);
+  assert.equal(
+    friendlyAuthError(Object.assign(new Error('Too many requests'), {
+      code: 'over_request_rate_limit',
+      status: 429,
+    })),
+    'Zu viele Versuche in kurzer Zeit. Warte bitte einige Minuten und versuche es dann erneut.',
+  );
+
+  await recovery.saveNewPassword('strong-new-password');
+  assert.equal(updateAttempts, 2);
+  assert.equal(recovery.isPending(), false);
+});
+
 test('behält die Wiederherstellungssitzung bei einem vorübergehenden Sitzungs-Netzwerkfehler', async () => {
   let sessionAttempts = 0;
   const recovery = createPasswordRecovery(createAuth({

@@ -291,13 +291,48 @@ test('erklärt typische Ursachen, wenn Supabase die Registrierung ablehnt', asyn
   }
 });
 
+test('erklärt vorübergehende Supabase-Drosselungen unabhängig von der Netzwerkverbindung', async (t) => {
+  const expected = 'Zu viele Versuche in kurzer Zeit. Warte bitte einige Minuten und versuche es dann erneut.';
+  const cases = [
+    ['Auth-Rate-Limit-Code', Object.assign(new Error('Request rejected'), {
+      code: 'over_request_rate_limit',
+    })],
+    ['HTTP 429 ohne aussagekräftige Fehlermeldung', Object.assign(new Error('Request rejected'), {
+      status: 429,
+    })],
+    ['zu viele Anfragen im Nachrichtentext', new Error('Too many requests')],
+  ];
+
+  for (const [name, error] of cases) {
+    await t.test(name, () => {
+      assert.equal(friendlyAuthError(error), expected);
+      assert.notEqual(
+        friendlyAuthError(error),
+        'Keine Verbindung möglich. Prüfe deine Internetverbindung und versuche es erneut.',
+      );
+    });
+  }
+});
+
+test('erklärt vorübergehende Supabase-Serverfehler ohne Netzwerkfehler zu melden', () => {
+  const error = Object.assign(new Error('Service unavailable'), { status: 503 });
+  assert.equal(
+    friendlyAuthError(error),
+    'Supabase ist vorübergehend nicht verfügbar. Warte bitte kurz und versuche es dann erneut.',
+  );
+  assert.notEqual(
+    friendlyAuthError(error),
+    'Keine Verbindung möglich. Prüfe deine Internetverbindung und versuche es erneut.',
+  );
+});
+
 test('zeigt unbekannte Supabase-Fehler bereinigt mit Code und HTTP-Status', () => {
   assert.equal(
     friendlyAuthError(Object.assign(new Error('Fehler für person@example.com bei https://example.com'), {
       code: 'unexpected_auth_error',
-      status: 500,
+      status: 400,
     })),
-    'Supabase hat die Anfrage abgelehnt: Fehler für [E-Mail] bei [URL] · Code: unexpected_auth_error · HTTP 500',
+    'Supabase hat die Anfrage abgelehnt: Fehler für [E-Mail] bei [URL] · Code: unexpected_auth_error · HTTP 400',
   );
 });
 

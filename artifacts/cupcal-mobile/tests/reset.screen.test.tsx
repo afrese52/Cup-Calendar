@@ -70,6 +70,30 @@ jest.mock('@/services/supabase', () => ({
     if (message.includes('network')) {
       return 'Keine Verbindung möglich. Prüfe deine Internetverbindung und versuche es erneut.';
     }
+    if (
+      code === 'over_request_rate_limit'
+      || code === 'over_email_send_rate_limit'
+      || message.includes('rate limit')
+      || message.includes('too many requests')
+      || (
+        typeof error === 'object'
+        && error !== null
+        && 'status' in error
+        && (error as { status?: unknown }).status === 429
+      )
+    ) {
+      return 'Zu viele Versuche in kurzer Zeit. Warte bitte einige Minuten und versuche es dann erneut.';
+    }
+    if (
+      typeof error === 'object'
+      && error !== null
+      && 'status' in error
+      && typeof (error as { status?: unknown }).status === 'number'
+      && (error as { status: number }).status >= 500
+      && (error as { status: number }).status < 600
+    ) {
+      return 'Supabase ist vorübergehend nicht verfügbar. Warte bitte kurz und versuche es dann erneut.';
+    }
     if (code === 'weak_password' || message.includes('weak password')) {
       return 'Das Passwort ist zu kurz oder zu unsicher. Bitte wähle ein stärkeres Passwort.';
     }
@@ -139,6 +163,39 @@ test('behält Formular und Eingaben nach einem Verbindungsfehler für einen erne
 
   await waitFor(() => expect(view.getByText('Passwort geändert')).toBeTruthy());
   expect(mockSaveNewPassword).toHaveBeenCalledTimes(2);
+});
+
+test('behält Eingaben und ermöglicht nach vorübergehender Passwort-Drosselung einen erneuten Versuch', async () => {
+  mockSaveNewPassword
+    .mockReset()
+    .mockRejectedValueOnce(Object.assign(new Error('Too many requests'), {
+      code: 'over_request_rate_limit',
+      status: 429,
+    }))
+    .mockResolvedValueOnce(undefined);
+  const view = await render(<ResetPasswordScreen />);
+
+  await waitFor(() => expect(view.getByTestId('reset-password-submit-button')).toBeTruthy());
+  await fireEvent.changeText(view.getByTestId('reset-password-input'), 'Mein-neues-Passwort-123');
+  await fireEvent.changeText(view.getByTestId('reset-password-confirm-input'), 'Mein-neues-Passwort-123');
+  await fireEvent.press(view.getByTestId('reset-password-submit-button'));
+
+  const errorMessage = await view.findByText(
+    'Zu viele Versuche in kurzer Zeit. Warte bitte einige Minuten und versuche es dann erneut.',
+  );
+  expect(errorMessage.props.accessibilityRole).toBe('alert');
+  expect(view.getByTestId('reset-password-input').props.value).toBe('Mein-neues-Passwort-123');
+  expect(view.getByTestId('reset-password-confirm-input').props.value).toBe('Mein-neues-Passwort-123');
+  expect(view.getByTestId('reset-password-submit-button').props.accessibilityState).toEqual({
+    disabled: false,
+    busy: false,
+  });
+
+  await fireEvent.press(view.getByTestId('reset-password-submit-button'));
+  expect(await view.findByText('Passwort geändert')).toBeTruthy();
+  expect(mockSaveNewPassword).toHaveBeenCalledTimes(2);
+  expect(mockSaveNewPassword).toHaveBeenNthCalledWith(1, 'Mein-neues-Passwort-123');
+  expect(mockSaveNewPassword).toHaveBeenNthCalledWith(2, 'Mein-neues-Passwort-123');
 });
 
 test('gibt bei einem unerwarteten Speicherfehler eine zugängliche nächste Aktion aus', async () => {
