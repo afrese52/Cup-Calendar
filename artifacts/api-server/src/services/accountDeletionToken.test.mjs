@@ -3,11 +3,12 @@ import test from "node:test";
 import {
   ACCOUNT_DELETION_TOKEN_TTL_SECONDS,
   createAccountDeletionToken,
+  getAccountDeletionSigningKey,
   getAccountDeletionTokenStatus,
   verifyAccountDeletionToken,
 } from "./accountDeletionToken.ts";
 
-const signingKey = "test-only-signing-key";
+const signingKey = "test-only-signing-key-for-account-deletion";
 const userId = "123e4567-e89b-12d3-a456-426614174000";
 const now = Date.UTC(2026, 10, 12, 12, 0, 0);
 
@@ -19,6 +20,36 @@ test("signiert ein Bestätigungstoken mit begrenzter Laufzeit für das richtige 
     new Date(now + ACCOUNT_DELETION_TOKEN_TTL_SECONDS * 1000).toISOString(),
   );
   assert.equal(verifyAccountDeletionToken(created.token, signingKey, now)?.sub, userId);
+});
+
+test("liest nur den eigenen ausreichend starken Signaturschlüssel", () => {
+  assert.equal(
+    getAccountDeletionSigningKey({ SUPABASE_SERVICE_ROLE_KEY: signingKey }),
+    null,
+  );
+  assert.equal(
+    getAccountDeletionSigningKey({
+      CUPCAL_ACCOUNT_DELETION_SIGNING_KEY: "too-short",
+      SUPABASE_SERVICE_ROLE_KEY: signingKey,
+    }),
+    null,
+  );
+  assert.equal(
+    getAccountDeletionSigningKey({
+      CUPCAL_ACCOUNT_DELETION_SIGNING_KEY: signingKey,
+      SUPABASE_SERVICE_ROLE_KEY: signingKey,
+    }),
+    null,
+  );
+  assert.equal(
+    getAccountDeletionSigningKey({
+      CUPCAL_ACCOUNT_DELETION_SIGNING_KEY: signingKey,
+      SUPABASE_SERVICE_ROLE_KEY: "separate-service-role-key",
+    }),
+    signingKey,
+  );
+  assert.throws(() => createAccountDeletionToken(userId, "too-short", now));
+  assert.equal(verifyAccountDeletionToken("payload.signature", "", now), null);
 });
 
 test("weist manipulierte, fremd signierte und abgelaufene Token ab", () => {

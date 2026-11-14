@@ -1,6 +1,10 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { z } from "zod";
-import { createAccountDeletionToken, getAccountDeletionTokenStatus } from "../services/accountDeletionToken";
+import {
+  createAccountDeletionToken,
+  getAccountDeletionSigningKey,
+  getAccountDeletionTokenStatus,
+} from "../services/accountDeletionToken";
 import { getSupabaseAdmin } from "../services/supabase";
 
 const router: IRouter = Router();
@@ -51,9 +55,9 @@ router.post("/v1/account/deletion/request", async (req, res): Promise<void> => {
     return;
   }
 
-  const signingKey = process.env["SUPABASE_SERVICE_ROLE_KEY"];
+  const signingKey = getAccountDeletionSigningKey();
   if (!signingKey) {
-    req.log.error("Account deletion is unavailable because its signing key is not configured");
+    req.log.error("Account deletion is unavailable because its dedicated signing key is missing or too weak");
     res.status(503).json({ error: "Der Kontodienst ist vorübergehend nicht verfügbar." });
     return;
   }
@@ -84,9 +88,9 @@ router.post("/v1/account/deletion/confirm", async (req, res): Promise<void> => {
     return;
   }
 
-  const signingKey = process.env["SUPABASE_SERVICE_ROLE_KEY"];
+  const signingKey = getAccountDeletionSigningKey();
   if (!signingKey) {
-    req.log.error("Account deletion is unavailable because its signing key is not configured");
+    req.log.error("Account deletion is unavailable because its dedicated signing key is missing or too weak");
     res.status(503).json({ error: "Das Konto konnte gerade nicht gelöscht werden." });
     return;
   }

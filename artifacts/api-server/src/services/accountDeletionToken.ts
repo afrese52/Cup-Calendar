@@ -1,6 +1,7 @@
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 
 export const ACCOUNT_DELETION_TOKEN_TTL_SECONDS = 30 * 60;
+export const ACCOUNT_DELETION_SIGNING_KEY_MIN_BYTES = 32;
 
 type AccountDeletionClaims = {
   sub: string;
@@ -12,12 +13,28 @@ function signPayload(payload: string, signingKey: string): string {
   return createHmac("sha256", signingKey).update(payload).digest("base64url");
 }
 
+function isStrongSigningKey(signingKey: string | undefined): signingKey is string {
+  return typeof signingKey === "string"
+    && signingKey.trim().length > 0
+    && Buffer.byteLength(signingKey, "utf8") >= ACCOUNT_DELETION_SIGNING_KEY_MIN_BYTES;
+}
+
+export function getAccountDeletionSigningKey(
+  environment: NodeJS.ProcessEnv = process.env,
+): string | null {
+  const signingKey = environment["CUPCAL_ACCOUNT_DELETION_SIGNING_KEY"];
+  return isStrongSigningKey(signingKey)
+    && signingKey !== environment["SUPABASE_SERVICE_ROLE_KEY"]
+    ? signingKey
+    : null;
+}
+
 export function createAccountDeletionToken(
   userId: string,
   signingKey: string,
   now = Date.now(),
 ): { token: string; expiresAt: string } {
-  if (!userId || !signingKey) {
+  if (!userId || !isStrongSigningKey(signingKey)) {
     throw new Error("A user and signing key are required.");
   }
 
@@ -40,7 +57,7 @@ export function verifyAccountDeletionToken(
   signingKey: string,
   now = Date.now(),
 ): AccountDeletionClaims | null {
-  if (!signingKey || token.length > 2048) return null;
+  if (!isStrongSigningKey(signingKey) || token.length > 2048) return null;
 
   const parts = token.split(".");
   if (parts.length !== 2 || parts.some((part) => !/^[A-Za-z0-9_-]+$/.test(part))) {
