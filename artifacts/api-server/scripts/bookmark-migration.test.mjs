@@ -298,6 +298,19 @@ test("0002 übernimmt Favoriten aus Profil- und Event-gebundenen Tabellen", asyn
     "t",
     "Die migrierte Tabelle muss Row Level Security verwenden.",
   );
+  assert.equal(
+    psql(`
+      SELECT NOT has_table_privilege('anon', 'public.user_event_bookmarks', 'SELECT')
+        AND NOT has_table_privilege('anon', 'public.user_event_bookmarks', 'INSERT')
+        AND NOT has_table_privilege('anon', 'public.user_event_bookmarks', 'UPDATE')
+        AND has_table_privilege('authenticated', 'public.user_event_bookmarks', 'SELECT')
+        AND has_table_privilege('authenticated', 'public.user_event_bookmarks', 'INSERT')
+        AND has_table_privilege('authenticated', 'public.user_event_bookmarks', 'UPDATE')
+        AND NOT has_table_privilege('authenticated', 'public.user_event_bookmarks', 'DELETE');
+    `, legacyDatabase),
+    "t",
+    "Anonyme Tabellenrechte müssen entzogen bleiben; angemeldete Nutzer erhalten nur die benötigten Rechte.",
+  );
 
   psql(`
     SET ROLE authenticated;

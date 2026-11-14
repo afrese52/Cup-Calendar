@@ -135,6 +135,72 @@ test("anonyme RPC-Aufrufe können Favoriten weder anlegen noch ändern", async (
   });
 });
 
+test("anonyme Tabellenzugriffe können Favoriten weder lesen noch einfügen oder ändern", async () => {
+  await withTestAccounts(async (account) => {
+    const anonymousClient = createClient(supabaseUrl, anonKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+    const admin = createClient(supabaseUrl, serviceRoleKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+    const existingEventId = `anonymous-table-existing-${randomUUID()}`;
+    const newEventId = `anonymous-table-new-${randomUUID()}`;
+
+    const seed = await account.client.from("user_event_bookmarks").insert({
+      user_id: account.id,
+      event_id: existingEventId,
+      is_favorite: true,
+    });
+    assert.ifError(seed.error);
+
+    const read = await anonymousClient
+      .from("user_event_bookmarks")
+      .select("user_id, event_id, is_favorite")
+      .eq("user_id", account.id)
+      .eq("event_id", existingEventId);
+    assert.deepEqual(
+      read.data ?? [],
+      [],
+      "Ein anonymer Client darf vorhandene Favoriten nicht lesen.",
+    );
+
+    const insert = await anonymousClient.from("user_event_bookmarks").insert({
+      user_id: account.id,
+      event_id: newEventId,
+      is_favorite: true,
+    });
+    assert.ok(insert.error, "Ein anonymer Client darf keine Favoriten einfügen.");
+
+    const update = await anonymousClient
+      .from("user_event_bookmarks")
+      .update({ is_favorite: false })
+      .eq("user_id", account.id)
+      .eq("event_id", existingEventId)
+      .select("event_id");
+    assert.ok(
+      update.error || update.data?.length === 0,
+      "Ein anonymer Client darf keine Favoriten ändern.",
+    );
+
+    const savedRows = await admin
+      .from("user_event_bookmarks")
+      .select("user_id, event_id, is_favorite, revision")
+      .in("event_id", [existingEventId, newEventId])
+      .order("event_id");
+    assert.ifError(savedRows.error);
+    assert.deepEqual(
+      savedRows.data,
+      [{
+        user_id: account.id,
+        event_id: existingEventId,
+        is_favorite: true,
+        revision: 0,
+      }],
+      "Anonyme Tabellenzugriffe dürfen keine Favoriten lesen oder verändern.",
+    );
+  });
+});
+
 test("Supabase-RLS trennt Favoriten-Lese- und Schreibzugriffe", async () => {
   await withTestAccounts(async (accountA, accountB) => {
     const eventA = `isolation-a-${randomUUID()}`;

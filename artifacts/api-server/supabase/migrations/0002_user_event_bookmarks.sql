@@ -55,6 +55,7 @@ ALTER TABLE public.user_event_bookmarks
     FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
 
 ALTER TABLE public.user_event_bookmarks ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON TABLE public.user_event_bookmarks FROM PUBLIC, anon;
 GRANT SELECT, INSERT, UPDATE ON public.user_event_bookmarks TO authenticated;
 
 DROP POLICY IF EXISTS "Users read own bookmarks" ON public.user_event_bookmarks;
