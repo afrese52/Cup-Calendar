@@ -390,4 +390,25 @@ test("0002 übernimmt Favoriten aus Profil- und Event-gebundenen Tabellen", asyn
     "1",
     "Das Löschen eines früher referenzierten Turniers darf den migrierten Favoriten nicht entfernen.",
   );
+
+  assert.equal(
+    psql(`
+      DELETE FROM auth.users
+      WHERE id = '${legacyAccountId}'
+      RETURNING id;
+    `, legacyDatabase),
+    legacyAccountId,
+    "Der Test muss genau das erste Konto löschen.",
+  );
+  assert.equal(
+    psql(`
+      SELECT string_agg(
+        user_id::text || ':' || event_id,
+        '|' ORDER BY user_id, event_id
+      )
+      FROM public.user_event_bookmarks;
+    `, legacyDatabase),
+    `${otherAccountId}:legacy-event-two`,
+    "Das Löschen eines Kontos muss alle zugehörigen Favoriten kaskadierend entfernen und die des anderen Kontos erhalten.",
+  );
 });
