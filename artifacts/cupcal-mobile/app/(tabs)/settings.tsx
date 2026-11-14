@@ -100,6 +100,7 @@ export default function SettingsScreen() {
   const [authError, setAuthError] = useState<string | null>(null);
   const authErrorRef = useRef<React.ComponentRef<typeof Text>>(null);
   const lastAnnouncedAccountStatusRef = useRef<string | null>(null);
+  const hasAnnouncedSessionCheckRef = useRef(false);
   const [authMessage, setAuthMessage] = useState<string | null>(null);
   const [confirmationResendAvailableAt, setConfirmationResendAvailableAt] = useState<number | null>(null);
   const [confirmationResendClock, setConfirmationResendClock] = useState(() => Date.now());
@@ -192,6 +193,18 @@ export default function SettingsScreen() {
       onReady: () => setIsCheckingSession(false),
     });
   }, []);
+
+  useEffect(() => {
+    if (
+      !supabase
+      || !isCheckingSession
+      || Platform.OS === 'web'
+      || hasAnnouncedSessionCheckRef.current
+    ) return;
+
+    hasAnnouncedSessionCheckRef.current = true;
+    AccessibilityInfo.announceForAccessibility('Sitzung wird geprüft …');
+  }, [isCheckingSession]);
 
   useEffect(() => {
     if (!supabase || isCheckingSession || Platform.OS !== 'ios') return;

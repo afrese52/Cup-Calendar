@@ -666,37 +666,49 @@ test('zeigt nach Wiederherstellung einer gespeicherten Sitzung das angemeldete K
 });
 
 test.each([
-  ['angemeldete', testSession, 'Angemeldet'],
-  ['abgemeldete', null, 'Bei CupCal anmelden'],
-] as const)('macht die %s Sitzung während und nach der verzögerten Prüfung hörbar', async (_name, session, finalStatus) => {
-  let finishSessionCheck!: (result: { data: { session: typeof testSession | null }; error: null }) => void;
-  auth.getSession.mockImplementation(
-    () => new Promise((resolve) => {
-      finishSessionCheck = resolve;
-    }),
-  );
-
-  const view = await render(<SettingsScreen />);
-  const loadingStatus = view.getByTestId('account-session-status');
-  expect(loadingStatus.props.accessible).toBe(true);
-  expect(loadingStatus.props.accessibilityRole).toBe('text');
-  expect(loadingStatus.props.accessibilityLiveRegion).toBe('polite');
-  expect(loadingStatus.props.children).toBe('Sitzung wird geprüft …');
-
-  await act(async () => finishSessionCheck({ data: { session }, error: null }));
-
-  const resolvedStatus = await view.findByTestId('account-session-status');
-  expect(resolvedStatus.props.children).toBe(finalStatus);
-  expect(resolvedStatus.props.accessible).toBe(true);
-  expect(resolvedStatus.props.accessibilityRole).toBe('text');
-  expect(resolvedStatus.props.accessibilityLiveRegion).toBe('polite');
-  if (session) expect(view.getByText('test@example.invalid')).toBeTruthy();
-  if (Platform.OS === 'ios') {
-    expect(announceForAccessibility).toHaveBeenCalledWith(
-      session ? 'Angemeldet. test@example.invalid' : 'Abgemeldet. Bei CupCal anmelden.',
+  ['ios', 'angemeldete', testSession, 'Angemeldet'],
+  ['ios', 'abgemeldete', null, 'Bei CupCal anmelden'],
+  ['android', 'angemeldete', testSession, 'Angemeldet'],
+  ['android', 'abgemeldete', null, 'Bei CupCal anmelden'],
+] as const)(
+  'macht den Prüfhinweis und die %s-%s Sitzung hörbar',
+  async (platform, _name, session, finalStatus) => {
+    const originalPlatformOS = Platform.OS;
+    Object.defineProperty(Platform, 'OS', { configurable: true, value: platform });
+    let finishSessionCheck!: (result: { data: { session: typeof testSession | null }; error: null }) => void;
+    auth.getSession.mockImplementation(
+      () => new Promise((resolve) => {
+        finishSessionCheck = resolve;
+      }),
     );
-  }
-});
+
+    try {
+      const view = await render(<SettingsScreen />);
+      const loadingStatus = view.getByTestId('account-session-status');
+      expect(loadingStatus.props.accessible).toBe(true);
+      expect(loadingStatus.props.accessibilityRole).toBe('text');
+      expect(loadingStatus.props.accessibilityLiveRegion).toBe('polite');
+      expect(loadingStatus.props.children).toBe('Sitzung wird geprüft …');
+      expect(announceForAccessibility).toHaveBeenCalledWith('Sitzung wird geprüft …');
+
+      await act(async () => finishSessionCheck({ data: { session }, error: null }));
+
+      const resolvedStatus = await view.findByTestId('account-session-status');
+      expect(resolvedStatus.props.children).toBe(finalStatus);
+      expect(resolvedStatus.props.accessible).toBe(true);
+      expect(resolvedStatus.props.accessibilityRole).toBe('text');
+      expect(resolvedStatus.props.accessibilityLiveRegion).toBe('polite');
+      if (session) expect(view.getByText('test@example.invalid')).toBeTruthy();
+      if (platform === 'ios') {
+        expect(announceForAccessibility).toHaveBeenLastCalledWith(
+          session ? 'Angemeldet. test@example.invalid' : 'Abgemeldet. Bei CupCal anmelden.',
+        );
+      }
+    } finally {
+      Object.defineProperty(Platform, 'OS', { configurable: true, value: originalPlatformOS });
+    }
+  },
+);
 
 test('macht spätere An- und Abmeldungen im zugänglichen Kontostatus sichtbar', async () => {
   auth.getSession.mockResolvedValue({ data: { session: null }, error: null });
