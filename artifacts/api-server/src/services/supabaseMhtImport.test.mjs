@@ -1,5 +1,13 @@
 import assert from "node:assert/strict";
+import { createServer } from "node:http";
+import { createRequire } from "node:module";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { pathToFileURL, fileURLToPath } from "node:url";
 import test from "node:test";
+import { build } from "esbuild";
+import { parseMhtSchedule } from "../../scripts/dry-run-mht-import.mjs";
 import {
   buildMhtEventUpsertRows,
   getMhtEventTimeChanges,
@@ -7,6 +15,50 @@ import {
   recordMhtImportHistory,
   upsertMhtEvents,
 } from "./supabase.ts";
+
+function listen(server) {
+  return new Promise((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", () => {
+      server.off("error", reject);
+      resolve(`http://127.0.0.1:${server.address().port}`);
+    });
+  });
+}
+
+function closeServer(server) {
+  return new Promise((resolve, reject) => {
+    server.close((error) => error ? reject(error) : resolve());
+  });
+}
+
+async function loadApiApp() {
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), "cupcal-admin-import-api-test-"));
+  const bundlePath = path.join(tempDir, "app.mjs");
+  const previousRequire = globalThis.require;
+  globalThis.require = createRequire(import.meta.url);
+  try {
+    await build({
+      entryPoints: [fileURLToPath(new URL("../app.ts", import.meta.url))],
+      bundle: true,
+      format: "esm",
+      platform: "node",
+      outfile: bundlePath,
+      logLevel: "silent",
+      banner: {
+        js: "import { createRequire as createBundleRequire } from 'node:module'; globalThis.require = createBundleRequire(import.meta.url);",
+      },
+    });
+    const { default: app } = await import(pathToFileURL(bundlePath).href);
+    return { app, tempDir };
+  } catch (error) {
+    await rm(tempDir, { recursive: true, force: true });
+    throw error;
+  } finally {
+    if (previousRequire === undefined) delete globalThis.require;
+    else globalThis.require = previousRequire;
+  }
+}
 
 function event(overrides = {}) {
   return {
@@ -41,6 +93,123 @@ test("meldet für neue Termine und unveränderte Zeiten keine Zeitänderung", ()
     previousStartTime: null,
     previousEndTime: null,
   });
+});
+
+test("gibt Zeitänderungen im authentifizierten Import-Vorschau-Endpunkt zurück", async () => {
+  const originalEnv = new Map(
+    ["NODE_ENV", "SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "CUPCAL_IMPORT_ADMIN_EMAILS"]
+      .map((key) => [key, process.env[key]]),
+  );
+  const fixturePath = new URL("../../scripts/fixtures/real-schedule-format-sample.mht", import.meta.url);
+  const sourceText = await readFile(fixturePath, "utf8");
+  const schedule = parseMhtSchedule(Buffer.from(sourceText, "utf8"), { timeZone: "Europe/Berlin" });
+  const unchangedEvent = schedule.events.find((item) => item.title === "Reload Ranked Cup (Duo) Battle Royale");
+  const changedEvent = schedule.events.find((item) => item.title === "Trio Cash Cup Battle Royale");
+  assert.ok(unchangedEvent, "Die Fixture enthält den unveränderten Duo-Termin.");
+  assert.ok(changedEvent, "Die Fixture enthält den geänderten Trio-Termin.");
+  const previousChangedStart = new Date(Date.parse(changedEvent.start_time) - 60 * 60 * 1000).toISOString();
+  const previousChangedEnd = new Date(Date.parse(changedEvent.end_time) - 60 * 60 * 1000).toISOString();
+  const queriedIds = [];
+  const fakeSupabase = createServer((request, response) => {
+    response.setHeader("Content-Type", "application/json");
+    if (request.url === "/auth/v1/user") {
+      if (request.headers.authorization !== "Bearer valid-admin-preview-token") {
+        response.statusCode = 401;
+        response.end(JSON.stringify({ message: "Invalid test session" }));
+        return;
+      }
+      response.end(JSON.stringify({
+        id: "admin-preview-test-user",
+        email: "admin@cupcal.test",
+      }));
+      return;
+    }
+    if (request.url?.startsWith("/rest/v1/fortnite_events")) {
+      const url = new URL(request.url, "http://supabase.test");
+      queriedIds.push(url.searchParams.get("id"));
+      response.end(JSON.stringify([
+        {
+          id: unchangedEvent.id,
+          start_time: unchangedEvent.start_time,
+          end_time: unchangedEvent.end_time,
+        },
+        {
+          id: changedEvent.id,
+          start_time: previousChangedStart,
+          end_time: previousChangedEnd,
+        },
+      ]));
+      return;
+    }
+    response.statusCode = 404;
+    response.end(JSON.stringify({ message: "Unexpected test request" }));
+  });
+  let fakeSupabaseUrl;
+  let apiServer;
+  let tempDir;
+
+  try {
+    fakeSupabaseUrl = await listen(fakeSupabase);
+    process.env["NODE_ENV"] = "production";
+    process.env["SUPABASE_URL"] = fakeSupabaseUrl;
+    process.env["SUPABASE_SERVICE_ROLE_KEY"] = "test-service-role-key";
+    process.env["CUPCAL_IMPORT_ADMIN_EMAILS"] = "admin@cupcal.test";
+
+    const loaded = await loadApiApp();
+    tempDir = loaded.tempDir;
+    apiServer = loaded.app.listen(0, "127.0.0.1");
+    await new Promise((resolve, reject) => {
+      apiServer.once("error", reject);
+      apiServer.once("listening", resolve);
+    });
+
+    const response = await fetch(
+      `http://127.0.0.1:${apiServer.address().port}/api/v1/admin/events/import/preview`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer valid-admin-preview-token",
+          "Content-Type": "text/plain; charset=utf-8",
+        },
+        body: sourceText,
+      },
+    );
+    const result = await response.json();
+    assert.equal(response.status, 200, JSON.stringify(result));
+
+    const newEvent = result.events.find((item) => item.id === "epic:S43_ReloadZBDuosCashCup:S43_ReloadZBDuosCashCup_Event1Round2_EU");
+    const unchanged = result.events.find((item) => item.id === unchangedEvent.id);
+    const changed = result.events.find((item) => item.id === changedEvent.id);
+    assert.ok(newEvent, "Die Vorschau enthält den neuen Termin.");
+    assert.ok(unchanged, "Die Vorschau enthält den unveränderten Termin.");
+    assert.ok(changed, "Die Vorschau enthält den geänderten Termin.");
+
+    assert.equal(newEvent.willUpdate, false);
+    assert.equal(newEvent.previousStartTime, null);
+    assert.equal(newEvent.previousEndTime, null);
+
+    assert.equal(unchanged.willUpdate, true);
+    assert.equal(unchanged.previousStartTime, null);
+    assert.equal(unchanged.previousEndTime, null);
+
+    assert.equal(changed.willUpdate, true);
+    assert.equal(changed.startTime, changedEvent.start_time);
+    assert.equal(changed.endTime, changedEvent.end_time);
+    assert.equal(changed.previousStartTime, previousChangedStart);
+    assert.equal(changed.previousEndTime, previousChangedEnd);
+    assert.equal(queriedIds.length, 1);
+    assert.ok(queriedIds[0]?.includes(unchangedEvent.id));
+    assert.ok(queriedIds[0]?.includes(changedEvent.id));
+    assert.ok(queriedIds[0]?.includes(newEvent.id));
+  } finally {
+    if (apiServer?.listening) await closeServer(apiServer);
+    if (fakeSupabase.listening) await closeServer(fakeSupabase);
+    if (tempDir) await rm(tempDir, { recursive: true, force: true });
+    for (const [key, value] of originalEnv) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
 });
 
 test("gibt nur die jeweils geänderte bisherige Zeit zurück", () => {
