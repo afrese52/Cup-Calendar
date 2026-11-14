@@ -18,6 +18,8 @@ function isEvent(value: unknown): value is TournamentEvent {
     typeof event.description === 'string' &&
     typeof event.region === 'string' &&
     typeof event.gameMode === 'string' &&
+    (event.gameRuleset === undefined || event.gameRuleset === null || typeof event.gameRuleset === 'string') &&
+    (event.tournamentSeries === undefined || event.tournamentSeries === null || typeof event.tournamentSeries === 'string') &&
     typeof event.teamFormat === 'string' &&
     typeof event.tournamentType === 'string' &&
     typeof event.category === 'string' &&

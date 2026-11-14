@@ -10,6 +10,8 @@ interface CachedEventRow {
   description: string;
   region: TournamentEvent['region'];
   game_mode: TournamentEvent['gameMode'];
+  game_ruleset: TournamentEvent['gameRuleset'];
+  tournament_series: TournamentEvent['tournamentSeries'];
   team_format: TournamentEvent['teamFormat'];
   tournament_type: TournamentEvent['tournamentType'];
   category: TournamentEvent['category'];
@@ -32,6 +34,8 @@ async function getDatabase(): Promise<SQLiteDatabase> {
           description TEXT NOT NULL,
           region TEXT NOT NULL,
           game_mode TEXT NOT NULL,
+          game_ruleset TEXT,
+          tournament_series TEXT,
           team_format TEXT NOT NULL,
           tournament_type TEXT NOT NULL,
           category TEXT NOT NULL,
@@ -46,6 +50,14 @@ async function getDatabase(): Promise<SQLiteDatabase> {
           updated_at INTEGER NOT NULL
         );
       `);
+      const columns = await database.getAllAsync<{ name: string }>('PRAGMA table_info(events)');
+      const columnNames = new Set(columns.map((column) => column.name));
+      if (!columnNames.has('game_ruleset')) {
+        await database.execAsync('ALTER TABLE events ADD COLUMN game_ruleset TEXT');
+      }
+      if (!columnNames.has('tournament_series')) {
+        await database.execAsync('ALTER TABLE events ADD COLUMN tournament_series TEXT');
+      }
       await database.runAsync("DELETE FROM events WHERE id LIKE 'preview-%'");
       return database;
     })().catch((error: unknown) => {
@@ -63,6 +75,8 @@ function mapRow(row: CachedEventRow): TournamentEvent {
     description: row.description,
     region: row.region,
     gameMode: row.game_mode,
+    gameRuleset: row.game_ruleset,
+    tournamentSeries: row.tournament_series,
     teamFormat: row.team_format,
     tournamentType: row.tournament_type,
     category: row.category,
@@ -97,14 +111,17 @@ export async function saveEventsToCache(events: TournamentEvent[]): Promise<void
     for (const event of events) {
       await database.runAsync(
         `INSERT INTO events (
-          id, title, description, region, game_mode, team_format,
-          tournament_type, category, start_time, end_time, featured, cached_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          id, title, description, region, game_mode, game_ruleset,
+          tournament_series, team_format, tournament_type, category,
+          start_time, end_time, featured, cached_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
           title = excluded.title,
           description = excluded.description,
           region = excluded.region,
           game_mode = excluded.game_mode,
+          game_ruleset = excluded.game_ruleset,
+          tournament_series = excluded.tournament_series,
           team_format = excluded.team_format,
           tournament_type = excluded.tournament_type,
           category = excluded.category,
@@ -118,6 +135,8 @@ export async function saveEventsToCache(events: TournamentEvent[]): Promise<void
           event.description,
           event.region,
           event.gameMode,
+          event.gameRuleset ?? null,
+          event.tournamentSeries ?? null,
           event.teamFormat,
           event.tournamentType,
           event.category,

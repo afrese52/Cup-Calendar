@@ -5,6 +5,8 @@ export interface ParsedMhtEvent {
   poster_url: string | null;
   region: string;
   game_mode: "Battle Royale" | "Zero Build" | "Reload" | "Community";
+  game_ruleset: "Battle Royale" | "Zero Build" | "Community" | null;
+  tournament_series: "Reload" | null;
   team_format: "Solo" | "Duos" | "Trios" | "Squads";
   tournament_type: "FNCS" | "Cash Cup" | "Ranked Cup" | "Community";
   category: "Turnier" | "Liga" | "Qualifikation" | "Trainingsrunde";

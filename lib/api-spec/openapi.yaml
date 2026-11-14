@@ -247,6 +247,15 @@ components:
         gameMode:
           type: string
           enum: [Battle Royale, Zero Build, Reload, Community]
+          description: Legacy mode value retained for existing API clients
+        gameRuleset:
+          type: ["string", "null"]
+          enum: [Battle Royale, Zero Build, Community, null]
+          description: Tournament ruleset, when known
+        tournamentSeries:
+          type: ["string", "null"]
+          enum: [Reload, null]
+          description: Tournament series, when applicable
         teamFormat:
           type: string
           enum: [Solo, Duos, Trios, Squads]
@@ -312,6 +321,12 @@ components:
         gameMode:
           type: string
           enum: [Battle Royale, Zero Build, Reload, Community]
+        gameRuleset:
+          type: ["string", "null"]
+          enum: [Battle Royale, Zero Build, Community, null]
+        tournamentSeries:
+          type: ["string", "null"]
+          enum: [Reload, null]
         teamFormat:
           type: string
           enum: [Solo, Duos, Trios, Squads]
@@ -331,6 +346,12 @@ components:
         previousGameMode:
           type: ["string", "null"]
           description: Previous game mode when it differs from the imported value
+        previousGameRuleset:
+          type: ["string", "null"]
+          description: Previous ruleset when it differs from the imported value
+        previousTournamentSeries:
+          type: ["string", "null"]
+          description: Previous tournament series when it differs from the imported value
         previousTeamFormat:
           type: ["string", "null"]
           description: Previous team format when it differs from the imported value

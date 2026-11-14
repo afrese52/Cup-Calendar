@@ -112,7 +112,10 @@ export default function EventDetailsScreen() {
           <InfoBlock icon="calendar" label="DATUM" value={dateLabel} />
           <InfoBlock icon="clock" label="UHRZEIT" value={`${timeLabel} Uhr`} />
           <InfoBlock icon="users" label="FORMAT" value={event.teamFormat} />
-          <InfoBlock icon="target" label="MODUS" value={event.gameMode} />
+          <InfoBlock icon="target" label="REGELWERK" value={event.gameRuleset ?? event.gameMode} />
+          {event.tournamentSeries ? (
+            <InfoBlock icon="refresh-cw" label="SERIE" value={event.tournamentSeries} />
+          ) : null}
         </View>
 
         <View style={[styles.notice, { backgroundColor: colors.surfaceRaised, borderColor: colors.border }]}>

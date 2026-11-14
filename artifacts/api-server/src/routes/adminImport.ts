@@ -5,6 +5,8 @@ import { getAdminImportAccess, getSafeUpcomingEvents, parseAdminEmailAllowlist }
 import {
   getSupabaseAdmin,
   getMhtEventChanges,
+  isMissingEventMetadataColumns,
+  EventMetadataMigrationRequiredError,
   ImportHistoryWriteError,
   listRecentMhtImports,
   recordMhtImportHistory,
@@ -143,16 +145,28 @@ async function findExistingEvents(
 ): Promise<Map<string, ExistingMhtEvent>> {
   if (eventIds.length === 0) return new Map();
   try {
-    const { data, error } = await getSupabaseAdmin()
+    const admin = getSupabaseAdmin();
+    type ExistingRow = { id: string } & ExistingMhtEvent;
+    type QueryResult = {
+      data: ExistingRow[] | null;
+      error: { code?: string; message?: string; details?: string } | null;
+    };
+    let { data, error } = await admin
       .from("fortnite_events")
-      .select("id, title, game_mode, team_format, tournament_type, category, start_time, end_time")
-      .in("id", eventIds);
+      .select("id, title, game_mode, game_ruleset, tournament_series, team_format, tournament_type, category, start_time, end_time")
+      .in("id", eventIds) as unknown as QueryResult;
+    if (error && isMissingEventMetadataColumns(error)) {
+      ({ data, error } = await admin
+        .from("fortnite_events")
+        .select("id, title, game_mode, team_format, tournament_type, category, start_time, end_time")
+        .in("id", eventIds) as unknown as QueryResult);
+    }
     if (error) throw error;
-    return new Map((data ?? []).map((row: {
-      id: string;
-    } & ExistingMhtEvent) => [row.id, {
+    return new Map((data ?? []).map((row) => [row.id, {
       title: row.title,
       game_mode: row.game_mode,
+      game_ruleset: row.game_ruleset ?? null,
+      tournament_series: row.tournament_series ?? null,
       team_format: row.team_format,
       tournament_type: row.tournament_type,
       category: row.category,
@@ -192,6 +206,8 @@ async function buildPreview(
       startTime: event.start_time,
       endTime: event.end_time,
       gameMode: event.game_mode,
+      gameRuleset: event.game_ruleset,
+      tournamentSeries: event.tournament_series,
       teamFormat: event.team_format,
       tournamentType: event.tournament_type,
       category: event.category,
@@ -312,6 +328,12 @@ router.post(
       });
     } catch (error) {
       req.log.error("MHT schedule import failed");
+      if (error instanceof EventMetadataMigrationRequiredError) {
+        res.status(503).json({
+          error: "Die Datenbank ist noch nicht für Turnierserie und Regelwerk migriert. Wende die neue Supabase-Migration an und wiederhole den Import.",
+        });
+        return;
+      }
       if (error instanceof ImportHistoryWriteError) {
         res.status(503).json({
           error: "Die Termine wurden gespeichert, aber der Historieneintrag fehlt. Bitte wende dich an die Administration, bevor du erneut importierst.",

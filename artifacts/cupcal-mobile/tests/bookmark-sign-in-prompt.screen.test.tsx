@@ -173,6 +173,44 @@ test.each(['android', 'ios'] as const)(
   },
 );
 
+test('zeigt Reload-Serie und Zero-Build-Regelwerk getrennt auf der Kalenderkarte', async () => {
+  const reloadZeroBuildEvent = {
+    ...event,
+    gameMode: 'Reload' as const,
+    gameRuleset: 'Zero Build' as const,
+    tournamentSeries: 'Reload' as const,
+  };
+  const view = await render(
+    <EventCard event={reloadZeroBuildEvent} isBookmarked={false} onBookmarkToggle={() => undefined} />,
+  );
+
+  expect(view.getByText('Zero Build')).toBeTruthy();
+  expect(view.getByText('Reload')).toBeTruthy();
+});
+
+test('zeigt Regelwerk und Turnierserie getrennt in den Turnierdetails', async () => {
+  const reloadZeroBuildEvent = {
+    ...event,
+    gameMode: 'Reload' as const,
+    gameRuleset: 'Zero Build' as const,
+    tournamentSeries: 'Reload' as const,
+  };
+  mockContext.current = {
+    authReady: true,
+    isAuthenticated: false,
+    events: [reloadZeroBuildEvent],
+    bookmarkedIds: [],
+    toggleBookmark: mockToggleBookmark,
+  };
+
+  const view = await render(<EventDetailsScreen />);
+
+  expect(view.getByText('REGELWERK')).toBeTruthy();
+  expect(view.getByText('SERIE')).toBeTruthy();
+  expect(view.getByText('Zero Build')).toBeTruthy();
+  expect(view.getByText('Reload')).toBeTruthy();
+});
+
 test.each(['android', 'ios'] as const)(
   'Turnierdetails behalten Gäste auf der Ansicht und erlauben Speichern nach Anmeldung auf %s',
   async (platform) => {

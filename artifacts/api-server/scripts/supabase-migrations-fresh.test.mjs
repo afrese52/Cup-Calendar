@@ -151,6 +151,23 @@ test("alle Supabase-Migrationen laufen auf einer frischen Datenbank durch", asyn
   );
 
   for (const file of migrationFiles) {
+    if (file === "0008_event_series_and_ruleset.sql") {
+      psql(`
+        INSERT INTO public.fortnite_events (
+          id, title, region, game_mode, team_format, tournament_type,
+          category, start_time, end_time
+        ) VALUES
+        (
+          'legacy-reload-event', 'Reload Cash Cup', 'EU', 'Reload', 'Solo',
+          'Cash Cup', 'Turnier', '2026-11-14 18:00:00+00', '2026-11-14 20:00:00+00'
+        ),
+        (
+          'legacy-reload-zero-build-event', 'Reload ZB Cash Cup Zero Build',
+          'EU', 'Zero Build', 'Duos', 'Cash Cup', 'Turnier',
+          '2026-11-14 18:00:00+00', '2026-11-14 20:00:00+00'
+        );
+      `);
+    }
     const migration = await readFile(path.join(migrationsDir, file), "utf8");
     try {
       psql(migration);
@@ -159,6 +176,19 @@ test("alle Supabase-Migrationen laufen auf einer frischen Datenbank durch", asyn
       throw error;
     }
   }
+
+  assert.equal(
+    psql(`
+      SELECT string_agg(
+        id || ':' || tournament_series || ':' || COALESCE(game_ruleset, 'unknown'),
+        ',' ORDER BY id
+      )
+      FROM public.fortnite_events
+      WHERE id LIKE 'legacy-reload%';
+    `),
+    "legacy-reload-event:Reload:unknown,legacy-reload-zero-build-event:Reload:Zero Build",
+    "Die Migration muss alte Reload-Varianten abbilden und unbekannte Regelwerke offenlassen.",
+  );
 
   assert.equal(
     psql(`

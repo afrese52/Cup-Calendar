@@ -527,10 +527,13 @@ export default function AdminImportScreen() {
                           <View style={styles.eventCopy}>
                             <Text style={[styles.eventTitle, { color: colors.foreground }]}>{event.title}</Text>
                             <Text style={[styles.eventMeta, { color: colors.mutedForeground }]}>
-                              {formatImportTime(event.startTime, preview.timeZone)} · {event.teamFormat} · {event.gameMode}
+                              {formatImportTime(event.startTime, preview.timeZone)} · {event.teamFormat} · {event.gameRuleset ?? event.gameMode}
+                              {event.tournamentSeries ? ` · ${event.tournamentSeries}` : ''}
                             </Text>
                             {event.previousTitle
                               || event.previousGameMode
+                              || event.previousGameRuleset
+                              || event.previousTournamentSeries
                               || event.previousTeamFormat
                               || event.previousTournamentType
                               || event.previousCategory ? (
@@ -542,6 +545,12 @@ export default function AdminImportScreen() {
                                   {event.previousTitle ? ` Titel „${event.previousTitle}“ → „${event.title}“` : ''}
                                   {event.previousTeamFormat ? ` Spielformat ${event.previousTeamFormat} → ${event.teamFormat}` : ''}
                                   {event.previousGameMode ? ` Spielmodus ${event.previousGameMode} → ${event.gameMode}` : ''}
+                                  {event.previousGameRuleset
+                                    ? ` Regelwerk ${event.previousGameRuleset} → ${event.gameRuleset ?? 'unbekannt'}`
+                                    : ''}
+                                  {event.previousTournamentSeries
+                                    ? ` Turnierserie ${event.previousTournamentSeries} → ${event.tournamentSeries ?? 'keine'}`
+                                    : ''}
                                   {event.previousTournamentType
                                     ? ` Turniertyp ${event.previousTournamentType} → ${event.tournamentType}`
                                     : ''}

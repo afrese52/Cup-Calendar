@@ -1,5 +1,7 @@
 export type TournamentRegion = 'EU' | 'NAE' | 'NAW' | 'BR' | 'ASIA' | 'OCE' | 'ME' | 'GLOBAL';
 export type TournamentMode = 'Battle Royale' | 'Zero Build' | 'Reload' | 'Community';
+export type TournamentRuleset = 'Battle Royale' | 'Zero Build' | 'Community';
+export type TournamentSeries = 'Reload';
 export type TournamentType = 'FNCS' | 'Cash Cup' | 'Ranked Cup' | 'Community';
 export type TeamFormat = 'Solo' | 'Duos' | 'Trios' | 'Squads';
 export type EventCategory = 'Turnier' | 'Liga' | 'Qualifikation' | 'Trainingsrunde';
@@ -10,6 +12,8 @@ export interface TournamentEvent {
   description: string;
   region: TournamentRegion;
   gameMode: TournamentMode;
+  gameRuleset?: TournamentRuleset | null;
+  tournamentSeries?: TournamentSeries | null;
   teamFormat: TeamFormat;
   tournamentType: TournamentType;
   category: EventCategory;
@@ -52,6 +56,8 @@ function sampleEvent(
     description,
     region,
     gameMode,
+    gameRuleset: gameMode === 'Reload' ? 'Battle Royale' : gameMode,
+    tournamentSeries: gameMode === 'Reload' ? 'Reload' : null,
     teamFormat,
     tournamentType,
     category,

@@ -23,6 +23,9 @@ export const TournamentEventRegion = {
   GLOBAL: 'GLOBAL',
 } as const;
 
+/**
+ * Legacy mode value retained for existing API clients
+ */
 export type TournamentEventGameMode = typeof TournamentEventGameMode[keyof typeof TournamentEventGameMode];
 
 
@@ -31,6 +34,30 @@ export const TournamentEventGameMode = {
   Zero_Build: 'Zero Build',
   Reload: 'Reload',
   Community: 'Community',
+} as const;
+
+/**
+ * Tournament ruleset, when known
+ * @nullable
+ */
+export type TournamentEventGameRuleset = typeof TournamentEventGameRuleset[keyof typeof TournamentEventGameRuleset] | null;
+
+
+export const TournamentEventGameRuleset = {
+  Battle_Royale: 'Battle Royale',
+  Zero_Build: 'Zero Build',
+  Community: 'Community',
+} as const;
+
+/**
+ * Tournament series, when applicable
+ * @nullable
+ */
+export type TournamentEventTournamentSeries = typeof TournamentEventTournamentSeries[keyof typeof TournamentEventTournamentSeries] | null;
+
+
+export const TournamentEventTournamentSeries = {
+  Reload: 'Reload',
 } as const;
 
 export type TournamentEventTeamFormat = typeof TournamentEventTeamFormat[keyof typeof TournamentEventTeamFormat];
@@ -68,7 +95,18 @@ export interface TournamentEvent {
   title: string;
   description: string;
   region: TournamentEventRegion;
+  /** Legacy mode value retained for existing API clients */
   gameMode: TournamentEventGameMode;
+  /**
+     * Tournament ruleset, when known
+     * @nullable
+     */
+  gameRuleset?: TournamentEventGameRuleset;
+  /**
+     * Tournament series, when applicable
+     * @nullable
+     */
+  tournamentSeries?: TournamentEventTournamentSeries;
   teamFormat: TournamentEventTeamFormat;
   tournamentType: TournamentEventTournamentType;
   category: TournamentEventCategory;
@@ -123,6 +161,28 @@ export const MhtImportEventGameMode = {
   Community: 'Community',
 } as const;
 
+/**
+ * @nullable
+ */
+export type MhtImportEventGameRuleset = typeof MhtImportEventGameRuleset[keyof typeof MhtImportEventGameRuleset] | null;
+
+
+export const MhtImportEventGameRuleset = {
+  Battle_Royale: 'Battle Royale',
+  Zero_Build: 'Zero Build',
+  Community: 'Community',
+} as const;
+
+/**
+ * @nullable
+ */
+export type MhtImportEventTournamentSeries = typeof MhtImportEventTournamentSeries[keyof typeof MhtImportEventTournamentSeries] | null;
+
+
+export const MhtImportEventTournamentSeries = {
+  Reload: 'Reload',
+} as const;
+
 export type MhtImportEventTeamFormat = typeof MhtImportEventTeamFormat[keyof typeof MhtImportEventTeamFormat];
 
 
@@ -159,6 +219,10 @@ export interface MhtImportEvent {
   startTime: string;
   endTime: string;
   gameMode: MhtImportEventGameMode;
+  /** @nullable */
+  gameRuleset?: MhtImportEventGameRuleset;
+  /** @nullable */
+  tournamentSeries?: MhtImportEventTournamentSeries;
   teamFormat: MhtImportEventTeamFormat;
   tournamentType: MhtImportEventTournamentType;
   category: MhtImportEventCategory;
@@ -174,6 +238,16 @@ export interface MhtImportEvent {
      * @nullable
      */
   previousGameMode: string | null;
+  /**
+     * Previous ruleset when it differs from the imported value
+     * @nullable
+     */
+  previousGameRuleset?: string | null;
+  /**
+     * Previous tournament series when it differs from the imported value
+     * @nullable
+     */
+  previousTournamentSeries?: string | null;
   /**
      * Previous team format when it differs from the imported value
      * @nullable

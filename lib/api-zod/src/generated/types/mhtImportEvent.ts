@@ -7,7 +7,9 @@
  */
 import type { MhtImportEventCategory } from './mhtImportEventCategory';
 import type { MhtImportEventGameMode } from './mhtImportEventGameMode';
+import type { MhtImportEventGameRuleset } from './mhtImportEventGameRuleset';
 import type { MhtImportEventTeamFormat } from './mhtImportEventTeamFormat';
+import type { MhtImportEventTournamentSeries } from './mhtImportEventTournamentSeries';
 import type { MhtImportEventTournamentType } from './mhtImportEventTournamentType';
 
 export interface MhtImportEvent {
@@ -16,6 +18,10 @@ export interface MhtImportEvent {
   startTime: Date;
   endTime: Date;
   gameMode: MhtImportEventGameMode;
+  /** @nullable */
+  gameRuleset?: MhtImportEventGameRuleset;
+  /** @nullable */
+  tournamentSeries?: MhtImportEventTournamentSeries;
   teamFormat: MhtImportEventTeamFormat;
   tournamentType: MhtImportEventTournamentType;
   category: MhtImportEventCategory;
@@ -31,6 +37,16 @@ export interface MhtImportEvent {
      * @nullable
      */
   previousGameMode: string | null;
+  /**
+     * Previous ruleset when it differs from the imported value
+     * @nullable
+     */
+  previousGameRuleset?: string | null;
+  /**
+     * Previous tournament series when it differs from the imported value
+     * @nullable
+     */
+  previousTournamentSeries?: string | null;
   /**
      * Previous team format when it differs from the imported value
      * @nullable

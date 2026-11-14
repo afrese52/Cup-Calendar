@@ -61,8 +61,13 @@ export function EventCard({ event, isBookmarked, onBookmarkToggle }: EventCardPr
         </View>
         <View style={styles.tagRow}>
           <Text style={[styles.tag, { color: colors.secondaryForeground, backgroundColor: colors.secondary }]}>
-            {event.gameMode}
+            {event.gameRuleset ?? event.gameMode}
           </Text>
+          {event.tournamentSeries ? (
+            <Text style={[styles.tag, { color: colors.secondaryForeground, backgroundColor: colors.secondary }]}>
+              {event.tournamentSeries}
+            </Text>
+          ) : null}
           <Text style={[styles.tag, { color: colors.secondaryForeground, backgroundColor: colors.secondary }]}>
             {event.teamFormat}
           </Text>

@@ -6,6 +6,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * Legacy mode value retained for existing API clients
+ */
 export type TournamentEventGameMode = typeof TournamentEventGameMode[keyof typeof TournamentEventGameMode];
 
 

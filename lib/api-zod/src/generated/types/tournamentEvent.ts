@@ -7,8 +7,10 @@
  */
 import type { TournamentEventCategory } from './tournamentEventCategory';
 import type { TournamentEventGameMode } from './tournamentEventGameMode';
+import type { TournamentEventGameRuleset } from './tournamentEventGameRuleset';
 import type { TournamentEventRegion } from './tournamentEventRegion';
 import type { TournamentEventTeamFormat } from './tournamentEventTeamFormat';
+import type { TournamentEventTournamentSeries } from './tournamentEventTournamentSeries';
 import type { TournamentEventTournamentType } from './tournamentEventTournamentType';
 
 export interface TournamentEvent {
@@ -16,7 +18,18 @@ export interface TournamentEvent {
   title: string;
   description: string;
   region: TournamentEventRegion;
+  /** Legacy mode value retained for existing API clients */
   gameMode: TournamentEventGameMode;
+  /**
+     * Tournament ruleset, when known
+     * @nullable
+     */
+  gameRuleset?: TournamentEventGameRuleset;
+  /**
+     * Tournament series, when applicable
+     * @nullable
+     */
+  tournamentSeries?: TournamentEventTournamentSeries;
   teamFormat: TournamentEventTeamFormat;
   tournamentType: TournamentEventTournamentType;
   category: TournamentEventCategory;

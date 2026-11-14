@@ -340,6 +340,18 @@ function mapGameMode(title) {
   return matches.length === 1 ? matches[0] : null;
 }
 
+function mapTournamentSeries(title) {
+  return /\breload\b/i.test(title) ? "Reload" : null;
+}
+
+function mapGameRuleset(title, gameMode) {
+  const lower = title.toLowerCase();
+  if (/\bzero[\s-]+build\b|\bnull bauen\b/i.test(lower)) return "Zero Build";
+  if (/\bbattle royale\b/i.test(lower) || gameMode === "Reload") return "Battle Royale";
+  if (gameMode === "Community") return "Community";
+  return null;
+}
+
 export function mapTeamFormat(cardText, officialEventSlug = "") {
   const formats = [
     [/\bsolos?\b/i, "Solo"],
@@ -506,6 +518,9 @@ function extractEventAnchors(html, sourceUrl, timeZone, region) {
         cursor = closingAnchorPattern.lastIndex;
         continue;
       }
+      const classificationText = `${title} ${attributes["aria-label"] ?? ""}`;
+      const tournamentSeries = mapTournamentSeries(classificationText);
+      const gameRuleset = mapGameRuleset(classificationText, gameMode);
       if (!teamFormat) {
         issues.push({
           anchorId: attributes.id,
@@ -524,6 +539,8 @@ function extractEventAnchors(html, sourceUrl, timeZone, region) {
         poster_url: null,
         region,
         game_mode: gameMode,
+        game_ruleset: gameRuleset,
+        tournament_series: tournamentSeries,
         team_format: teamFormat,
         tournament_type: tournamentType,
         category: mapCategory(title, tournamentType),

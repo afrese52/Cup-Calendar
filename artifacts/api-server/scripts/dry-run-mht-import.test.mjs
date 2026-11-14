@@ -512,11 +512,27 @@ test("prüft Spielformate an echten, anonymisierten MHT-Turnierkarten", async ()
     "Zero Build",
   );
   assert.equal(
+    acceptedByTitle.get("Reload ZB Duos Cash Cup Zero Build")?.game_ruleset,
+    "Zero Build",
+  );
+  assert.equal(
+    acceptedByTitle.get("Reload ZB Duos Cash Cup Zero Build")?.tournament_series,
+    "Reload",
+  );
+  assert.equal(
     acceptedByTitle.get("Victory Cash Cup (Team) Battle Royale")?.team_format,
     "Squads",
   );
   assert.equal(
     acceptedByTitle.get("Reload Ranked Cup (Duo) Battle Royale")?.game_mode,
+    "Reload",
+  );
+  assert.equal(
+    acceptedByTitle.get("Reload Ranked Cup (Duo) Battle Royale")?.game_ruleset,
+    "Battle Royale",
+  );
+  assert.equal(
+    acceptedByTitle.get("Reload Ranked Cup (Duo) Battle Royale")?.tournament_series,
     "Reload",
   );
   assert.equal(acceptedByTitle.get("FNCS Solos Reload Heats")?.tournament_type, "FNCS");

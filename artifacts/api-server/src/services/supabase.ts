@@ -7,6 +7,8 @@ export interface MhtImportEvent {
   title: string;
   region: string;
   game_mode: string;
+  game_ruleset: string | null;
+  tournament_series: string | null;
   team_format: string;
   tournament_type: string;
   category: string;
@@ -21,6 +23,8 @@ export interface MhtImportEvent {
 export interface ExistingMhtEvent {
   title: string;
   game_mode: string;
+  game_ruleset: string | null;
+  tournament_series: string | null;
   team_format: string;
   tournament_type: string;
   category: string;
@@ -28,15 +32,40 @@ export interface ExistingMhtEvent {
   end_time: string;
 }
 
+export function isMissingEventMetadataColumns(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const candidate = error as { code?: unknown; message?: unknown; details?: unknown };
+  if (candidate.code !== "42703") return false;
+  const diagnostic = `${candidate.message ?? ""} ${candidate.details ?? ""}`;
+  return /game_ruleset|tournament_series/.test(diagnostic);
+}
+
+export class EventMetadataMigrationRequiredError extends Error {
+  constructor() {
+    super("Die Datenbank benötigt zuerst die Migration für Turnierserie und Regelwerk.");
+    this.name = "EventMetadataMigrationRequiredError";
+  }
+}
+
 export function getMhtEventChanges(
   event: Pick<
     MhtImportEvent,
-    "title" | "game_mode" | "team_format" | "tournament_type" | "category" | "start_time" | "end_time"
+    | "title"
+    | "game_mode"
+    | "game_ruleset"
+    | "tournament_series"
+    | "team_format"
+    | "tournament_type"
+    | "category"
+    | "start_time"
+    | "end_time"
   >,
   existing: ExistingMhtEvent | null,
 ): {
   previousTitle: string | null;
   previousGameMode: string | null;
+  previousGameRuleset: string | null;
+  previousTournamentSeries: string | null;
   previousTeamFormat: string | null;
   previousTournamentType: string | null;
   previousCategory: string | null;
@@ -47,6 +76,8 @@ export function getMhtEventChanges(
     return {
       previousTitle: null,
       previousGameMode: null,
+      previousGameRuleset: null,
+      previousTournamentSeries: null,
       previousTeamFormat: null,
       previousTournamentType: null,
       previousCategory: null,
@@ -58,6 +89,12 @@ export function getMhtEventChanges(
   return {
     previousTitle: existing.title === event.title ? null : existing.title,
     previousGameMode: existing.game_mode === event.game_mode ? null : existing.game_mode,
+    previousGameRuleset: existing.game_ruleset === event.game_ruleset
+      ? null
+      : existing.game_ruleset ?? "Nicht angegeben",
+    previousTournamentSeries: existing.tournament_series === event.tournament_series
+      ? null
+      : existing.tournament_series ?? "Keine",
     previousTeamFormat: existing.team_format === event.team_format ? null : existing.team_format,
     previousTournamentType: existing.tournament_type === event.tournament_type
       ? null
@@ -136,6 +173,8 @@ export function buildMhtEventUpsertRows(events: MhtImportEvent[]) {
       title: event.title,
       region: event.region,
       game_mode: event.game_mode,
+      game_ruleset: event.game_ruleset,
+      tournament_series: event.tournament_series,
       team_format: event.team_format,
       tournament_type: event.tournament_type,
       category: event.category,
@@ -156,6 +195,9 @@ export async function upsertMhtEvents(
     .from("fortnite_events")
     .upsert(rows, { onConflict: "id", defaultToNull: false });
   if (error) {
+    if (isMissingEventMetadataColumns(error)) {
+      throw new EventMetadataMigrationRequiredError();
+    }
     // Do not expose provider error payloads, which may contain sensitive values.
     throw new Error("Die geprüften Termine konnten nicht gespeichert werden.");
   }

@@ -10,6 +10,7 @@ import { build } from "esbuild";
 import { parseMhtSchedule } from "../../scripts/dry-run-mht-import.mjs";
 import {
   buildMhtEventUpsertRows,
+  EventMetadataMigrationRequiredError,
   getMhtEventChanges,
   listRecentMhtImports,
   recordMhtImportHistory,
@@ -117,6 +118,8 @@ function event(overrides = {}) {
     title: "Solo Cup",
     region: "EU",
     game_mode: "Battle Royale",
+    game_ruleset: "Battle Royale",
+    tournament_series: null,
     team_format: "Solo",
     tournament_type: "Cash Cup",
     category: "Turnier",
@@ -130,12 +133,101 @@ function event(overrides = {}) {
   };
 }
 
+test("liefert die getrennten Felder zusätzlich zu den bisherigen API-Angaben", async () => {
+  const originalEnv = new Map(
+    ["NODE_ENV", "SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY"]
+      .map((key) => [key, process.env[key]]),
+  );
+  let useLegacySchema = false;
+  const fakeSupabase = createServer((request, response) => {
+    response.setHeader("Content-Type", "application/json");
+    if (request.url?.startsWith("/rest/v1/fortnite_events")) {
+      const url = new URL(request.url, "http://supabase.test");
+      if (useLegacySchema && url.searchParams.get("select")?.includes("game_ruleset")) {
+        response.statusCode = 400;
+        response.end(JSON.stringify({
+          code: "42703",
+          message: "column fortnite_events.game_ruleset does not exist",
+        }));
+        return;
+      }
+      const row = {
+        id: "epic:reload-zb:round",
+        title: "Reload Zero Build Duos Cash Cup",
+        description: "",
+        region: "EU",
+        game_mode: "Reload",
+        game_ruleset: "Zero Build",
+        tournament_series: "Reload",
+        team_format: "Duos",
+        tournament_type: "Cash Cup",
+        start_time: "2026-11-14T18:00:00.000Z",
+        end_time: "2026-11-14T20:00:00.000Z",
+        is_featured: false,
+      };
+      if (url.searchParams.get("select")?.includes("game_ruleset")) {
+        response.end(JSON.stringify([row]));
+      } else {
+        const { game_ruleset: _ruleset, tournament_series: _series, ...legacyRow } = row;
+        response.end(JSON.stringify([legacyRow]));
+      }
+      return;
+    }
+    response.statusCode = 404;
+    response.end(JSON.stringify({ message: "Unexpected test request" }));
+  });
+  let fakeSupabaseUrl;
+  let apiServer;
+  let tempDir;
+
+  try {
+    fakeSupabaseUrl = await listen(fakeSupabase);
+    process.env["NODE_ENV"] = "production";
+    process.env["SUPABASE_URL"] = fakeSupabaseUrl;
+    process.env["SUPABASE_SERVICE_ROLE_KEY"] = "test-service-role-key";
+    const loaded = await loadApiApp();
+    tempDir = loaded.tempDir;
+    apiServer = loaded.app.listen(0, "127.0.0.1");
+    await new Promise((resolve, reject) => {
+      apiServer.once("error", reject);
+      apiServer.once("listening", resolve);
+    });
+
+    const response = await fetch(`http://127.0.0.1:${apiServer.address().port}/api/v1/events`);
+    const result = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(result.data[0].gameMode, "Reload");
+    assert.equal(result.data[0].gameRuleset, "Zero Build");
+    assert.equal(result.data[0].tournamentSeries, "Reload");
+
+    useLegacySchema = true;
+    const legacyResponse = await fetch(
+      `http://127.0.0.1:${apiServer.address().port}/api/v1/events`,
+    );
+    const legacyResult = await legacyResponse.json();
+    assert.equal(legacyResponse.status, 200);
+    assert.equal(legacyResult.data[0].gameMode, "Reload");
+    assert.equal(legacyResult.data[0].gameRuleset, null);
+    assert.equal(legacyResult.data[0].tournamentSeries, null);
+  } finally {
+    if (apiServer?.listening) await closeServer(apiServer);
+    if (fakeSupabase.listening) await closeServer(fakeSupabase);
+    if (tempDir) await rm(tempDir, { recursive: true, force: true });
+    for (const [key, value] of originalEnv) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+});
+
 test("meldet bei neuen und unveränderten Terminen keine geänderten Details", () => {
   const imported = event();
 
   assert.deepEqual(getMhtEventChanges(imported, null), {
     previousTitle: null,
     previousGameMode: null,
+    previousGameRuleset: null,
+    previousTournamentSeries: null,
     previousTeamFormat: null,
     previousTournamentType: null,
     previousCategory: null,
@@ -145,6 +237,8 @@ test("meldet bei neuen und unveränderten Terminen keine geänderten Details", (
   assert.deepEqual(getMhtEventChanges(imported, {
     title: imported.title,
     game_mode: imported.game_mode,
+    game_ruleset: imported.game_ruleset,
+    tournament_series: imported.tournament_series,
     team_format: imported.team_format,
     tournament_type: imported.tournament_type,
     category: imported.category,
@@ -153,6 +247,8 @@ test("meldet bei neuen und unveränderten Terminen keine geänderten Details", (
   }), {
     previousTitle: null,
     previousGameMode: null,
+    previousGameRuleset: null,
+    previousTournamentSeries: null,
     previousTeamFormat: null,
     previousTournamentType: null,
     previousCategory: null,
@@ -166,6 +262,8 @@ test("liefert nur die bisherigen Werte geänderter Turnierdetails", () => {
   assert.deepEqual(getMhtEventChanges(imported, {
     title: "Alter Titel",
     game_mode: "Reload",
+    game_ruleset: null,
+    tournament_series: "Reload",
     team_format: "Duos",
     tournament_type: "FNCS",
     category: "Liga",
@@ -174,6 +272,8 @@ test("liefert nur die bisherigen Werte geänderter Turnierdetails", () => {
   }), {
     previousTitle: "Alter Titel",
     previousGameMode: "Reload",
+    previousGameRuleset: "Nicht angegeben",
+    previousTournamentSeries: "Reload",
     previousTeamFormat: "Duos",
     previousTournamentType: "FNCS",
     previousCategory: "Liga",
@@ -215,7 +315,7 @@ test("gibt Zeitänderungen im authentifizierten Import-Vorschau-Endpunkt zurück
       const url = new URL(request.url, "http://supabase.test");
       assert.equal(
         url.searchParams.get("select"),
-        "id,title,game_mode,team_format,tournament_type,category,start_time,end_time",
+        "id,title,game_mode,game_ruleset,tournament_series,team_format,tournament_type,category,start_time,end_time",
       );
       queriedIds.push(url.searchParams.get("id"));
       response.end(JSON.stringify([
@@ -223,6 +323,8 @@ test("gibt Zeitänderungen im authentifizierten Import-Vorschau-Endpunkt zurück
           id: unchangedEvent.id,
           title: unchangedEvent.title,
           game_mode: unchangedEvent.game_mode,
+          game_ruleset: unchangedEvent.game_ruleset,
+          tournament_series: unchangedEvent.tournament_series,
           team_format: unchangedEvent.team_format,
           tournament_type: unchangedEvent.tournament_type,
           category: unchangedEvent.category,
@@ -233,6 +335,8 @@ test("gibt Zeitänderungen im authentifizierten Import-Vorschau-Endpunkt zurück
           id: changedEvent.id,
           title: "Alter Turniertitel",
           game_mode: "Reload",
+          game_ruleset: null,
+          tournament_series: "Reload",
           team_format: "Duos",
           tournament_type: "FNCS",
           category: "Liga",
@@ -288,6 +392,10 @@ test("gibt Zeitänderungen im authentifizierten Import-Vorschau-Endpunkt zurück
     assert.equal(newEvent.willUpdate, false);
     assert.equal(newEvent.previousTitle, null);
     assert.equal(newEvent.previousGameMode, null);
+    assert.equal(newEvent.gameRuleset, "Zero Build");
+    assert.equal(newEvent.tournamentSeries, "Reload");
+    assert.equal(newEvent.previousGameRuleset, null);
+    assert.equal(newEvent.previousTournamentSeries, null);
     assert.equal(newEvent.previousTeamFormat, null);
     assert.equal(newEvent.previousTournamentType, null);
     assert.equal(newEvent.previousCategory, null);
@@ -297,6 +405,8 @@ test("gibt Zeitänderungen im authentifizierten Import-Vorschau-Endpunkt zurück
     assert.equal(unchanged.willUpdate, true);
     assert.equal(unchanged.previousTitle, null);
     assert.equal(unchanged.previousGameMode, null);
+    assert.equal(unchanged.previousGameRuleset, null);
+    assert.equal(unchanged.previousTournamentSeries, null);
     assert.equal(unchanged.previousTeamFormat, null);
     assert.equal(unchanged.previousTournamentType, null);
     assert.equal(unchanged.previousCategory, null);
@@ -306,6 +416,8 @@ test("gibt Zeitänderungen im authentifizierten Import-Vorschau-Endpunkt zurück
     assert.equal(changed.willUpdate, true);
     assert.equal(changed.previousTitle, "Alter Turniertitel");
     assert.equal(changed.previousGameMode, "Reload");
+    assert.equal(changed.previousGameRuleset, "Nicht angegeben");
+    assert.equal(changed.previousTournamentSeries, "Reload");
     assert.equal(changed.previousTeamFormat, "Duos");
     assert.equal(changed.previousTournamentType, "FNCS");
     assert.equal(changed.previousCategory, "Liga");
@@ -511,6 +623,8 @@ test("gibt nur die jeweils geänderte bisherige Zeit zurück", () => {
   const existing = {
     title: imported.title,
     game_mode: imported.game_mode,
+    game_ruleset: imported.game_ruleset,
+    tournament_series: imported.tournament_series,
     team_format: imported.team_format,
     tournament_type: imported.tournament_type,
     category: imported.category,
@@ -520,6 +634,8 @@ test("gibt nur die jeweils geänderte bisherige Zeit zurück", () => {
   assert.deepEqual(getMhtEventChanges(imported, existing), {
     previousTitle: null,
     previousGameMode: null,
+    previousGameRuleset: null,
+    previousTournamentSeries: null,
     previousTeamFormat: null,
     previousTournamentType: null,
     previousCategory: null,
@@ -534,6 +650,8 @@ test("gibt nur die jeweils geänderte bisherige Zeit zurück", () => {
   }), {
     previousTitle: null,
     previousGameMode: null,
+    previousGameRuleset: null,
+    previousTournamentSeries: null,
     previousTeamFormat: null,
     previousTournamentType: null,
     previousCategory: null,
@@ -599,6 +717,28 @@ test("hides database error details from the caller", async () => {
       assert.equal(error.cause, undefined);
       return true;
     },
+  );
+});
+
+test("erfordert die neue Datenbankmigration statt neue Metadaten still zu verwerfen", async () => {
+  const admin = {
+    from() {
+      return {
+        async upsert() {
+          return {
+            error: {
+              code: "42703",
+              message: "column fortnite_events.tournament_series does not exist",
+            },
+          };
+        },
+      };
+    },
+  };
+
+  await assert.rejects(
+    upsertMhtEvents([event()], admin),
+    EventMetadataMigrationRequiredError,
   );
 });
 
