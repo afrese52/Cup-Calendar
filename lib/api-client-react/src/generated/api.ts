@@ -31,6 +31,7 @@ import type {
   EventListResponse,
   GetEventsParams,
   HealthStatus,
+  ImportMhtScheduleParams,
   MhtImportHistoryResponse,
   MhtImportPreview,
   MhtImportResult,
@@ -463,18 +464,26 @@ export const usePreviewMhtImport = <TError = ErrorType<void>,
       return useMutation(getPreviewMhtImportMutationOptions(options), queryClient);
     }
 
-export const getImportMhtScheduleUrl = () => {
+export const getImportMhtScheduleUrl = (params?: ImportMhtScheduleParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/api/v1/admin/events/import`
+  return stringifiedParams.length > 0 ? `/api/v1/admin/events/import?${stringifiedParams}` : `/api/v1/admin/events/import`
 }
 
 /**
  * @summary Import reviewed schedule entries into Supabase
  */
-export const importMhtSchedule = async (mhtScheduleFile: MhtScheduleFile, options?: Parameters<typeof customFetch>[1]): Promise<MhtImportResult> => {
+export const importMhtSchedule = async (mhtScheduleFile: MhtScheduleFile,
+    params?: ImportMhtScheduleParams, options?: Parameters<typeof customFetch>[1]): Promise<MhtImportResult> => {
 
     const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
     if (!h) return {};
@@ -490,7 +499,7 @@ export const importMhtSchedule = async (mhtScheduleFile: MhtScheduleFile, option
     }
     return headers;
   };
-return customFetch<MhtImportResult>(getImportMhtScheduleUrl(),
+return customFetch<MhtImportResult>(getImportMhtScheduleUrl(params),
   {
     ...options,
     method: 'POST',
@@ -520,9 +529,9 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof importMhtSchedule>>, ImportMhtScheduleMutationVariables> = (props) => {
-          const {data} = props ?? {};
+          const {data,params} = props ?? {};
 
-          return  importMhtSchedule(data,requestOptions)
+          return  importMhtSchedule(data,params,requestOptions)
         }
 
 
@@ -535,7 +544,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type ImportMhtScheduleMutationResult = NonNullable<Awaited<ReturnType<typeof importMhtSchedule>>>
     export type ImportMhtScheduleMutationBody = BodyType<MhtScheduleFile>
     export type ImportMhtScheduleMutationError = ErrorType<void>
-    export type ImportMhtScheduleMutationVariables = {data: BodyType<MhtScheduleFile>}
+    export type ImportMhtScheduleMutationVariables = {data: BodyType<MhtScheduleFile>;params?: ImportMhtScheduleParams}
 
     /**
  * @summary Import reviewed schedule entries into Supabase

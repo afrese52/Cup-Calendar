@@ -127,6 +127,13 @@ paths:
       summary: Import reviewed schedule entries into Supabase
       security:
         - BearerAuth: []
+      parameters:
+        - in: query
+          name: confirmStaleSnapshot
+          required: false
+          description: Explicitly confirms importing a snapshot older than 24 hours after the updated preview was reviewed
+          schema:
+            type: boolean
       requestBody:
         required: true
         content:
@@ -142,6 +149,8 @@ paths:
                 $ref: "#/components/schemas/MhtImportResult"
         "400":
           description: The uploaded file could not be imported
+        "409":
+          description: The snapshot became stale and needs explicit confirmation
         "401":
           description: Authentication required
         "403":

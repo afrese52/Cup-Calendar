@@ -187,9 +187,58 @@ test('zeigt das Alter und warnt vor einem mehr als 24 Stunden alten Snapshot', a
   await fireEvent.press(screen.getByTestId('confirm-import-button'));
   expect(alertSpy).toHaveBeenCalledWith(
     'Veralteten Spielplan importieren?',
-    expect.stringContaining('Achtung: Der Snapshot ist älter als 24 Stunden.'),
+    expect.stringContaining('Achtung: Der Snapshot ist inzwischen älter als 24 Stunden.'),
     expect.any(Array),
   );
+  alertSpy.mockRestore();
+});
+
+test('aktualisiert eine zunächst frische Vorschau und verlangt Bestätigung, wenn sie inzwischen veraltet ist', async () => {
+  mockGetDocumentAsync.mockResolvedValue(selectedFile('plan.mht'));
+  const freshPreview = {
+    ...preview,
+    importableCount: 1,
+    snapshotAt: '2026-11-12T12:00:00.000Z',
+    snapshotAgeMs: 23 * 60 * 60 * 1000,
+    isSnapshotStale: false,
+  };
+  const stalePreview = {
+    ...freshPreview,
+    snapshotAgeMs: 24 * 60 * 60 * 1000 + 1,
+    isSnapshotStale: true,
+  };
+  mockPreviewImport
+    .mockResolvedValueOnce(freshPreview)
+    .mockResolvedValueOnce(stalePreview)
+    .mockResolvedValueOnce(stalePreview);
+  mockImportSchedule.mockResolvedValue({
+    importedCount: 1,
+    insertedCount: 1,
+    updatedCount: 0,
+    skippedWarningCount: 0,
+    skippedPastCount: 0,
+    skippedInvalidCount: 0,
+    skippedCount: 0,
+  });
+  const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation((_title, _message, buttons) => {
+    buttons?.find((button) => button.text === 'Importieren')?.onPress?.();
+  });
+  const screen = await openImportScreen();
+
+  await fireEvent.press(screen.getByTestId('choose-import-file-button'));
+  await fireEvent.press(screen.getByTestId('preview-import-file-button'));
+  await fireEvent.press(await screen.findByTestId('confirm-import-button'));
+
+  expect(alertSpy).toHaveBeenCalledWith(
+    'Veralteten Spielplan importieren?',
+    expect.stringContaining('Der Snapshot ist inzwischen älter als 24 Stunden.'),
+    expect.any(Array),
+  );
+  await waitFor(() => expect(mockImportSchedule).toHaveBeenCalledWith({
+    data: 'MIME-Version: 1.0\n',
+    params: { confirmStaleSnapshot: true },
+  }));
+  expect(mockPreviewImport).toHaveBeenCalledTimes(3);
   alertSpy.mockRestore();
 });
 

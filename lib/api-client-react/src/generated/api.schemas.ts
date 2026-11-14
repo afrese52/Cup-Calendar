@@ -278,3 +278,10 @@ export const GetEventsTournamentType = {
   ALL: 'ALL',
 } as const;
 
+export type ImportMhtScheduleParams = {
+/**
+ * Explicitly confirms importing a snapshot older than 24 hours after the updated preview was reviewed
+ */
+confirmStaleSnapshot?: boolean;
+};
+

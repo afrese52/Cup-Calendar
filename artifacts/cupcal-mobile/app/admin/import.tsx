@@ -229,43 +229,91 @@ export default function AdminImportScreen() {
     }
   };
 
-  const saveImport = async () => {
+  function showImportConfirmation(currentPreview: MhtImportPreview) {
+    const period = getImportPeriod(currentPreview);
+    const periodCopy = period
+      ? ` Zeitraum: ${formatImportTime(period.start, currentPreview.timeZone)} bis ${formatImportTime(period.end, currentPreview.timeZone)}.`
+      : '';
+    const message =
+      `${currentPreview.importableCount} geprüfte Termine importieren.${periodCopy} ` +
+      `${currentPreview.warningCount} Termine mit Zuordnungswarnungen bleiben ausgelassen. ` +
+      `${currentPreview.updateCount} vorhandene Einträge werden aktualisiert; persönliche Admin-Notizen bleiben erhalten.` +
+      (currentPreview.isSnapshotStale
+        ? ' Achtung: Der Snapshot ist inzwischen älter als 24 Stunden. Prüfe eine aktuelle Datei oder bestätige ausdrücklich den Import dieser veralteten Vorschau.'
+        : '');
+    const confirmedStaleSnapshot = currentPreview.isSnapshotStale;
+    if (Platform.OS === 'web') {
+      if (window.confirm(message)) void saveImport(confirmedStaleSnapshot);
+      return;
+    }
+    Alert.alert(confirmedStaleSnapshot ? 'Veralteten Spielplan importieren?' : 'Termine importieren?', message, [
+      { text: 'Abbrechen', style: 'cancel' },
+      { text: 'Importieren', onPress: () => void saveImport(confirmedStaleSnapshot) },
+    ]);
+  }
+
+  async function saveImport(staleSnapshotWasConfirmed: boolean) {
     if (!pickedFile || !preview || preview.importableCount === 0) return;
     setError(null);
     try {
-      const result = await importMutation.mutateAsync({ data: pickedFile.content });
+      const currentPreview = await previewMutation.mutateAsync({ data: pickedFile.content });
+      setPreview(currentPreview);
+      if (currentPreview.importableCount === 0) {
+        setError('Es gibt keine eindeutig zugeordneten zukünftigen Termine zum Importieren.');
+        return;
+      }
+      if (currentPreview.isSnapshotStale && !staleSnapshotWasConfirmed) {
+        showImportConfirmation(currentPreview);
+        return;
+      }
+
+      const result = await importMutation.mutateAsync({
+        data: pickedFile.content,
+        params: { confirmStaleSnapshot: currentPreview.isSnapshotStale },
+      });
       setImportResult(result);
       setPreview(null);
       setPickedFile(null);
       await queryClient.invalidateQueries({ queryKey: getGetEventsQueryKey() });
       await queryClient.invalidateQueries({ queryKey: getGetAdminImportHistoryQueryKey() });
     } catch (importError) {
+      if (
+        importError &&
+        typeof importError === 'object' &&
+        'status' in importError &&
+        importError.status === 409 &&
+        pickedFile
+      ) {
+        try {
+          const currentPreview = await previewMutation.mutateAsync({ data: pickedFile.content });
+          setPreview(currentPreview);
+          if (currentPreview.isSnapshotStale) {
+            showImportConfirmation(currentPreview);
+            return;
+          }
+        } catch {
+          // Fall through to the import error when the preview cannot be refreshed.
+        }
+      }
       setError(importError instanceof Error ? importError.message : 'Der Import ist fehlgeschlagen.');
     }
-  };
+  }
 
-  const confirmImport = () => {
-    if (!preview) return;
-    const period = getImportPeriod(preview);
-    const periodCopy = period
-      ? ` Zeitraum: ${formatImportTime(period.start, preview.timeZone)} bis ${formatImportTime(period.end, preview.timeZone)}.`
-      : '';
-    const message =
-      `${preview.importableCount} geprüfte Termine importieren.${periodCopy} ` +
-      `${preview.warningCount} Termine mit Zuordnungswarnungen bleiben ausgelassen. ` +
-      `${preview.updateCount} vorhandene Einträge werden aktualisiert; persönliche Admin-Notizen bleiben erhalten.` +
-      (preview.isSnapshotStale
-        ? ' Achtung: Der Snapshot ist älter als 24 Stunden. Prüfe eine aktuelle Datei, bevor du importierst.'
-        : '');
-    if (Platform.OS === 'web') {
-      if (window.confirm(message)) void saveImport();
-      return;
+  async function confirmImport() {
+    if (!pickedFile || !preview) return;
+    setError(null);
+    try {
+      const currentPreview = await previewMutation.mutateAsync({ data: pickedFile.content });
+      setPreview(currentPreview);
+      if (currentPreview.importableCount === 0) {
+        setError('Es gibt keine eindeutig zugeordneten zukünftigen Termine zum Importieren.');
+        return;
+      }
+      showImportConfirmation(currentPreview);
+    } catch (previewError) {
+      setError(previewError instanceof Error ? previewError.message : 'Die Vorschau konnte nicht aktualisiert werden.');
     }
-    Alert.alert(preview.isSnapshotStale ? 'Veralteten Spielplan importieren?' : 'Termine importieren?', message, [
-      { text: 'Abbrechen', style: 'cancel' },
-      { text: 'Importieren', onPress: () => void saveImport() },
-    ]);
-  };
+  }
 
   const isAuthorized = accessQuery.data?.authorized === true;
   const busy = previewMutation.isPending || importMutation.isPending;
@@ -533,7 +581,11 @@ export default function AdminImportScreen() {
                     <Feather name="database" size={16} color={colors.primaryForeground} />
                   )}
                   <Text style={[styles.primaryButtonText, { color: colors.primaryForeground }]}>
-                    {importMutation.isPending ? 'Speichere in Supabase …' : `${preview.importableCount} Termine importieren`}
+                    {importMutation.isPending
+                      ? 'Speichere in Supabase …'
+                      : previewMutation.isPending
+                        ? 'Vorschau wird aktualisiert …'
+                        : `${preview.importableCount} Termine importieren`}
                   </Text>
                 </Pressable>
               </>

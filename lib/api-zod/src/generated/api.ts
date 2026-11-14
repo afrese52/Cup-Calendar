@@ -96,6 +96,10 @@ export const PreviewMhtImportResponse = zod.object({
 /**
  * @summary Import reviewed schedule entries into Supabase
  */
+export const ImportMhtScheduleQueryParams = zod.object({
+  "confirmStaleSnapshot": zod.coerce.boolean().optional().describe('Explicitly confirms importing a snapshot older than 24 hours after the updated preview was reviewed')
+})
+
 export const ImportMhtScheduleResponse = zod.object({
   "importedCount": zod.number().int(),
   "insertedCount": zod.number().int(),

@@ -16,6 +16,7 @@ export * from './getEventsParams';
 export * from './getEventsRegion';
 export * from './getEventsTournamentType';
 export * from './healthStatus';
+export * from './importMhtScheduleParams';
 export * from './mhtImportEvent';
 export * from './mhtImportEventCategory';
 export * from './mhtImportEventGameMode';

@@ -1,6 +1,6 @@
 import express, { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
 import { z } from "zod";
-import { parseMhtSchedule } from "../../scripts/dry-run-mht-import.mjs";
+import { getSnapshotFreshness, parseMhtSchedule } from "../../scripts/dry-run-mht-import.mjs";
 import { getAdminImportAccess, getSafeUpcomingEvents, parseAdminEmailAllowlist } from "../services/adminImportAccess";
 import {
   getSupabaseAdmin,
@@ -117,6 +117,25 @@ function parseSchedule(sourceText: string) {
       error instanceof Error ? error.message : "Die MHT-Datei konnte nicht gelesen werden.",
     );
   }
+}
+
+function rejectUnconfirmedStaleSnapshot(
+  req: Request,
+  res: Response,
+  snapshotAt: string,
+): boolean {
+  const freshness = getSnapshotFreshness(snapshotAt);
+  if (!freshness.isSnapshotStale || req.query["confirmStaleSnapshot"] === "true") {
+    return false;
+  }
+
+  res.status(409).json({
+    error: "Der Snapshot ist inzwischen älter als 24 Stunden. Prüfe die aktualisierte Vorschau und bestätige den Import erneut.",
+    snapshotAt,
+    snapshotAgeMs: freshness.snapshotAgeMs,
+    isSnapshotStale: true,
+  });
+  return true;
 }
 
 async function findExistingEvents(
@@ -242,8 +261,10 @@ router.post(
         res.status(400).json({ error: "Es gibt keine eindeutig zugeordneten zukünftigen Termine zum Importieren." });
         return;
       }
+      if (rejectUnconfirmedStaleSnapshot(req, res, preview.schedule.snapshotAt)) return;
 
       const existingEvents = await findExistingEvents(preview.importableEvents.map((event) => event.id));
+      if (rejectUnconfirmedStaleSnapshot(req, res, preview.schedule.snapshotAt)) return;
       await upsertMhtEvents(preview.importableEvents);
       const insertedCount = preview.importableEvents.filter((event) => !existingEvents.has(event.id)).length;
       const updatedCount = preview.importableEvents.length - insertedCount;
