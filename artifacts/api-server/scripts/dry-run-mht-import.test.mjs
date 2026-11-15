@@ -93,6 +93,14 @@ test("liefert Snapshot-Alter und Warnstatus über den authentifizierten Admin-Vo
   const fakeSupabase = createServer((request, response) => {
     response.setHeader("Content-Type", "application/json");
     if (request.url === "/auth/v1/user") {
+      if (request.headers.authorization === "Bearer auth-outage-preview-token") {
+        response.statusCode = 503;
+        response.end(JSON.stringify({
+          message: "Auth provider temporarily unavailable",
+          code: "server_error",
+        }));
+        return;
+      }
       const usersByToken = {
         "Bearer valid-admin-preview-token": {
           id: "admin-preview-test-user",
@@ -219,6 +227,22 @@ test("liefert Snapshot-Alter und Warnstatus über den authentifizierten Admin-Vo
     assert.equal(deniedResponse.status, 403, JSON.stringify(deniedResult));
     assert.equal(deniedResult.authorized, false);
     assert.equal(eventDatabaseQueryCount, queriesBeforeNonAdminPreview);
+
+    const queriesBeforeAuthOutagePreview = eventDatabaseQueryCount;
+    const unavailableResponse = await fetch(`${apiUrl}/api/v1/admin/events/import/preview`, {
+      method: "POST",
+      headers: {
+        Authorization: "Bearer auth-outage-preview-token",
+        "Content-Type": "text/plain; charset=utf-8",
+      },
+      body: makeMht(html, { date: freshDate }),
+    });
+    const unavailableResult = await unavailableResponse.json();
+    assert.equal(unavailableResponse.status, 503, JSON.stringify(unavailableResult));
+    assert.deepEqual(unavailableResult, {
+      error: "Die Anmeldung kann gerade nicht geprüft werden.",
+    });
+    assert.equal(eventDatabaseQueryCount, queriesBeforeAuthOutagePreview);
   } finally {
     if (apiServer?.listening) await closeServer(apiServer);
     if (fakeSupabase.listening) await closeServer(fakeSupabase);
