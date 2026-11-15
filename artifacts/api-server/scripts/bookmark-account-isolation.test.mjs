@@ -550,6 +550,88 @@ test("spätere RPC-Aufrufe ändern beim gemeinsamen Termin nur das eigene Konto"
   });
 });
 
+test("RLS blockiert direkte fremde Änderungen bei gleicher Termin-ID", async () => {
+  await withTestAccounts(async (accountA, accountB) => {
+    const eventId = `shared-direct-event-${randomUUID()}`;
+    const updatedAt = new Date(0).toISOString();
+    const [seedA, seedB] = await Promise.all([
+      accountA.client.rpc("sync_user_event_bookmark", {
+        p_event_id: eventId,
+        p_is_favorite: true,
+        p_updated_at: updatedAt,
+      }),
+      accountB.client.rpc("sync_user_event_bookmark", {
+        p_event_id: eventId,
+        p_is_favorite: false,
+        p_updated_at: updatedAt,
+      }),
+    ]);
+    assert.ifError(seedA.error);
+    assert.ifError(seedB.error);
+
+    const [updateA, updateB] = await Promise.all([
+      accountA.client
+        .from("user_event_bookmarks")
+        .update({ is_favorite: false })
+        .eq("user_id", accountB.id)
+        .eq("event_id", eventId)
+        .select("event_id"),
+      accountB.client
+        .from("user_event_bookmarks")
+        .update({ is_favorite: true })
+        .eq("user_id", accountA.id)
+        .eq("event_id", eventId)
+        .select("event_id"),
+    ]);
+    assert.ifError(updateA.error);
+    assert.ifError(updateB.error);
+    assert.deepEqual(updateA.data, [], "Konto A darf die Zeile von Konto B nicht ändern.");
+    assert.deepEqual(updateB.data, [], "Konto B darf die Zeile von Konto A nicht ändern.");
+
+    const [insertA, insertB] = await Promise.all([
+      accountA.client.from("user_event_bookmarks").insert({
+        user_id: accountB.id,
+        event_id: eventId,
+        is_favorite: true,
+      }),
+      accountB.client.from("user_event_bookmarks").insert({
+        user_id: accountA.id,
+        event_id: eventId,
+        is_favorite: false,
+      }),
+    ]);
+    assert.ok(insertA.error, "Konto A darf keine fremde Zeile für den gemeinsamen Termin einfügen.");
+    assert.ok(insertB.error, "Konto B darf keine fremde Zeile für den gemeinsamen Termin einfügen.");
+
+    const [savedA, savedB] = await Promise.all([
+      accountA.client
+        .from("user_event_bookmarks")
+        .select("user_id, event_id, is_favorite, revision")
+        .eq("event_id", eventId)
+        .single(),
+      accountB.client
+        .from("user_event_bookmarks")
+        .select("user_id, event_id, is_favorite, revision")
+        .eq("event_id", eventId)
+        .single(),
+    ]);
+    assert.ifError(savedA.error);
+    assert.ifError(savedB.error);
+    assert.deepEqual(savedA.data, {
+      user_id: accountA.id,
+      event_id: eventId,
+      is_favorite: true,
+      revision: 1,
+    });
+    assert.deepEqual(savedB.data, {
+      user_id: accountB.id,
+      event_id: eventId,
+      is_favorite: false,
+      revision: 1,
+    });
+  });
+});
+
 test("gleichzeitige RPC-Aufrufe erhöhen die Revision atomar und behalten den zuletzt angenommenen Status", async () => {
   await withTestAccounts(async (accountA) => {
     const secondDevice = createClient(supabaseUrl, anonKey, {
