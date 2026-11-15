@@ -35,3 +35,6 @@ jobs:
 
       - name: Test Supabase migrations on a fresh database
         run: pnpm --filter @workspace/api-server test:supabase-migrations:fresh
+
+      - name: Test migrations with the full local Supabase stack
+        run: pnpm --filter @workspace/api-server test:supabase-migrations:cli

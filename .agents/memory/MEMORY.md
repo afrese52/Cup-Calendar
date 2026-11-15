@@ -10,6 +10,7 @@
 - [Gesperrte Supabase-Mailvorlage](supabase-locked-email-template.md) — Die Magic-Link-Vorlage kann im CupCal-Supabase-Projekt schreibgeschützt sein; einen unterstützten Rücksprung nicht voraussetzen.
 - [Supabase-Profile für Auth-Konten](supabase-user-profiles.md) — Jedes CupCal-Auth-Konto braucht einen passenden Eintrag in `public.user_profiles`.
 - [Supabase-Migrationen für Live-Tests](supabase-live-migrations.md) — Vor Konto-Isolationstests muss das Live-Schema die lokalen Favoritenmigrationen enthalten.
+- [Supabase-CLI-Migrationstests](supabase-cli-migrations.md) — `supabase start` wendet lokale Migrationen an; `db reset` kann beim Neustart von Kong in dieser Umgebung scheitern.
 - [Supabase-Passwortregel](supabase-password-policy.md) — Beim CupCal-Passwort-Reset gelten mindestens sechs Zeichen, ohne zusätzliche Zeichenklassen.
 - [Bookmark-Zeitordnung](bookmark-clock-ordering.md) — Favoritenänderungen anhand serverseitiger Revisionen statt Gerätezeitstempeln ordnen.
 - [Favoriten über Geräte hinweg](cross-device-bookmarks.md) — Favoriten gehören zum angemeldeten Konto und sollen auf all seinen Geräten erscheinen.

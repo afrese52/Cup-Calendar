@@ -14,6 +14,7 @@
     "test:bookmark-concurrency": "node --test --test-name-pattern='gleichzeitige RPC-Aufrufe' ./scripts/bookmark-account-isolation.test.mjs",
     "test:bookmark-migration": "node --test ./scripts/bookmark-migration.test.mjs",
     "test:supabase-migrations:fresh": "node --test ./scripts/supabase-migrations-fresh.test.mjs",
+    "test:supabase-migrations:cli": "node --test ./scripts/supabase-migrations-cli.test.mjs",
     "test:send-email-hook": "node --experimental-strip-types --test ./src/services/authEmailHook.test.mjs",
     "test:admin-import": "node --experimental-strip-types --test ./src/services/*.test.mjs"
   },
