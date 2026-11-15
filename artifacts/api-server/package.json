@@ -15,6 +15,7 @@
     "test:bookmark-migration": "node --test ./scripts/bookmark-migration.test.mjs",
     "test:supabase-migrations:fresh": "node --test ./scripts/supabase-migrations-fresh.test.mjs",
     "test:supabase-migrations:cli": "node --test ./scripts/supabase-migrations-cli.test.mjs",
+    "test:account-deletion": "pnpm run build && node --experimental-strip-types --test ./src/services/accountDeletionToken.test.mjs ./scripts/account-deletion-routes.test.mjs",
     "test:send-email-hook": "node --experimental-strip-types --test ./src/services/authEmailHook.test.mjs",
     "test:admin-import": "node --experimental-strip-types --test ./src/services/*.test.mjs"
   },
