@@ -515,6 +515,44 @@ test('zeigt einen Registrierungsfehler sichtbar an', async () => {
   await waitFor(() => expect(sendAccessibilityFocus).toHaveBeenCalledTimes(1));
 });
 
+test.each([
+  ['Anmeldung', 'sign-in'],
+  ['Registrierung', 'sign-up'],
+  ['Passwortlink', 'forgot-password'],
+] as const)('fokussiert wiederholte Fehler bei %s erneut', async (_name, mode) => {
+  const error = new Error(mode === 'sign-up' ? 'weak password' : 'Invalid login credentials');
+  if (mode === 'sign-in') {
+    auth.signInWithPassword.mockResolvedValue({ error });
+  } else if (mode === 'sign-up') {
+    auth.signUp.mockResolvedValue({ data: { session: null }, error });
+  } else {
+    auth.resetPasswordForEmail.mockResolvedValue({ error });
+  }
+
+  const view = await openSettings();
+  if (mode === 'sign-up') {
+    await fireEvent.press(view.getByTestId('auth-mode-toggle'));
+    await enterCredentials(view);
+  } else if (mode === 'forgot-password') {
+    await fireEvent.press(view.getByTestId('forgot-password-button'));
+    await fireEvent.changeText(view.getByTestId('auth-email-input'), 'test@example.invalid');
+  } else {
+    await enterCredentials(view);
+  }
+
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    await fireEvent.press(view.getByTestId('auth-submit-button'));
+    expect(await view.findByTestId('auth-error-message')).toBeTruthy();
+    await waitFor(() => expect(sendAccessibilityFocus).toHaveBeenCalledTimes(1));
+    if (attempt === 1) sendAccessibilityFocus.mockClear();
+  }
+
+  expect(sendAccessibilityFocus).toHaveBeenCalledTimes(1);
+  if (mode === 'sign-in') expect(auth.signInWithPassword).toHaveBeenCalledTimes(2);
+  if (mode === 'sign-up') expect(auth.signUp).toHaveBeenCalledTimes(2);
+  if (mode === 'forgot-password') expect(auth.resetPasswordForEmail).toHaveBeenCalledTimes(2);
+});
+
 test('öffnet den Passwort-zurücksetzen-Modus und fordert den Link mit einer anonymen Erfolgsmeldung an', async () => {
   const view = await openSettings();
   await fireEvent.press(view.getByTestId('forgot-password-button'));

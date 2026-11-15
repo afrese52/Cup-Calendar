@@ -100,6 +100,7 @@ export default function SettingsScreen() {
   const isSubmittingAuthRef = useRef(false);
   const isSubmittingAuth = submittingAction !== null;
   const [authError, setAuthError] = useState<string | null>(null);
+  const [authErrorFocusRequest, setAuthErrorFocusRequest] = useState(0);
   const authErrorRef = useRef<React.ComponentRef<typeof Text>>(null);
   const accountFocusRef = useRef<React.ComponentRef<typeof Text>>(null);
   const lastAnnouncedAccountStatusRef = useRef<string | null>(null);
@@ -111,6 +112,10 @@ export default function SettingsScreen() {
   const announcedResendCooldownCompletionRef = useRef<number | null>(null);
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
   const accountDeletionRequest = useRequestAccountDeletion();
+  const reportAuthError = (message: string) => {
+    setAuthError(message);
+    setAuthErrorFocusRequest((request) => request + 1);
+  };
   const confirmationResendSecondsLeft = confirmationResendAvailableAt === null
     ? 0
     : Math.max(0, Math.ceil((confirmationResendAvailableAt - confirmationResendClock) / 1000));
@@ -138,7 +143,7 @@ export default function SettingsScreen() {
       if (!active) return;
       setConfirmationResendAvailableAt(null);
       setConfirmationResendCooldownLoaded(true);
-      setAuthError(
+      reportAuthError(
         'Die lokale Wartezeit konnte nicht geladen werden. Serverseitige Versandlimits gelten weiterhin.',
       );
     });
@@ -176,7 +181,7 @@ export default function SettingsScreen() {
     if (authErrorRef.current) {
       AccessibilityInfo.sendAccessibilityEvent(authErrorRef.current, 'focus');
     }
-  }, [authError, isSubmittingAuth]);
+  }, [authError, authErrorFocusRequest, isSubmittingAuth]);
 
   useEffect(() => {
     if (focusAccount !== 'true' || isCheckingSession || Platform.OS === 'web') return;
@@ -201,7 +206,7 @@ export default function SettingsScreen() {
       onError: (_error) => {
         // Keep storage details (which may include malformed persisted data)
         // out of the account UI and ask the user to authenticate again.
-        setAuthError('Die Sitzung konnte nicht geladen werden. Bitte melde dich erneut an.');
+        reportAuthError('Die Sitzung konnte nicht geladen werden. Bitte melde dich erneut an.');
       },
       onReady: () => setIsCheckingSession(false),
     });
@@ -240,7 +245,7 @@ export default function SettingsScreen() {
 
     const normalizedEmail = email.trim();
     if (!normalizedEmail || (authMode !== 'forgot-password' && !password)) {
-      setAuthError(
+      reportAuthError(
         authMode === 'forgot-password'
           ? 'Bitte gib deine E-Mail-Adresse ein.'
           : 'Bitte gib E-Mail-Adresse und Passwort ein.',
@@ -269,10 +274,10 @@ export default function SettingsScreen() {
         }
         if (result.clearPassword) setPassword('');
       } else {
-        setAuthError(result.error);
+        reportAuthError(result.error);
       }
     } catch (error) {
-      setAuthError(friendlyAuthError(error, 'Die Registrierung oder Anmeldung ist fehlgeschlagen. Bitte versuche es erneut.'));
+      reportAuthError(friendlyAuthError(error, 'Die Registrierung oder Anmeldung ist fehlgeschlagen. Bitte versuche es erneut.'));
     } finally {
       isSubmittingAuthRef.current = false;
       setSubmittingAction(null);
@@ -307,12 +312,12 @@ export default function SettingsScreen() {
         try {
           await saveAccountConfirmationResendAvailableAt(availableAt);
         } catch {
-          setAuthError(
+          reportAuthError(
             'Die Anfrage wurde gesendet, aber die Wartezeit konnte auf diesem Gerät nicht gespeichert werden. Serverseitige Versandlimits gelten weiterhin.',
           );
         }
       } else {
-        setAuthError(result.error);
+        reportAuthError(result.error);
       }
     } finally {
       setSubmittingAction(null);
@@ -331,7 +336,7 @@ export default function SettingsScreen() {
         setAuthMessage(result.message);
         if (result.clearPassword) setPassword('');
       } else {
-        setAuthError(result.error);
+        reportAuthError(result.error);
       }
     } finally {
       setSubmittingAction(null);
@@ -340,7 +345,7 @@ export default function SettingsScreen() {
 
   const sendAccountDeletionLink = async () => {
     if (!supabase || !session?.user.email) {
-      setAuthError('Für dieses angemeldete Konto ist keine E-Mail-Adresse verfügbar.');
+      reportAuthError('Für dieses angemeldete Konto ist keine E-Mail-Adresse verfügbar.');
       return;
     }
 
@@ -359,7 +364,7 @@ export default function SettingsScreen() {
         `Wir haben einen Bestätigungslink an ${session.user.email} gesendet. Das Konto wird erst gelöscht, wenn du den Link öffnest. Er ist 30 Minuten gültig.`,
       );
     } catch (error) {
-      setAuthError(
+      reportAuthError(
         friendlyAuthError(
           error,
           'Der Bestätigungslink konnte nicht gesendet werden. Bitte versuche es erneut.',
