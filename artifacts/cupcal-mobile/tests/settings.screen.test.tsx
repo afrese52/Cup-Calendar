@@ -543,6 +543,44 @@ test('hält Eingabe, Rückmeldung und Zurück-Aktion auf kleinem Display erreich
   expect(compactScreen.getByText('Zurück zur Anmeldung')).toBeTruthy();
 });
 
+test('hält Erklärung und Aktionen des Löschdialogs auf kleinem Display erreichbar', async () => {
+  const compactDimensions = { width: 320, height: 480, scale: 1, fontScale: 1 };
+  Dimensions.set({
+    window: compactDimensions,
+    screen: compactDimensions,
+  });
+  auth.getSession.mockResolvedValue({ data: { session: testSession }, error: null });
+  const view = await render(<SettingsScreen />);
+  expect(await view.findByText('test@example.invalid')).toBeTruthy();
+
+  const scrollView = view.getByTestId('settings-scroll-view');
+  const compactScreen = within(scrollView);
+  expect(scrollView.props.scrollEnabled).toBe(true);
+  expect(StyleSheet.flatten(scrollView.props.style).flex).toBe(1);
+
+  await fireEvent.press(compactScreen.getByTestId('delete-account-button'));
+  expect(compactScreen.getByText('Konto wirklich löschen?')).toBeTruthy();
+  expect(compactScreen.getByText(
+    'Dein Konto und deine gespeicherten Favoriten werden endgültig entfernt. Zuerst senden wir einen Link an deine E-Mail-Adresse. Gelöscht wird erst, wenn du diesen Link öffnest.',
+  )).toBeTruthy();
+
+  await fireEvent.scroll(scrollView, {
+    nativeEvent: {
+      contentOffset: { x: 0, y: 800 },
+      contentSize: { width: compactDimensions.width, height: 1280 },
+      layoutMeasurement: { width: compactDimensions.width, height: compactDimensions.height },
+    },
+  });
+
+  expect(compactScreen.getByTestId('delete-account-confirm-button')).toBeTruthy();
+  expect(compactScreen.getByText('Bestätigungslink senden')).toBeTruthy();
+  expect(compactScreen.getByTestId('delete-account-cancel-button')).toBeTruthy();
+  expect(compactScreen.getByText('Abbrechen')).toBeTruthy();
+
+  await fireEvent.press(compactScreen.getByTestId('delete-account-cancel-button'));
+  expect(compactScreen.queryByText('Konto wirklich löschen?')).toBeNull();
+});
+
 test('hält E-Mail, Absenden und Zurück bei geöffneter Tastatur auf kleinem Display erreichbar', async () => {
   const compactDimensions = { width: 320, height: 568, scale: 1, fontScale: 1 };
   Dimensions.set({
