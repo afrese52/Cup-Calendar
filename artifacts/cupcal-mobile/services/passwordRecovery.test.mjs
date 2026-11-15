@@ -110,6 +110,29 @@ test('erlaubt nach einem vorübergehenden Linkfehler denselben Link erneut', asy
   assert.equal(recovery.isPending(), true);
 });
 
+test('erlaubt nach einem vorübergehenden Supabase-Fehlerobjekt denselben Link erneut', async () => {
+  let exchangeAttempts = 0;
+  const recovery = createPasswordRecovery(createAuth({
+    exchangeCodeForSession: async () => {
+      exchangeAttempts += 1;
+      if (exchangeAttempts === 1) {
+        return { error: { message: 'Network request failed' } };
+      }
+      return { error: null };
+    },
+  }));
+
+  await assert.rejects(
+    recovery.handlePasswordResetUrl(recoveryUrl),
+    (error) => error.message === 'Network request failed',
+  );
+  assert.equal(recovery.isPending(), false);
+
+  assert.equal(await recovery.handlePasswordResetUrl(recoveryUrl), true);
+  assert.equal(exchangeAttempts, 2);
+  assert.equal(recovery.isPending(), true);
+});
+
 test('erlaubt nach vorübergehenden HTTP-Fehlern denselben Link erneut', async (t) => {
   const cases = [
     ['Zeitüberschreitung', 408],
