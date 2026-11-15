@@ -436,6 +436,56 @@ test('verarbeitet Supabase-Recovery-Links ohne CupCal-Flow-Parameter', async () 
   assert.equal(recovery.isPending(), true);
 });
 
+test('übergibt aktuelle und ältere Flow-IDs aus Query und Fragment an Supabase', async (t) => {
+  const cases = [
+    {
+      name: 'sb_flow_id in der Query',
+      parameters: '?code=code-query-sb&type=recovery&sb_flow_id=query-sb',
+      code: 'code-query-sb',
+      flowId: 'query-sb',
+    },
+    {
+      name: 'sb_flow_id im Fragment',
+      parameters: '#code=code-fragment-sb&type=recovery&sb_flow_id=fragment-sb',
+      code: 'code-fragment-sb',
+      flowId: 'fragment-sb',
+    },
+    {
+      name: 'älteres flow_id in der Query',
+      parameters: '?code=code-query-legacy&type=recovery&flow_id=query-legacy',
+      code: 'code-query-legacy',
+      flowId: 'query-legacy',
+    },
+    {
+      name: 'älteres flow_id im Fragment',
+      parameters: '#code=code-fragment-legacy&type=recovery&flow_id=fragment-legacy',
+      code: 'code-fragment-legacy',
+      flowId: 'fragment-legacy',
+    },
+  ];
+
+  for (const { name, parameters, code, flowId } of cases) {
+    await t.test(name, async () => {
+      let exchangeArguments;
+      const recovery = createPasswordRecovery(createAuth({
+        exchangeCodeForSession: async (...args) => {
+          exchangeArguments = args;
+          return { error: null };
+        },
+      }));
+
+      assert.equal(
+        await recovery.handlePasswordResetUrl(`cupcal-android://auth/reset${parameters}`),
+        true,
+      );
+      assert.deepEqual(exchangeArguments, [
+        code,
+        { flowId },
+      ]);
+    });
+  }
+});
+
 test('ordnet gleichzeitige Wiederherstellungslinks auch bei möglicher umgekehrter Abschlussreihenfolge', async () => {
   let releaseFirstExchange;
   const firstExchange = new Promise((resolve) => {

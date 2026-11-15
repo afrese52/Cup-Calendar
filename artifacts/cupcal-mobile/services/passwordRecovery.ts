@@ -147,7 +147,7 @@ export function createPasswordRecovery(auth: PasswordRecoveryAuth) {
     }
 
     if (code) {
-      const flowId = getParameter('flow_id');
+      const flowId = getParameter('sb_flow_id') ?? getParameter('flow_id');
       const { error } = await auth.exchangeCodeForSession(
         code,
         flowId ? { flowId } : undefined,
