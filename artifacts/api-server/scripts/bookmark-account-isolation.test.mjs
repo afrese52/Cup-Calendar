@@ -450,7 +450,7 @@ test("RPC schützt Konten und synchronisiert eine zweite Gerätesitzung", async 
   });
 });
 
-test("gleichzeitige RPC-Aufrufe halten denselben Termin für zwei Konten getrennt", async () => {
+test("spätere RPC-Aufrufe ändern beim gemeinsamen Termin nur das eigene Konto", async () => {
   await withTestAccounts(async (accountA, accountB) => {
     const eventId = `shared-event-${randomUUID()}`;
     const updatedAt = new Date(0).toISOString();
@@ -485,18 +485,68 @@ test("gleichzeitige RPC-Aufrufe halten denselben Termin für zwei Konten getrenn
 
     assert.ifError(savedA.error);
     assert.ifError(savedB.error);
-    assert.deepEqual(savedA.data, {
+    const initialStateA = {
       user_id: accountA.id,
       event_id: eventId,
       is_favorite: true,
       revision: 1,
-    });
-    assert.deepEqual(savedB.data, {
+    };
+    const initialStateB = {
       user_id: accountB.id,
       event_id: eventId,
       is_favorite: false,
       revision: 1,
+    };
+    assert.deepEqual(savedA.data, initialStateA);
+    assert.deepEqual(savedB.data, initialStateB);
+
+    const updateA = await accountA.client.rpc("sync_user_event_bookmark", {
+      p_event_id: eventId,
+      p_is_favorite: false,
+      p_updated_at: updatedAt,
     });
+    assert.ifError(updateA.error);
+
+    const [afterUpdateA, unchangedB] = await Promise.all([
+      accountA.client
+        .from("user_event_bookmarks")
+        .select("user_id, event_id, is_favorite, revision")
+        .eq("event_id", eventId)
+        .single(),
+      accountB.client
+        .from("user_event_bookmarks")
+        .select("user_id, event_id, is_favorite, revision")
+        .eq("event_id", eventId)
+        .single(),
+    ]);
+    assert.ifError(afterUpdateA.error);
+    assert.ifError(unchangedB.error);
+    assert.deepEqual(afterUpdateA.data, { ...initialStateA, is_favorite: false, revision: 2 });
+    assert.deepEqual(unchangedB.data, initialStateB);
+
+    const updateB = await accountB.client.rpc("sync_user_event_bookmark", {
+      p_event_id: eventId,
+      p_is_favorite: true,
+      p_updated_at: updatedAt,
+    });
+    assert.ifError(updateB.error);
+
+    const [unchangedA, afterUpdateB] = await Promise.all([
+      accountA.client
+        .from("user_event_bookmarks")
+        .select("user_id, event_id, is_favorite, revision")
+        .eq("event_id", eventId)
+        .single(),
+      accountB.client
+        .from("user_event_bookmarks")
+        .select("user_id, event_id, is_favorite, revision")
+        .eq("event_id", eventId)
+        .single(),
+    ]);
+    assert.ifError(unchangedA.error);
+    assert.ifError(afterUpdateB.error);
+    assert.deepEqual(unchangedA.data, { ...initialStateA, is_favorite: false, revision: 2 });
+    assert.deepEqual(afterUpdateB.data, { ...initialStateB, is_favorite: true, revision: 2 });
   });
 });
 
