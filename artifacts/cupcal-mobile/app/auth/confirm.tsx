@@ -65,6 +65,7 @@ export default function ConfirmEmailScreen() {
   }>();
   const confirmationMutation = useConfirmAccountDeletion();
   const processedCallback = useRef<string | null>(null);
+  const callbackQueue = useRef<Promise<void>>(Promise.resolve());
   const [status, setStatus] = useState<ConfirmationStatus>('checking');
   const [message, setMessage] = useState('Deine E-Mail-Adresse wird bestätigt …');
   const [completedFlow, setCompletedFlow] = useState<string | undefined>();
@@ -83,10 +84,10 @@ export default function ConfirmEmailScreen() {
         callback.error,
         callback.errorDescription,
       ].join('|');
+      if (!isMounted) return;
       if (processedCallback.current === callbackKey) return;
       processedCallback.current = callbackKey;
 
-      if (!isMounted) return;
       setStatus('checking');
       setMessage('Deine E-Mail-Adresse wird bestätigt …');
       setCompletedFlow(undefined);
@@ -170,8 +171,28 @@ export default function ConfirmEmailScreen() {
       }
     };
 
+    const enqueueCallback = (callback: AuthCallbackParams) => {
+      const nextCallback = callbackQueue.current.then(() => processCallback(callback));
+      callbackQueue.current = nextCallback.catch((error: unknown) => {
+        if (!isMounted) return;
+        setStatus('error');
+        setMessage(friendlyAuthError(error, 'Der Bestätigungslink konnte nicht verarbeitet werden.'));
+      });
+      return callbackQueue.current;
+    };
+
     const routeParams = routeCallback(params);
     const hasRouteCallback = Object.values(routeParams).some(Boolean);
+    let initialUrlResolved = false;
+    const pendingUrls: string[] = [];
+    const subscription = Linking.addEventListener('url', ({ url }) => {
+      if (!initialUrlResolved) {
+        pendingUrls.push(url);
+        return;
+      }
+      void enqueueCallback(parseAuthCallbackUrl(url));
+    });
+
     void Linking.getInitialURL()
       .then((url) => {
         const browserUrl = Platform.OS === 'web' && typeof window !== 'undefined'
@@ -194,15 +215,18 @@ export default function ConfirmEmailScreen() {
           : hasRouteCallback
             ? routeParams
             : {};
-        void processCallback(callback);
+        void enqueueCallback(callback);
       })
       .catch(() => {
-        void processCallback(routeParams);
+        void enqueueCallback(routeParams);
+      })
+      .finally(() => {
+        initialUrlResolved = true;
+        for (const url of pendingUrls) {
+          void enqueueCallback(parseAuthCallbackUrl(url));
+        }
+        pendingUrls.length = 0;
       });
-
-    const subscription = Linking.addEventListener('url', ({ url }) => {
-      void processCallback(parseAuthCallbackUrl(url));
-    });
 
     return () => {
       isMounted = false;

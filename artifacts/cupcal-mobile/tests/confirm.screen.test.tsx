@@ -10,6 +10,15 @@ const mockUrlListener: {
 const mockDeletionConfirm = jest.fn(async (_input: {
   data: { confirmationToken: string };
 }) => undefined);
+let mockPersistedSession: { user: { id: string } } | null = null;
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+  return { promise, resolve };
+}
 
 jest.mock('@expo/vector-icons', () => ({ Feather: () => null }));
 jest.mock('@react-native-async-storage/async-storage', () => ({
@@ -77,6 +86,7 @@ beforeEach(() => {
   mockInitialUrl.current = null;
   mockUrlListener.current = null;
   mockDeletionConfirm.mockReset().mockResolvedValue(undefined);
+  mockPersistedSession = null;
   supabase.auth.exchangeCodeForSession.mockReset().mockResolvedValue({
     data: { session: { user: { id: 'account-id' } } },
     error: null,
@@ -132,6 +142,61 @@ test('verarbeitet nacheinander Bestätigungslinks verschiedener Konten mit ihren
       'account-b-code',
       { flowId: 'account-b-flow' },
     );
+    expect(view.getByText(
+      'Deine E-Mail-Adresse ist bestätigt. Du kannst CupCal jetzt verwenden.',
+    )).toBeTruthy();
+  });
+});
+
+test('lässt eine verspätete Antwort des ersten Links das zuletzt geöffnete Konto nicht ersetzen', async () => {
+  const firstExchange = deferred<any>();
+  const secondExchange = deferred<any>();
+  mockInitialUrl.current =
+    'cupcal-android://auth/confirm?code=account-a-code&flow_id=account-a-flow';
+  supabase.auth.exchangeCodeForSession.mockImplementation((code: string) => {
+    const response = code === 'account-a-code' ? firstExchange.promise : secondExchange.promise;
+    return response.then((result: any) => {
+      mockPersistedSession = result.data.session;
+      return result;
+    });
+  });
+  const view = await render(<ConfirmEmailScreen />);
+
+  await waitFor(() => {
+    expect(supabase.auth.exchangeCodeForSession).toHaveBeenCalledTimes(1);
+  });
+  await act(async () => {
+    mockUrlListener.current?.({
+      url: 'cupcal-android://auth/confirm?code=account-b-code&sb_flow_id=account-b-flow',
+    });
+    await Promise.resolve();
+  });
+  expect(supabase.auth.exchangeCodeForSession).toHaveBeenCalledTimes(1);
+
+  await act(async () => {
+    secondExchange.resolve({
+      data: { session: { user: { id: 'account-b' } } },
+      error: null,
+    });
+    await Promise.resolve();
+  });
+  expect(supabase.auth.exchangeCodeForSession).toHaveBeenCalledTimes(1);
+
+  await act(async () => {
+    firstExchange.resolve({
+      data: { session: { user: { id: 'account-a' } } },
+      error: null,
+    });
+    await firstExchange.promise;
+  });
+
+  await waitFor(() => {
+    expect(supabase.auth.exchangeCodeForSession).toHaveBeenNthCalledWith(
+      2,
+      'account-b-code',
+      { flowId: 'account-b-flow' },
+    );
+    expect(mockPersistedSession?.user.id).toBe('account-b');
     expect(view.getByText(
       'Deine E-Mail-Adresse ist bestätigt. Du kannst CupCal jetzt verwenden.',
     )).toBeTruthy();

@@ -291,3 +291,97 @@ test('ordnet zwei offene Registrierungslinks den Konten zu und meldet zuletzt da
     await client.auth.dispose();
   }
 });
+
+test('serialisiert gleichzeitig geöffnete Bestätigungslinks und behält das zuletzt gestartete Konto', async () => {
+  const storage = createPersistentStorage();
+  const flowIdA = '33333333-3333-4333-8333-333333333333';
+  const flowIdB = '44444444-4444-4444-8444-444444444444';
+  await storage.setItem(
+    `sb-parallel-confirmation-auth-token-flow-${flowIdA}-code-verifier`,
+    JSON.stringify('verifier-a/signup'),
+  );
+  await storage.setItem(
+    `sb-parallel-confirmation-auth-token-flow-${flowIdB}-code-verifier`,
+    JSON.stringify('verifier-b/signup'),
+  );
+
+  let resolveFirstResponse;
+  const firstResponse = new Promise((resolve) => {
+    resolveFirstResponse = resolve;
+  });
+  let firstTokenResponse;
+  const tokenRequests = [];
+  const userForCode = {
+    'account-a-code': {
+      id: '00000000-0000-4000-8000-000000000031',
+      email: 'account-a@example.invalid',
+      refreshToken: 'confirmed-refresh-token-a',
+    },
+    'account-b-code': {
+      id: '00000000-0000-4000-8000-000000000032',
+      email: 'account-b@example.invalid',
+      refreshToken: 'confirmed-refresh-token-b',
+    },
+  };
+  const delayedConfirmationFetch = async (input, init) => {
+    const url = new URL(String(input));
+    if (url.pathname.endsWith('/token')) {
+      const request = JSON.parse(String(init?.body));
+      tokenRequests.push(request);
+      const user = userForCode[request.auth_code];
+      const response = new Response(JSON.stringify({
+        access_token: accessToken,
+        refresh_token: user.refreshToken,
+        token_type: 'bearer',
+        expires_in: 3600,
+        user: {
+          id: user.id,
+          email: user.email,
+          aud: 'authenticated',
+          role: 'authenticated',
+          app_metadata: {},
+          user_metadata: {},
+          created_at: new Date(0).toISOString(),
+        },
+      }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      if (request.auth_code === 'account-a-code') {
+        firstTokenResponse = response;
+        return firstResponse;
+      }
+      return response;
+    }
+    return fakeUserFetch(input, init);
+  };
+  const client = createCupCalSupabaseClient(
+    'https://parallel-confirmation.supabase.co',
+    'test-publishable-key',
+    storage,
+    delayedConfirmationFetch,
+  );
+
+  try {
+    const firstConfirmation = confirmEmailCode(client.auth, 'account-a-code', flowIdA);
+    const secondConfirmation = confirmEmailCode(client.auth, 'account-b-code', flowIdB);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    assert.deepEqual(tokenRequests.map(({ auth_code }) => auth_code), ['account-a-code']);
+    resolveFirstResponse(firstTokenResponse);
+    const [sessionA, sessionB] = await Promise.all([firstConfirmation, secondConfirmation]);
+
+    assert.equal(sessionA.user.id, userForCode['account-a-code'].id);
+    assert.equal(sessionB.user.id, userForCode['account-b-code'].id);
+    assert.deepEqual(tokenRequests.map(({ auth_code }) => auth_code), [
+      'account-a-code',
+      'account-b-code',
+    ]);
+    const finalSession = await client.auth.getSession();
+    assert.equal(finalSession.data.session?.user.id, userForCode['account-b-code'].id);
+    assert.equal(finalSession.data.session?.user.email, userForCode['account-b-code'].email);
+  } finally {
+    await client.auth.dispose();
+  }
+});

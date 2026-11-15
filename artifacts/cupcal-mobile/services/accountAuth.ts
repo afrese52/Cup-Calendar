@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { passwordLengthRequirementError } from './passwordRecovery.ts';
 
 type AuthApi = SupabaseClient['auth'];
+const emailConfirmationQueues = new WeakMap<object, Promise<void>>();
 const storage = (AsyncStorage as typeof AsyncStorage & { default?: typeof AsyncStorage }).default
   ?? AsyncStorage;
 export const ACCOUNT_CONFIRMATION_RESEND_AVAILABLE_AT_KEY =
@@ -239,13 +240,28 @@ export async function confirmEmailCode(
 ): Promise<Session> {
   if (!code) throw new Error('Der Bestätigungslink enthält keinen gültigen Code.');
 
-  const { data, error } = await auth.exchangeCodeForSession(
-    code,
-    flowId ? { flowId } : undefined,
-  );
-  if (error) throw error;
-  if (!data.session) throw new Error('Es wurde keine gültige Sitzung erstellt.');
-  return data.session;
+  const previousConfirmation = emailConfirmationQueues.get(auth) ?? Promise.resolve();
+  let releaseConfirmation!: () => void;
+  const currentConfirmation = new Promise<void>((resolve) => {
+    releaseConfirmation = resolve;
+  });
+  emailConfirmationQueues.set(auth, currentConfirmation);
+
+  await previousConfirmation;
+  try {
+    const { data, error } = await auth.exchangeCodeForSession(
+      code,
+      flowId ? { flowId } : undefined,
+    );
+    if (error) throw error;
+    if (!data.session) throw new Error('Es wurde keine gültige Sitzung erstellt.');
+    return data.session;
+  } finally {
+    releaseConfirmation();
+    if (emailConfirmationQueues.get(auth) === currentConfirmation) {
+      emailConfirmationQueues.delete(auth);
+    }
+  }
 }
 
 export function emailConfirmationLinkError(
