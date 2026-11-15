@@ -142,6 +142,13 @@ export class ImportHistoryWriteError extends Error {
   }
 }
 
+export class MhtImportTransactionError extends Error {
+  constructor() {
+    super("Der Import konnte nicht gemeinsam mit der Historie gespeichert werden.");
+    this.name = "MhtImportTransactionError";
+  }
+}
+
 const SUPABASE_API_PATH_SUFFIX = /\/(?:auth|rest|storage|functions)\/v1$/i;
 
 export function normalizeSupabaseBaseUrl(value: string): string {
@@ -222,6 +229,38 @@ export async function recordMhtImportHistory(
     });
   if (error) {
     throw new ImportHistoryWriteError();
+  }
+}
+
+export async function commitMhtImport(
+  events: MhtImportEvent[],
+  history: MhtImportHistoryInput,
+  admin: SupabaseClient = getSupabaseAdmin(),
+): Promise<void> {
+  const rows = buildMhtEventUpsertRows(events);
+  if (rows.length === 0) {
+    throw new MhtImportTransactionError();
+  }
+
+  const { error } = await admin.rpc("commit_mht_import", {
+    p_events: rows,
+    p_history: {
+      admin_user_id: history.adminUserId,
+      admin_email: history.adminEmail,
+      source_hint: history.sourceHint,
+      inserted_count: history.insertedCount,
+      updated_count: history.updatedCount,
+      skipped_count: history.skippedCount,
+      skipped_warning_count: history.skippedWarningCount,
+      skipped_past_count: history.skippedPastCount,
+      skipped_invalid_count: history.skippedInvalidCount,
+    },
+  });
+  if (error) {
+    if (isMissingEventMetadataColumns(error)) {
+      throw new EventMetadataMigrationRequiredError();
+    }
+    throw new MhtImportTransactionError();
   }
 }
 

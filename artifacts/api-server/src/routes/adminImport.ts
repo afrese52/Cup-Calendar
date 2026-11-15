@@ -7,10 +7,9 @@ import {
   getMhtEventChanges,
   isMissingEventMetadataColumns,
   EventMetadataMigrationRequiredError,
-  ImportHistoryWriteError,
   listRecentMhtImports,
-  recordMhtImportHistory,
-  upsertMhtEvents,
+  commitMhtImport,
+  MhtImportTransactionError,
   type ExistingMhtEvent,
 } from "../services/supabase";
 import { MAX_MHT_UPLOAD_BYTES } from "../lib/uploadLimits";
@@ -363,7 +362,6 @@ router.post(
 
       const existingEvents = await findExistingEvents(preview.importableEvents.map((event) => event.id));
       if (rejectUnconfirmedStaleSnapshot(req, res, preview.schedule.snapshotAt)) return;
-      await upsertMhtEvents(preview.importableEvents);
       const insertedCount = preview.importableEvents.filter((event) => !existingEvents.has(event.id)).length;
       const updatedCount = preview.importableEvents.length - insertedCount;
       const adminUser = (req as ImportAdminRequest).importAdminUser;
@@ -375,7 +373,7 @@ router.post(
         skippedPastCount: preview.skippedPastCount,
         invalidCount: preview.invalidCount,
       });
-      await recordMhtImportHistory({
+      await commitMhtImport(preview.importableEvents, {
         adminUserId: adminUser.id,
         adminEmail: adminUser.email,
         sourceHint: getSourceHint(preview.sourceUrl),
@@ -401,9 +399,9 @@ router.post(
         });
         return;
       }
-      if (error instanceof ImportHistoryWriteError) {
+      if (error instanceof MhtImportTransactionError) {
         res.status(503).json({
-          error: "Die Termine wurden gespeichert, aber der Historieneintrag fehlt. Bitte wende dich an die Administration, bevor du erneut importierst.",
+          error: "Der Import wurde nicht gespeichert. Es wurden keine Termine oder Historieneinträge übernommen.",
         });
         return;
       }

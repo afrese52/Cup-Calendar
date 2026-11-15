@@ -7,7 +7,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import pg from "pg";
 import test from "node:test";
-import { upsertMhtEvents } from "./supabase.ts";
+import { commitMhtImport, upsertMhtEvents } from "./supabase.ts";
 
 const { Client, Pool } = pg;
 const projectDir = path.resolve(
@@ -75,6 +75,23 @@ function createPostgresUpsertAdmin(pool) {
           }
         },
       };
+    },
+  };
+}
+
+function createPostgresAtomicImportAdmin(pool) {
+  return {
+    async rpc(name, args) {
+      assert.equal(name, "commit_mht_import");
+      try {
+        await pool.query(
+          "SELECT public.commit_mht_import($1::jsonb, $2::jsonb)",
+          [JSON.stringify(args.p_events), JSON.stringify(args.p_history)],
+        );
+        return { error: null };
+      } catch (error) {
+        return { error };
+      }
     },
   };
 }
@@ -155,6 +172,12 @@ test("wiederholter Import aktualisiert denselben Termin und erhält Admin-Felder
     for (const migration of migrations) {
       await pool.query(await readFile(path.join(migrationsDir, migration), "utf8"));
     }
+
+    const adminUserId = "2d81b842-8d9c-4de3-8411-6787a91e68e9";
+    await pool.query(
+      "INSERT INTO auth.users (id, raw_user_meta_data) VALUES ($1, '{}'::jsonb)",
+      [adminUserId],
+    );
 
     const importedEvent = {
       id: "epic:cup:round-1",
@@ -249,6 +272,71 @@ test("wiederholter Import aktualisiert denselben Termin und erhält Admin-Felder
         custom_admin_note: null,
       },
     ], "Der zweite Import muss dieselbe Zeile aktualisieren, Admin-Felder erhalten und fehlende Snapshot-Einträge behalten.");
+
+    const atomicEvent = {
+      ...importedEvent,
+      id: "epic:cup:atomic-import",
+      title: "Atomar gespeicherter Solo Cup",
+    };
+    const history = {
+      adminUserId,
+      adminEmail: "admin@cupcal.test",
+      sourceHint: "fortnite.com",
+      insertedCount: 1,
+      updatedCount: 0,
+      skippedCount: 0,
+      skippedWarningCount: 0,
+      skippedPastCount: 0,
+      skippedInvalidCount: 0,
+    };
+    const atomicAdmin = createPostgresAtomicImportAdmin(pool);
+    await commitMhtImport([atomicEvent], history, atomicAdmin);
+
+    const committed = await pool.query(
+      `SELECT event.id, event.title, history.admin_email, history.inserted_count
+       FROM public.fortnite_events AS event
+       CROSS JOIN public.admin_import_history AS history
+       WHERE event.id = $1`,
+      [atomicEvent.id],
+    );
+    assert.deepEqual(committed.rows, [{
+      id: atomicEvent.id,
+      title: atomicEvent.title,
+      admin_email: "admin@cupcal.test",
+      inserted_count: 1,
+    }], "Der Datenbankaufruf muss Termin und Historie gemeinsam schreiben.");
+
+    const failedNewEvent = {
+      ...atomicEvent,
+      id: "epic:cup:must-roll-back",
+      title: "Darf nicht gespeichert werden",
+    };
+    await assert.rejects(
+      commitMhtImport([
+        { ...atomicEvent, title: "Änderung muss zurückgerollt werden" },
+        failedNewEvent,
+      ], {
+        ...history,
+        adminUserId: "11111111-1111-4111-8111-111111111111",
+      }, atomicAdmin),
+      (error) => error.name === "MhtImportTransactionError",
+    );
+
+    const afterRollback = await pool.query(
+      `SELECT id, title
+       FROM public.fortnite_events
+       WHERE id = ANY($1::text[])
+       ORDER BY id`,
+      [[atomicEvent.id, failedNewEvent.id]],
+    );
+    assert.deepEqual(afterRollback.rows, [{
+      id: atomicEvent.id,
+      title: atomicEvent.title,
+    }], "Ein fehlgeschlagener Historieneintrag muss alle Terminänderungen zurückrollen.");
+    const historyCount = await pool.query(
+      "SELECT count(*)::integer AS count FROM public.admin_import_history",
+    );
+    assert.equal(historyCount.rows[0].count, 1, "Der fehlgeschlagene Import darf keinen Historieneintrag hinterlassen.");
   } finally {
     await pool?.end();
     await setupClient?.end();

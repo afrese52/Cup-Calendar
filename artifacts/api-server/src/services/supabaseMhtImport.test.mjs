@@ -11,6 +11,8 @@ import { parseMhtSchedule } from "../../scripts/dry-run-mht-import.mjs";
 import {
   buildMhtEventUpsertRows,
   EventMetadataMigrationRequiredError,
+  MhtImportTransactionError,
+  commitMhtImport,
   getMhtEventChanges,
   listRecentMhtImports,
   recordMhtImportHistory,
@@ -476,7 +478,7 @@ Content-Type: text/html; charset=utf-8
 </body></html>
 --CupCalImportCountsTest--
 `;
-  let upsertRows = [];
+  let importCall;
   let historyRow;
   const fakeSupabase = createServer(async (request, response) => {
     const chunks = [];
@@ -497,17 +499,17 @@ Content-Type: text/html; charset=utf-8
       return;
     }
 
-    if (request.url?.startsWith("/rest/v1/fortnite_events")) {
-      if (request.method === "GET") {
-        response.end("[]");
-        return;
-      }
-      if (request.method === "POST") {
-        upsertRows = JSON.parse(body);
-        response.statusCode = 201;
-        response.end("");
-        return;
-      }
+    if (request.url?.startsWith("/rest/v1/fortnite_events") && request.method === "GET") {
+      response.end("[]");
+      return;
+    }
+
+    if (request.url === "/rest/v1/rpc/commit_mht_import" && request.method === "POST") {
+      importCall = JSON.parse(body);
+      historyRow = importCall.p_history;
+      response.statusCode = 200;
+      response.end("null");
+      return;
     }
 
     if (request.url?.startsWith("/rest/v1/admin_import_history")) {
@@ -617,8 +619,8 @@ Content-Type: text/html; charset=utf-8
       skippedInvalidCount: 1,
       skippedCount: 3,
     });
-    assert.deepEqual(upsertRows.map((row) => row.id), ["epic:CleanSolo:CleanRound"]);
-    assert.ok(!upsertRows.some((row) => row.id === "epic:OutsideRange:OutsideRangeRound"));
+    assert.deepEqual(importCall.p_events.map((row) => row.id), ["epic:CleanSolo:CleanRound"]);
+    assert.ok(!importCall.p_events.some((row) => row.id === "epic:OutsideRange:OutsideRangeRound"));
     assert.equal(historyRow.inserted_count, 1);
     assert.equal(historyRow.updated_count, 0);
     assert.equal(historyRow.skipped_count, 3);
@@ -783,6 +785,63 @@ test("erfordert die neue Datenbankmigration statt neue Metadaten still zu verwer
     upsertMhtEvents([event()], admin),
     EventMetadataMigrationRequiredError,
   );
+});
+
+test("speichert Termine und Verlauf über einen gemeinsamen Datenbankaufruf", async () => {
+  let call;
+  const admin = {
+    async rpc(name, args) {
+      call = { name, args };
+      return { error: null };
+    },
+  };
+  const history = {
+    adminUserId: "2d81b842-8d9c-4de3-8411-6787a91e68e9",
+    adminEmail: "admin@example.org",
+    sourceHint: "fortnite.com",
+    insertedCount: 1,
+    updatedCount: 0,
+    skippedCount: 2,
+    skippedWarningCount: 1,
+    skippedPastCount: 1,
+    skippedInvalidCount: 0,
+  };
+
+  await commitMhtImport([event()], history, admin);
+
+  assert.equal(call.name, "commit_mht_import");
+  assert.deepEqual(call.args.p_events.map((row) => row.id), ["epic:cup:round-1"]);
+  assert.deepEqual(call.args.p_history, {
+    admin_user_id: history.adminUserId,
+    admin_email: history.adminEmail,
+    source_hint: history.sourceHint,
+    inserted_count: 1,
+    updated_count: 0,
+    skipped_count: 2,
+    skipped_warning_count: 1,
+    skipped_past_count: 1,
+    skipped_invalid_count: 0,
+  });
+});
+
+test("meldet einen fehlgeschlagenen gemeinsamen Import ohne Datenbankdetails", async () => {
+  const admin = {
+    async rpc() {
+      return { error: new Error("secret-looking-key=must-not-escape") };
+    },
+  };
+
+  await assert.rejects(commitMhtImport([event()], {
+    adminUserId: "2d81b842-8d9c-4de3-8411-6787a91e68e9",
+    adminEmail: "admin@example.org",
+    sourceHint: null,
+    insertedCount: 1,
+    updatedCount: 0,
+    skippedCount: 0,
+    skippedWarningCount: 0,
+    skippedPastCount: 0,
+    skippedInvalidCount: 0,
+  }, admin), MhtImportTransactionError);
 });
 
 test("records only approved import metadata and never stores uploaded content", async () => {
