@@ -122,6 +122,7 @@ export default function SettingsScreen() {
   const confirmationResendSecondsLeft = confirmationResendAvailableAt === null
     ? 0
     : Math.max(0, Math.ceil((confirmationResendAvailableAt - confirmationResendClock) / 1000));
+  const confirmationResendEmail = registrationConfirmationEmail ?? email.trim();
   const confirmationResendDisabled =
     isSubmittingAuth || !confirmationResendCooldownLoaded || confirmationResendSecondsLeft > 0;
   const confirmationResendCountdownLabel = confirmationResendSecondsLeft === 1
@@ -342,7 +343,7 @@ export default function SettingsScreen() {
     setAuthMessage(null);
     try {
       const result = await resendAccountConfirmation({
-        email: registrationConfirmationEmail ?? email,
+        email: confirmationResendEmail,
         emailConfirmationRedirectTo: getEmailConfirmationRedirectUrl(),
         requestEmailConfirmation,
       });
@@ -742,32 +743,42 @@ export default function SettingsScreen() {
                 </Pressable>
               ) : null}
               {authMode === 'sign-in' ? (
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={confirmationResendAccessibilityLabel}
-                  accessibilityState={{
-                    disabled: confirmationResendDisabled,
-                    busy: submittingAction === 'resend-confirmation',
-                  }}
-                  testID="resend-confirmation-button"
-                  disabled={confirmationResendDisabled}
-                  onPress={() => void resendConfirmation()}
-                  style={({ pressed }) => [
-                    styles.modeToggle,
-                    pressed && !confirmationResendDisabled ? styles.pressed : null,
-                    confirmationResendDisabled ? styles.disabled : null,
-                  ]}
-                >
-                  <Text style={[styles.modeToggleText, { color: colors.primary }]}>
-                    {isSubmittingAuth
-                      ? 'Bestätigungslink wird gesendet'
-                      : !confirmationResendCooldownLoaded
-                        ? 'Bestätigungswartezeit wird geladen'
-                        : confirmationResendSecondsLeft > 0
-                        ? confirmationResendCountdownLabel
-                        : 'Bestätigungslink erneut senden'}
-                  </Text>
-                </Pressable>
+                <>
+                  {confirmationResendEmail ? (
+                    <Text
+                      testID="confirmation-resend-recipient"
+                      style={[styles.accountSubtitle, { color: colors.mutedForeground }]}
+                    >
+                      Der Bestätigungslink wird an {confirmationResendEmail} gesendet.
+                    </Text>
+                  ) : null}
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={confirmationResendAccessibilityLabel}
+                    accessibilityState={{
+                      disabled: confirmationResendDisabled,
+                      busy: submittingAction === 'resend-confirmation',
+                    }}
+                    testID="resend-confirmation-button"
+                    disabled={confirmationResendDisabled}
+                    onPress={() => void resendConfirmation()}
+                    style={({ pressed }) => [
+                      styles.modeToggle,
+                      pressed && !confirmationResendDisabled ? styles.pressed : null,
+                      confirmationResendDisabled ? styles.disabled : null,
+                    ]}
+                  >
+                    <Text style={[styles.modeToggleText, { color: colors.primary }]}>
+                      {isSubmittingAuth
+                        ? 'Bestätigungslink wird gesendet'
+                        : !confirmationResendCooldownLoaded
+                          ? 'Bestätigungswartezeit wird geladen'
+                          : confirmationResendSecondsLeft > 0
+                          ? confirmationResendCountdownLabel
+                          : 'Bestätigungslink erneut senden'}
+                    </Text>
+                  </Pressable>
+                </>
               ) : null}
               <Pressable
                 accessibilityRole="button"
@@ -803,32 +814,40 @@ export default function SettingsScreen() {
                 {authMessage}
               </Text>
               {registrationConfirmationEmail && !session ? (
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={confirmationResendAccessibilityLabel}
-                  accessibilityState={{
-                    disabled: confirmationResendDisabled,
-                    busy: submittingAction === 'resend-confirmation',
-                  }}
-                  testID="registration-resend-confirmation-button"
-                  disabled={confirmationResendDisabled}
-                  onPress={() => void resendConfirmation()}
-                  style={({ pressed }) => [
-                    styles.modeToggle,
-                    pressed && !confirmationResendDisabled ? styles.pressed : null,
-                    confirmationResendDisabled ? styles.disabled : null,
-                  ]}
-                >
-                  <Text style={[styles.modeToggleText, { color: colors.primary }]}>
-                    {isSubmittingAuth
-                      ? 'Bestätigungslink wird gesendet'
-                      : !confirmationResendCooldownLoaded
-                        ? 'Bestätigungswartezeit wird geladen'
-                        : confirmationResendSecondsLeft > 0
-                        ? confirmationResendCountdownLabel
-                        : 'Bestätigungslink erneut senden'}
+                <>
+                  <Text
+                    testID="confirmation-resend-recipient"
+                    style={[styles.accountSubtitle, { color: colors.mutedForeground }]}
+                  >
+                    Der Bestätigungslink wird an {confirmationResendEmail} gesendet.
                   </Text>
-                </Pressable>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={confirmationResendAccessibilityLabel}
+                    accessibilityState={{
+                      disabled: confirmationResendDisabled,
+                      busy: submittingAction === 'resend-confirmation',
+                    }}
+                    testID="registration-resend-confirmation-button"
+                    disabled={confirmationResendDisabled}
+                    onPress={() => void resendConfirmation()}
+                    style={({ pressed }) => [
+                      styles.modeToggle,
+                      pressed && !confirmationResendDisabled ? styles.pressed : null,
+                      confirmationResendDisabled ? styles.disabled : null,
+                    ]}
+                  >
+                    <Text style={[styles.modeToggleText, { color: colors.primary }]}>
+                      {isSubmittingAuth
+                        ? 'Bestätigungslink wird gesendet'
+                        : !confirmationResendCooldownLoaded
+                          ? 'Bestätigungswartezeit wird geladen'
+                          : confirmationResendSecondsLeft > 0
+                          ? confirmationResendCountdownLabel
+                          : 'Bestätigungslink erneut senden'}
+                    </Text>
+                  </Pressable>
+                </>
               ) : null}
             </View>
           ) : null}

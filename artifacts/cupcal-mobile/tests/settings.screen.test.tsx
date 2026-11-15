@@ -389,6 +389,7 @@ test('sendet nach geänderter E-Mail-Adresse weiter an die registrierte Adresse'
 
   await fireEvent.changeText(view.getByTestId('auth-email-input'), 'changed@example.invalid');
   expect(view.getByTestId('auth-email-input').props.value).toBe('changed@example.invalid');
+  expect(view.getByText('Der Bestätigungslink wird an test@example.invalid gesendet.')).toBeTruthy();
 
   await fireEvent.press(view.getByTestId('registration-resend-confirmation-button'));
 
