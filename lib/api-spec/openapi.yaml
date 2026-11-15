@@ -373,12 +373,15 @@ components:
     MhtImportIssue:
       type: object
       properties:
+        id:
+          type: ["string", "null"]
+          description: Event identifier when it could be extracted
         title:
           type: ["string", "null"]
         errors:
           type: array
           items: { type: string }
-      required: [title, errors]
+      required: [id, title, errors]
     MhtImportPreview:
       type: object
       properties:

@@ -7,6 +7,11 @@
  */
 
 export interface MhtImportIssue {
+  /**
+     * Event identifier when it could be extracted
+     * @nullable
+     */
+  id: string | null;
   /** @nullable */
   title: string | null;
   errors: string[];

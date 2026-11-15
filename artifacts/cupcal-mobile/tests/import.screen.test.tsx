@@ -165,6 +165,26 @@ test.each(['plan.mht', 'plan.mhtml'])('liest %s ein und zeigt die Vorschau', asy
   expect(await screen.findByText('Prüfergebnis')).toBeTruthy();
 });
 
+test('zeigt Titel, Eventkennung und Prüfgrund für nicht importierte Karten', async () => {
+  mockGetDocumentAsync.mockResolvedValue(selectedFile('plan.mht'));
+  mockPreviewImport.mockResolvedValue({
+    ...preview,
+    issues: [{
+      id: 'epic:solo-cash-cup:round-1',
+      title: 'Solo Cash Cup',
+      errors: ['Turnierart fehlt oder ist nicht eindeutig angegeben.'],
+    }],
+  });
+  const screen = await openImportScreen();
+
+  await fireEvent.press(screen.getByTestId('choose-import-file-button'));
+  await fireEvent.press(screen.getByTestId('preview-import-file-button'));
+
+  expect(await screen.findByText('Solo Cash Cup')).toBeTruthy();
+  expect(screen.getByTestId('import-issue-id-0').props.children).toContain('epic:solo-cash-cup:round-1');
+  expect(screen.getByText('Prüfgrund: Turnierart fehlt oder ist nicht eindeutig angegeben.')).toBeTruthy();
+});
+
 test('zeigt das Alter und warnt vor einem mehr als 24 Stunden alten Snapshot', async () => {
   mockGetDocumentAsync.mockResolvedValue(selectedFile('plan.mht'));
   mockPreviewImport.mockResolvedValue({

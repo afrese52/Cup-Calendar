@@ -592,9 +592,23 @@ export default function AdminImportScreen() {
                   <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.warning }]}>
                     <Text style={[styles.sectionTitle, { color: colors.warning }]}>Nicht importierte Karten</Text>
                     {preview.issues.map((issue, index) => (
-                      <Text key={`${issue.title ?? 'karte'}-${index}`} style={[styles.detailCopy, { color: colors.mutedForeground }]}>
-                        {issue.title ?? 'Turnierkarte'}: {issue.errors.join(' ')}
-                      </Text>
+                      <View
+                        key={`${issue.id ?? issue.title ?? 'karte'}-${index}`}
+                        style={[styles.issueRow, { borderBottomColor: colors.border }]}
+                      >
+                        <Text style={[styles.eventTitle, { color: colors.foreground }]}>
+                          {issue.title ?? 'Turnierkarte'}
+                        </Text>
+                        <Text
+                          testID={`import-issue-id-${index}`}
+                          style={[styles.eventMeta, { color: colors.mutedForeground }]}
+                        >
+                          Eventkennung: {issue.id ?? 'nicht verfügbar'}
+                        </Text>
+                        <Text style={[styles.detailCopy, { color: colors.warning }]}>
+                          Prüfgrund: {issue.errors.join(' ')}
+                        </Text>
+                      </View>
                     ))}
                   </View>
                 ) : null}
@@ -761,6 +775,7 @@ const styles = StyleSheet.create({
   timeChangeText: { fontSize: 11, lineHeight: 16, fontWeight: '700', marginTop: 4 },
   warningText: { fontSize: 10, lineHeight: 14, marginTop: 4 },
   eventState: { fontSize: 9, fontWeight: '800', textTransform: 'uppercase' },
+  issueRow: { borderBottomWidth: StyleSheet.hairlineWidth, paddingVertical: 10 },
   messageBox: { borderWidth: 1, borderRadius: 13, padding: 13, flexDirection: 'row', gap: 9, alignItems: 'flex-start' },
   messageText: { flex: 1, fontSize: 12, lineHeight: 18 },
 });

@@ -98,6 +98,7 @@ export const PreviewMhtImportResponse = zod.object({
   "previousEndTime": zod.coerce.date().nullable().describe('Previous end time when it differs from the imported value')
 })),
   "issues": zod.array(zod.object({
+  "id": zod.string().nullable().describe('Event identifier when it could be extracted'),
   "title": zod.string().nullable(),
   "errors": zod.array(zod.string())
 }))

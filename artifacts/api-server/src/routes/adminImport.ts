@@ -216,6 +216,7 @@ async function buildPreview(
       ...getMhtEventChanges(event, existingEvents.get(event.id) ?? null),
     })),
     issues: schedule.issues.map((issue) => ({
+      id: issue.id ?? null,
       title: issue.title ?? null,
       errors: issue.errors,
     })),
