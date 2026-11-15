@@ -442,6 +442,89 @@ test("gibt Zeitänderungen im authentifizierten Import-Vorschau-Endpunkt zurück
   }
 });
 
+test("verbirgt Supabase-Fehlerdetails bei einem Fehler der Importvorschau", async () => {
+  const originalEnv = new Map(
+    ["NODE_ENV", "SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "CUPCAL_IMPORT_ADMIN_EMAILS"]
+      .map((key) => [key, process.env[key]]),
+  );
+  const fixturePath = new URL("../../scripts/fixtures/real-schedule-format-sample.mht", import.meta.url);
+  const sourceText = await readFile(fixturePath, "utf8");
+  let existingEventsQueried = false;
+  const fakeSupabase = createServer((request, response) => {
+    response.setHeader("Content-Type", "application/json");
+    if (request.url === "/auth/v1/user") {
+      if (request.headers.authorization !== "Bearer valid-admin-preview-error-token") {
+        response.statusCode = 401;
+        response.end(JSON.stringify({ message: "Invalid test session" }));
+        return;
+      }
+      response.end(JSON.stringify({
+        id: "admin-preview-error-test-user",
+        email: "admin@cupcal.test",
+      }));
+      return;
+    }
+    if (request.url?.startsWith("/rest/v1/fortnite_events")) {
+      existingEventsQueried = true;
+      response.statusCode = 500;
+      response.end(JSON.stringify({
+        code: "XX000",
+        message: "private provider failure detail",
+        details: "internal database host and query information",
+      }));
+      return;
+    }
+    response.statusCode = 404;
+    response.end(JSON.stringify({ message: "Unexpected test request" }));
+  });
+  let apiServer;
+  let tempDir;
+
+  try {
+    const fakeSupabaseUrl = await listen(fakeSupabase);
+    process.env["NODE_ENV"] = "production";
+    process.env["SUPABASE_URL"] = fakeSupabaseUrl;
+    process.env["SUPABASE_SERVICE_ROLE_KEY"] = "test-service-role-key";
+    process.env["CUPCAL_IMPORT_ADMIN_EMAILS"] = "admin@cupcal.test";
+
+    const loaded = await loadApiApp();
+    tempDir = loaded.tempDir;
+    apiServer = loaded.app.listen(0, "127.0.0.1");
+    await new Promise((resolve, reject) => {
+      apiServer.once("error", reject);
+      apiServer.once("listening", resolve);
+    });
+
+    const response = await fetch(
+      `http://127.0.0.1:${apiServer.address().port}/api/v1/admin/events/import/preview`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer valid-admin-preview-error-token",
+          "Content-Type": "text/plain; charset=utf-8",
+        },
+        body: sourceText,
+      },
+    );
+    const result = await response.json();
+
+    assert.equal(existingEventsQueried, true, "Die Vorschau hat vorhandene Termine abgefragt.");
+    assert.equal(response.status, 503);
+    assert.deepEqual(result, {
+      error: "Vorhandene Termine können gerade nicht geprüft werden.",
+    });
+    assert.doesNotMatch(JSON.stringify(result), /private provider failure detail|internal database host/);
+  } finally {
+    if (apiServer?.listening) await closeServer(apiServer);
+    if (fakeSupabase.listening) await closeServer(fakeSupabase);
+    if (tempDir) await rm(tempDir, { recursive: true, force: true });
+    for (const [key, value] of originalEnv) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+});
+
 test("gibt alle Ausschlusskategorien am Import-Endpunkt getrennt zurück und speichert ihre Summe", async () => {
   const originalEnv = new Map(
     ["NODE_ENV", "SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "CUPCAL_IMPORT_ADMIN_EMAILS"]
