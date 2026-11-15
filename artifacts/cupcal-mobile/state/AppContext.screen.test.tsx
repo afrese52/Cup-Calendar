@@ -79,6 +79,11 @@ const bookmarkStore = jest.requireMock('@/services/localBookmarkStore') as {
 };
 const mockedSupabase = jest.requireMock('@/services/supabase') as {
   __emitAuthStateChange: (event: string, session: { user: { id: string } } | null) => void;
+  supabase: {
+    auth: {
+      getSession: jest.Mock<(...args: any[]) => any>;
+    };
+  };
   fetchRemoteBookmarks: jest.Mock<(...args: any[]) => any>;
 };
 
@@ -106,11 +111,66 @@ beforeEach(() => {
       pendingCount: 0,
     }),
   );
+  mockedSupabase.supabase.auth.getSession.mockReset().mockResolvedValue({
+    data: { session: null },
+    error: null,
+  });
   mockedSupabase.fetchRemoteBookmarks.mockReset().mockResolvedValue([]);
 });
 
 afterEach(() => {
   jest.clearAllMocks();
+});
+
+test('zeigt beim Kaltstart erst nach der Sitzungsprüfung die Favoriten des angemeldeten Kontos', async () => {
+  const sessionLoad = deferred<{
+    data: { session: { user: { id: string } } };
+    error: null;
+  }>();
+  mockedSupabase.supabase.auth.getSession.mockReturnValue(sessionLoad.promise);
+  bookmarkStore.loadBookmarksForUser.mockImplementation((userId: string | null) =>
+    Promise.resolve(userId === 'konto-a' ? ['konto-favorit'] : ['gast-favorit']),
+  );
+  mockedSupabase.fetchRemoteBookmarks.mockResolvedValue([{
+    event_id: 'konto-favorit',
+    is_favorite: true,
+    updated_at: '2026-01-01T00:00:00.000Z',
+    revision: 1,
+  }]);
+
+  const view = await renderProvider();
+
+  expect(view.getByTestId('bookmark-ids').props.children).toBe('');
+  expect(bookmarkStore.loadBookmarksForUser).not.toHaveBeenCalled();
+
+  await act(async () => {
+    sessionLoad.resolve({
+      data: { session: { user: { id: 'konto-a' } } },
+      error: null,
+    });
+    await sessionLoad.promise;
+  });
+
+  await waitFor(() => {
+    expect(view.getByTestId('bookmark-ids').props.children).toBe('konto-favorit');
+  });
+  expect(bookmarkStore.loadBookmarksForUser).toHaveBeenCalledWith('konto-a');
+  expect(bookmarkStore.loadBookmarksForUser).not.toHaveBeenCalledWith(null);
+});
+
+test('zeigt ohne gespeicherte Sitzung weiterhin nur lokale Gastfavoriten', async () => {
+  bookmarkStore.loadBookmarksForUser.mockImplementation((userId: string | null) =>
+    Promise.resolve(userId === null ? ['gast-favorit'] : ['konto-favorit']),
+  );
+
+  const view = await renderProvider();
+
+  await waitFor(() => {
+    expect(view.getByTestId('bookmark-ids').props.children).toBe('gast-favorit');
+  });
+  expect(bookmarkStore.loadBookmarksForUser).toHaveBeenCalledWith(null);
+  expect(bookmarkStore.loadBookmarksForUser).not.toHaveBeenCalledWith('konto-a');
+  expect(mockedSupabase.fetchRemoteBookmarks).not.toHaveBeenCalled();
 });
 
 test('zeigt nach einem Kontowechsel während des lokalen Ladens nur die Favoriten des neuen Kontos', async () => {
