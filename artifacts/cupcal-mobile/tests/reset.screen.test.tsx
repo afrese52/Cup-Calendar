@@ -162,24 +162,44 @@ test('verhindert das Speichern unterschiedlicher Passwörter mit zugänglicher F
   expect(mockSaveNewPassword).not.toHaveBeenCalled();
 });
 
-test('meldet die erfolgreiche Passwortänderung als Screenreader-Status', async () => {
-  mockSaveNewPassword.mockResolvedValue(undefined);
-  const view = await render(<ResetPasswordScreen />);
+test.each(['ios', 'android'] as const)(
+  'meldet die erfolgreiche Passwortänderung unter %s als Screenreader-Status und lässt die Rückkehr zu',
+  async (platform) => {
+    const originalPlatformOS = Platform.OS;
+    Object.defineProperty(Platform, 'OS', { configurable: true, value: platform });
+    const announceSpy = jest.spyOn(AccessibilityInfo, 'announceForAccessibility').mockImplementation(() => {});
+    mockSaveNewPassword.mockResolvedValue(undefined);
+    try {
+      const view = await render(<ResetPasswordScreen />);
 
-  await waitFor(() => expect(view.getByTestId('reset-password-submit-button')).toBeTruthy());
-  await fireEvent.changeText(view.getByTestId('reset-password-input'), 'Mein-neues-Passwort-123');
-  await fireEvent.changeText(view.getByTestId('reset-password-confirm-input'), 'Mein-neues-Passwort-123');
-  await fireEvent.press(view.getByTestId('reset-password-submit-button'));
+      await waitFor(() => expect(view.getByTestId('reset-password-submit-button')).toBeTruthy());
+      await fireEvent.changeText(view.getByTestId('reset-password-input'), 'Mein-neues-Passwort-123');
+      await fireEvent.changeText(view.getByTestId('reset-password-confirm-input'), 'Mein-neues-Passwort-123');
+      await fireEvent.press(view.getByTestId('reset-password-submit-button'));
 
-  const successMessage = await view.findByText(
-    'Dein neues Passwort ist gespeichert. Du kannst dich jetzt mit diesem Passwort anmelden.',
-  );
-  expect(successMessage.props.accessible).toBe(true);
-  expect(successMessage.props.accessibilityRole).toBe('status');
-  expect(successMessage.props.accessibilityLiveRegion).toBe('polite');
-  expect(view.getByText('Passwort geändert')).toBeTruthy();
-  expect(mockSaveNewPassword).toHaveBeenCalledTimes(1);
-});
+      const successMessage = await view.findByTestId('reset-password-success-message');
+      expect(successMessage.props.accessible).toBe(true);
+      expect(successMessage.props.accessibilityRole).toBe('status');
+      expect(successMessage.props.accessibilityLiveRegion).toBe('polite');
+      expect(successMessage.props.children).toBe(
+        'Dein neues Passwort ist gespeichert. Du kannst dich jetzt mit diesem Passwort anmelden.',
+      );
+      expect(view.getByText('Passwort geändert')).toBeTruthy();
+
+      const returnButton = view.getByTestId('reset-password-return-button');
+      expect(returnButton.props.accessibilityRole).toBe('button');
+      expect(view.getByText('Zu CupCal')).toBeTruthy();
+
+      if (platform === 'ios') {
+        expect(announceSpy).toHaveBeenCalledWith(successMessage.props.children);
+      }
+      expect(mockSaveNewPassword).toHaveBeenCalledTimes(1);
+    } finally {
+      announceSpy.mockRestore();
+      Object.defineProperty(Platform, 'OS', { configurable: true, value: originalPlatformOS });
+    }
+  },
+);
 
 test('behält Formular und Eingaben nach einem Verbindungsfehler für einen erneuten Versuch', async () => {
   const view = await render(<ResetPasswordScreen />);

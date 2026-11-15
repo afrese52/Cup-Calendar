@@ -192,6 +192,7 @@ export default function ResetPasswordScreen() {
           {isSaved ? 'Passwort geändert' : 'Neues Passwort'}
         </Text>
         <Text
+          testID={isSaved ? 'reset-password-success-message' : undefined}
           accessible={isSaved}
           accessibilityRole={isSaved ? 'status' : undefined}
           accessibilityLiveRegion={isSaved ? 'polite' : undefined}
