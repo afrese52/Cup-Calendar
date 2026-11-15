@@ -1,7 +1,12 @@
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import test from 'node:test';
 import { createClient } from '@supabase/supabase-js';
-import { createPasswordRecovery, PASSWORD_MIN_LENGTH } from './passwordRecovery.ts';
+import {
+  createPasswordRecovery,
+  passwordLengthRequirementError,
+  PASSWORD_MIN_LENGTH,
+} from './passwordRecovery.ts';
 import { friendlyAuthError } from './accountAuth.ts';
 
 const validSession = {
@@ -144,6 +149,23 @@ test('weist ein zu kurzes Passwort vor der Serveranfrage ab', async () => {
   );
   assert.equal(updateCalled, false);
   assert.equal(recovery.isPending(), true);
+});
+
+test('zählt Unicode-Passwörter lokal nach Unicode-Codepoints', () => {
+  const passwords = [
+    { value: '😀'.repeat(5), accepted: false },
+    { value: '😀'.repeat(6), accepted: true },
+    { value: 'é'.repeat(6), accepted: true },
+    { value: 'e\u0301'.repeat(3), accepted: true },
+  ];
+
+  for (const { value, accepted } of passwords) {
+    assert.equal(
+      passwordLengthRequirementError(value) === null,
+      accepted,
+      `Unerwartete lokale Mindestlängenprüfung für ${JSON.stringify(value)}.`,
+    );
+  }
 });
 
 test('akzeptiert sechs Buchstaben ohne zusätzliche Zeichenregeln', async () => {
@@ -514,83 +536,160 @@ test('verarbeitet ältere Wiederherstellungslinks mit Token im URL-Fragment', as
 const livePasswordTestEnabled =
   process.env.CUPCAL_RUN_SUPABASE_PASSWORD_LIVE_TEST === '1';
 
-// Nur mit eigens angelegtem, entbehrlichem Testkonto aktivieren: Der Test setzt
-// dessen Passwort dauerhaft auf NEXT_PASSWORD. Beim nächsten Lauf muss
-// CURRENT_PASSWORD dem dann aktuellen Testkonto-Passwort entsprechen.
 test(
-  'bestätigt bei Supabase Auth, dass fünf Zeichen abgelehnt und sechs akzeptiert werden',
+  'vergleicht die Unicode-Mindestlänge mit Supabase über ein entbehrliches Testkonto',
   { skip: !livePasswordTestEnabled },
   async () => {
+    const publishableKey =
+      process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
+      process.env.SUPABASE_PUBLISHABLE_KEY ??
+      process.env.SUPABASE_ANON_KEY;
     const requiredEnv = [
-      'CUPCAL_SUPABASE_PASSWORD_TEST_URL',
-      'CUPCAL_SUPABASE_PASSWORD_TEST_PUBLISHABLE_KEY',
-      'CUPCAL_SUPABASE_PASSWORD_TEST_EMAIL',
-      'CUPCAL_SUPABASE_PASSWORD_TEST_CURRENT_PASSWORD',
-      'CUPCAL_SUPABASE_PASSWORD_TEST_NEXT_PASSWORD',
+      'SUPABASE_URL',
+      'SUPABASE_SERVICE_ROLE_KEY',
     ];
-    const missingEnv = requiredEnv.filter((name) => !process.env[name]?.trim());
+    const missingEnv = [
+      ...requiredEnv.filter((name) => !process.env[name]?.trim()),
+      !publishableKey?.trim() && 'EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY or SUPABASE_ANON_KEY',
+    ].filter(Boolean);
     assert.deepEqual(
       missingEnv,
       [],
       `Für den opt-in Live-Test fehlen: ${missingEnv.join(', ')}`,
     );
 
-    const email = process.env.CUPCAL_SUPABASE_PASSWORD_TEST_EMAIL.trim();
-    const nextPassword = process.env.CUPCAL_SUPABASE_PASSWORD_TEST_NEXT_PASSWORD;
-    assert.equal(
-      Array.from(nextPassword).length,
-      PASSWORD_MIN_LENGTH,
-      'Das neue Testkonto-Passwort muss genau sechs Zeichen lang sein.',
+    const supabaseUrl = process.env.SUPABASE_URL.trim();
+    const admin = createClient(
+      supabaseUrl,
+      process.env.SUPABASE_SERVICE_ROLE_KEY,
+      { auth: { autoRefreshToken: false, persistSession: false } },
     );
-    assert.notEqual(
-      nextPassword,
-      process.env.CUPCAL_SUPABASE_PASSWORD_TEST_CURRENT_PASSWORD,
-      'Das neue Testkonto-Passwort muss sich vom aktuellen Passwort unterscheiden.',
+    const testClient = createClient(
+      supabaseUrl,
+      publishableKey,
+      { auth: { autoRefreshToken: false, persistSession: false } },
     );
+    const email = `cupcal-unicode-password-${randomUUID()}@example.com`;
+    const initialPassword = `CupCal-${randomUUID()}-test`;
+    let testUserId;
 
-    const supabase = createClient(
-      process.env.CUPCAL_SUPABASE_PASSWORD_TEST_URL,
-      process.env.CUPCAL_SUPABASE_PASSWORD_TEST_PUBLISHABLE_KEY,
-      {
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false,
-        },
-      },
-    );
-
-    const { data: signInData, error: signInError } =
-      await supabase.auth.signInWithPassword({
+    try {
+      const { data: created, error: createError } = await admin.auth.admin.createUser({
         email,
-        password: process.env.CUPCAL_SUPABASE_PASSWORD_TEST_CURRENT_PASSWORD,
+        password: initialPassword,
+        email_confirm: true,
+        user_metadata: { cupcal_unicode_password_test: true },
       });
-    assert.equal(signInError, null, 'Das separate Supabase-Testkonto konnte sich nicht anmelden.');
-    assert.equal(
-      signInData.user?.email?.toLowerCase(),
-      email.toLowerCase(),
-      'Supabase hat nicht das ausdrücklich konfigurierte Testkonto angemeldet.',
-    );
+      assert.ifError(createError);
+      assert.ok(created.user, 'Das entbehrliche Supabase-Testkonto wurde nicht angelegt.');
+      testUserId = created.user.id;
 
-    const shortPasswordResult = await supabase.auth.updateUser({
-      password: 'a'.repeat(PASSWORD_MIN_LENGTH - 1),
-    });
-    assert.ok(
-      shortPasswordResult.error,
-      'Supabase Auth hat ein fünf Zeichen langes Passwort unerwartet akzeptiert.',
-    );
-    assert.match(
-      shortPasswordResult.error.message,
-      /(at least 6|6 characters|minimum.{0,20}6|password.{0,40}(short|length|6))/i,
-      'Supabase hat das Passwort zwar abgelehnt, die Fehlermeldung bestätigte aber keine Sechs-Zeichen-Grenze.',
-    );
+      const { data: signedIn, error: signInError } = await testClient.auth.signInWithPassword({
+        email,
+        password: initialPassword,
+      });
+      assert.ifError(signInError);
+      assert.equal(signedIn.user?.id, testUserId);
 
-    const sixCharacterPasswordResult = await supabase.auth.updateUser({
-      password: nextPassword,
-    });
-    assert.equal(
-      sixCharacterPasswordResult.error,
-      null,
-      'Supabase Auth hat ein genau sechs Zeichen langes Passwort abgelehnt.',
-    );
+      // Supabase counts UTF-8 bytes; CupCal intentionally keeps its six-codepoint
+      // UI rule, which is stricter for multibyte passwords but cannot pass a
+      // value that Supabase rejects for being shorter than six UTF-8 bytes.
+      const cases = [
+        {
+          label: 'fünf ASCII-Zeichen',
+          password: 'a'.repeat(PASSWORD_MIN_LENGTH - 1),
+          localAccepted: false,
+          supabaseAccepted: false,
+        },
+        {
+          label: 'sechs ASCII-Zeichen',
+          password: 'a'.repeat(PASSWORD_MIN_LENGTH),
+          localAccepted: true,
+          supabaseAccepted: true,
+        },
+        {
+          label: 'ein Emoji',
+          password: '😀',
+          localAccepted: false,
+          supabaseAccepted: false,
+        },
+        {
+          label: 'Emoji plus ein ASCII-Zeichen (fünf UTF-8-Bytes)',
+          password: '😀a',
+          localAccepted: false,
+          supabaseAccepted: false,
+        },
+        {
+          label: 'Emoji plus zwei ASCII-Zeichen (sechs UTF-8-Bytes)',
+          password: '😀aa',
+          localAccepted: false,
+          supabaseAccepted: true,
+        },
+        {
+          label: 'drei vorkomponierte Akzente (sechs UTF-8-Bytes)',
+          password: 'é'.repeat(3),
+          localAccepted: false,
+          supabaseAccepted: true,
+        },
+        {
+          label: 'zwei Emoji',
+          password: '😀'.repeat(2),
+          localAccepted: false,
+          supabaseAccepted: true,
+        },
+        {
+          label: 'fünf vorkomponierte Akzente',
+          password: 'é'.repeat(5),
+          localAccepted: false,
+          supabaseAccepted: true,
+        },
+        {
+          label: 'fünf Emoji',
+          password: '😀'.repeat(PASSWORD_MIN_LENGTH - 1),
+          localAccepted: false,
+          supabaseAccepted: true,
+        },
+        {
+          label: 'sechs Emoji',
+          password: '😀'.repeat(PASSWORD_MIN_LENGTH),
+          localAccepted: true,
+          supabaseAccepted: true,
+        },
+        {
+          label: 'sechs vorkomponierte Akzente',
+          password: 'é'.repeat(PASSWORD_MIN_LENGTH),
+          localAccepted: true,
+          supabaseAccepted: true,
+        },
+        {
+          label: 'drei zerlegte Akzente',
+          password: 'e\u0301'.repeat(3),
+          localAccepted: true,
+          supabaseAccepted: true,
+        },
+      ];
+
+      for (const sample of cases) {
+        const localAccepted = passwordLengthRequirementError(sample.password) === null;
+        assert.equal(
+          localAccepted,
+          sample.localAccepted,
+          `${sample.label}: lokale Codepoint-Zählung ergab ein unerwartetes Ergebnis.`,
+        );
+
+        const { error } = await testClient.auth.updateUser({ password: sample.password });
+        assert.equal(
+          error === null,
+          sample.supabaseAccepted,
+          `${sample.label}: unerwartete Supabase-Entscheidung${error ? ` (Supabase: ${error.message})` : ''}.`,
+        );
+      }
+    } finally {
+      if (testUserId) {
+        const { error } = await admin.auth.admin.deleteUser(testUserId);
+        assert.ifError(error);
+      }
+      await Promise.all([admin.auth.dispose(), testClient.auth.dispose()]);
+    }
   },
 );
