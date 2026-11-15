@@ -844,6 +844,51 @@ test('zeigt den Ladezustand und sperrt die Schaltflächen während der Linkanfra
   });
 });
 
+test('hält die aktuelle Wartezeit bei fehlgeschlagenem Speichern nach erfolgreichem Versand ein', async () => {
+  const mockedSupabase = jest.requireMock('@/services/supabase') as {
+    requestEmailConfirmation: jest.Mock;
+  };
+  const storageMock = jest.requireMock('@react-native-async-storage/async-storage') as {
+    default: {
+      setItem: {
+        mockImplementationOnce: (implementation: () => Promise<void>) => unknown;
+      };
+    };
+  };
+  storageMock.default.setItem.mockImplementationOnce(async () => {
+    throw new Error('Speicher nicht verfügbar');
+  });
+
+  const view = await openSettings();
+  await fireEvent.changeText(view.getByTestId('auth-email-input'), 'test@example.invalid');
+  const button = view.getByTestId('resend-confirmation-button');
+  jest.useFakeTimers();
+
+  try {
+    await fireEvent.press(button);
+
+    expect(mockedSupabase.requestEmailConfirmation).toHaveBeenCalledTimes(1);
+    expect(await view.findByText(
+      'Die Anfrage wurde gesendet, aber die Wartezeit konnte auf diesem Gerät nicht gespeichert werden. Serverseitige Versandlimits gelten weiterhin.',
+    )).toBeTruthy();
+    expect(view.getByText(
+      `Erneut senden in ${ACCOUNT_CONFIRMATION_RESEND_COOLDOWN_SECONDS} Sekunden`,
+    )).toBeTruthy();
+    expect(button.props.accessibilityState).toMatchObject({ disabled: true, busy: false });
+    expect(button.props.accessibilityLabel).toBe(
+      'Bestätigungslink erneut senden. Die Wartezeit läuft.',
+    );
+
+    await fireEvent.press(button);
+    expect(mockedSupabase.requestEmailConfirmation).toHaveBeenCalledTimes(1);
+  } finally {
+    await act(async () => {
+      view.unmount();
+    });
+    jest.useRealTimers();
+  }
+});
+
 test('fordert im Kontobereich einen neuen Bestätigungslink an', async () => {
   const mockedSupabase = jest.requireMock('@/services/supabase') as {
     requestEmailConfirmation: jest.Mock;
