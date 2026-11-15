@@ -559,6 +559,50 @@ test('zeigt einen verständlichen Fehler beim Anfordern des Wiederherstellungsli
   await waitFor(() => expect(sendAccessibilityFocus).toHaveBeenCalledTimes(1));
 });
 
+test('sendet bei Mehrfachklicks während einer laufenden Wiederherstellung nur eine Anfrage', async () => {
+  let finishReset!: (result: { error: null }) => void;
+  auth.resetPasswordForEmail.mockImplementation(
+    () => new Promise((resolve) => { finishReset = resolve; }),
+  );
+  const view = await openSettings();
+  await fireEvent.press(view.getByTestId('forgot-password-button'));
+  await fireEvent.changeText(view.getByTestId('auth-email-input'), 'test@example.invalid');
+
+  await fireEvent.press(view.getByTestId('auth-submit-button'));
+  await fireEvent.press(view.getByTestId('auth-submit-button'));
+  await fireEvent.press(view.getByTestId('auth-submit-button'));
+
+  expect(auth.resetPasswordForEmail).toHaveBeenCalledTimes(1);
+  expect(view.getByTestId('auth-submit-button').props.accessibilityState).toEqual({
+    disabled: true,
+    busy: true,
+  });
+  await act(async () => finishReset({ error: null }));
+  expect(await view.findByTestId('auth-success-message')).toBeTruthy();
+  expect(auth.resetPasswordForEmail).toHaveBeenCalledTimes(1);
+});
+
+test('ermöglicht nach einem fehlgeschlagenen Wiederherstellungsversand einen neuen Versuch', async () => {
+  auth.resetPasswordForEmail
+    .mockResolvedValueOnce({ error: new Error('Email rate limit exceeded') })
+    .mockResolvedValueOnce({ error: null });
+  const view = await openSettings();
+  await fireEvent.press(view.getByTestId('forgot-password-button'));
+  await fireEvent.changeText(view.getByTestId('auth-email-input'), 'test@example.invalid');
+
+  await fireEvent.press(view.getByTestId('auth-submit-button'));
+  expect(await view.findByTestId('auth-error-message')).toBeTruthy();
+  expect(view.getByTestId('auth-submit-button').props.accessibilityState).toEqual({
+    disabled: false,
+    busy: false,
+  });
+
+  await fireEvent.press(view.getByTestId('auth-submit-button'));
+
+  expect(await view.findByTestId('auth-success-message')).toBeTruthy();
+  expect(auth.resetPasswordForEmail).toHaveBeenCalledTimes(2);
+});
+
 test('zeigt den Ladezustand und sperrt die Schaltflächen während der Linkanfrage', async () => {
   let finishReset!: (result: { error: null }) => void;
   auth.resetPasswordForEmail.mockImplementation(

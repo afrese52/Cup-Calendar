@@ -97,6 +97,7 @@ export default function SettingsScreen() {
   const [registrationConfirmationEmail, setRegistrationConfirmationEmail] = useState<string | null>(null);
   const [password, setPassword] = useState('');
   const [submittingAction, setSubmittingAction] = useState<AuthAction | null>(null);
+  const isSubmittingAuthRef = useRef(false);
   const isSubmittingAuth = submittingAction !== null;
   const [authError, setAuthError] = useState<string | null>(null);
   const authErrorRef = useRef<React.ComponentRef<typeof Text>>(null);
@@ -235,7 +236,7 @@ export default function SettingsScreen() {
   }, [isCheckingSession, session]);
 
   const submitAuth = async () => {
-    if (!supabase) return;
+    if (!supabase || isSubmittingAuthRef.current) return;
 
     const normalizedEmail = email.trim();
     if (!normalizedEmail || (authMode !== 'forgot-password' && !password)) {
@@ -248,6 +249,7 @@ export default function SettingsScreen() {
       return;
     }
 
+    isSubmittingAuthRef.current = true;
     setSubmittingAction('submit');
     setAuthError(null);
     setAuthMessage(null);
@@ -272,6 +274,7 @@ export default function SettingsScreen() {
     } catch (error) {
       setAuthError(friendlyAuthError(error, 'Die Registrierung oder Anmeldung ist fehlgeschlagen. Bitte versuche es erneut.'));
     } finally {
+      isSubmittingAuthRef.current = false;
       setSubmittingAction(null);
     }
   };
