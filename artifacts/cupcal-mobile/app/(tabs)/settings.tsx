@@ -130,12 +130,15 @@ export default function SettingsScreen() {
   const confirmationResendCountdownLabel = confirmationResendSecondsLeft === 1
     ? 'Erneut senden in 1 Sekunde'
     : `Erneut senden in ${confirmationResendSecondsLeft} Sekunden`;
+  const confirmationResendRemainingTimeLabel = confirmationResendSecondsLeft === 1
+    ? 'Noch 1 Sekunde Wartezeit'
+    : `Noch ${confirmationResendSecondsLeft} Sekunden Wartezeit`;
   const confirmationResendAccessibilityLabel = isSubmittingAuth
     ? 'Bestätigungslink wird gesendet'
     : !confirmationResendCooldownLoaded
       ? 'Bestätigungswartezeit wird geladen'
       : confirmationResendSecondsLeft > 0
-        ? 'Bestätigungslink erneut senden. Die Wartezeit läuft.'
+        ? `Bestätigungslink erneut senden. Gesperrt. ${confirmationResendRemainingTimeLabel}.`
         : 'Bestätigungslink erneut senden';
 
   useEffect(() => {
@@ -776,6 +779,7 @@ export default function SettingsScreen() {
                   <Pressable
                     accessibilityRole="button"
                     accessibilityLabel={confirmationResendAccessibilityLabel}
+                    accessibilityLiveRegion="none"
                     accessibilityState={{
                       disabled: confirmationResendDisabled,
                       busy: submittingAction === 'resend-confirmation',
@@ -845,6 +849,7 @@ export default function SettingsScreen() {
                   <Pressable
                     accessibilityRole="button"
                     accessibilityLabel={confirmationResendAccessibilityLabel}
+                    accessibilityLiveRegion="none"
                     accessibilityState={{
                       disabled: confirmationResendDisabled,
                       busy: submittingAction === 'resend-confirmation',

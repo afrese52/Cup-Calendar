@@ -458,6 +458,10 @@ test('sendet nach geänderter E-Mail-Adresse weiter an die registrierte Adresse'
   )).toBeTruthy();
   const resendButton = view.getByTestId('registration-resend-confirmation-button');
   expect(resendButton.props.accessibilityState).toMatchObject({ disabled: true, busy: false });
+  expect(resendButton.props.accessibilityLabel).toMatch(
+    /^Bestätigungslink erneut senden\. Gesperrt\. Noch \d+ Sekunden Wartezeit\.$/,
+  );
+  expect(resendButton.props.accessibilityLiveRegion).toBe('none');
   expect(view.getByText(/Erneut senden in \d+ Sekunden/)).toBeTruthy();
   await act(async () => {
     view.unmount();
@@ -490,8 +494,9 @@ test('sperrt erneute Bestätigungsanfragen mit Countdown und gibt sie danach fre
     expect(storageMock.__values.get(ACCOUNT_CONFIRMATION_RESEND_AVAILABLE_AT_KEY))
       .toBe(String(Date.now() + ACCOUNT_CONFIRMATION_RESEND_COOLDOWN_SECONDS * 1000));
     expect(button.props.accessibilityLabel).toBe(
-      'Bestätigungslink erneut senden. Die Wartezeit läuft.',
+      `Bestätigungslink erneut senden. Gesperrt. Noch ${ACCOUNT_CONFIRMATION_RESEND_COOLDOWN_SECONDS} Sekunden Wartezeit.`,
     );
+    expect(button.props.accessibilityLiveRegion).toBe('none');
     expect(announceForAccessibility).toHaveBeenCalledTimes(1);
     expect(announceForAccessibility).toHaveBeenNthCalledWith(
       1,
@@ -502,7 +507,7 @@ test('sperrt erneute Bestätigungsanfragen mit Countdown und gibt sie danach fre
       await jest.advanceTimersByTimeAsync(5000);
     });
     expect(button.props.accessibilityLabel).toBe(
-      'Bestätigungslink erneut senden. Die Wartezeit läuft.',
+      `Bestätigungslink erneut senden. Gesperrt. Noch ${ACCOUNT_CONFIRMATION_RESEND_COOLDOWN_SECONDS - 5} Sekunden Wartezeit.`,
     );
     expect(announceForAccessibility).toHaveBeenCalledTimes(1);
 
@@ -521,6 +526,10 @@ test('sperrt erneute Bestätigungsanfragen mit Countdown und gibt sie danach fre
       2,
       'Die Wartezeit ist vorbei. Du kannst jetzt einen neuen Bestätigungslink anfordern.',
     );
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(5000);
+    });
+    expect(announceForAccessibility).toHaveBeenCalledTimes(2);
   } finally {
     await act(async () => {
       view.unmount();
@@ -876,8 +885,8 @@ test('hält die aktuelle Wartezeit bei fehlgeschlagenem Speichern nach erfolgrei
       `Erneut senden in ${ACCOUNT_CONFIRMATION_RESEND_COOLDOWN_SECONDS} Sekunden`,
     )).toBeTruthy();
     expect(button.props.accessibilityState).toMatchObject({ disabled: true, busy: false });
-    expect(button.props.accessibilityLabel).toBe(
-      'Bestätigungslink erneut senden. Die Wartezeit läuft.',
+    expect(button.props.accessibilityLabel).toMatch(
+      /^Bestätigungslink erneut senden\. Gesperrt\. Noch \d+ Sekunden Wartezeit\.$/,
     );
 
     await fireEvent.press(button);
@@ -1260,6 +1269,9 @@ test('stellt die Bestätigungsadresse nach einem App-Neustart wieder her und ent
   const cooldownRestartedView = await openSettings();
   const button = cooldownRestartedView.getByTestId('resend-confirmation-button');
   expect(button.props.accessibilityState).toMatchObject({ disabled: true, busy: false });
+  expect(button.props.accessibilityLabel).toMatch(
+    /^Bestätigungslink erneut senden\. Gesperrt\. Noch \d+ Sekunden Wartezeit\.$/,
+  );
   expect(cooldownRestartedView.getByText(/Erneut senden in \d+ Sekunden/)).toBeTruthy();
 
   await fireEvent.press(button);
@@ -1304,6 +1316,7 @@ test('berechnet die Bestätigungswartezeit nach einer längeren App-Pause neu', 
     expect(view.getByTestId('resend-confirmation-button').props.accessibilityState)
       .toMatchObject({ disabled: true, busy: false });
 
+    announceForAccessibility.mockClear();
     await act(async () => {
       notifyAppStateChange?.('background');
       jest.setSystemTime(Date.now() + 11_000);
@@ -1313,7 +1326,15 @@ test('berechnet die Bestätigungswartezeit nach einer längeren App-Pause neu', 
     const button = view.getByTestId('resend-confirmation-button');
     expect(view.queryByText(/Erneut senden in \d+ Sekunden/)).toBeNull();
     expect(button.props.accessibilityState).toMatchObject({ disabled: false, busy: false });
+    expect(announceForAccessibility).toHaveBeenCalledTimes(1);
+    expect(announceForAccessibility).toHaveBeenLastCalledWith(
+      'Die Wartezeit ist vorbei. Du kannst jetzt einen neuen Bestätigungslink anfordern.',
+    );
 
+    await act(async () => {
+      notifyAppStateChange?.('active');
+    });
+    expect(announceForAccessibility).toHaveBeenCalledTimes(1);
     await fireEvent.press(button);
     expect(mockedSupabase.requestEmailConfirmation).toHaveBeenCalledTimes(2);
   } finally {
