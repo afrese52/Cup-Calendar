@@ -8,6 +8,8 @@ const storage = (AsyncStorage as typeof AsyncStorage & { default?: typeof AsyncS
   ?? AsyncStorage;
 export const ACCOUNT_CONFIRMATION_RESEND_AVAILABLE_AT_KEY =
   'cupcal.account-confirmation-resend-available-at.v1';
+export const PENDING_ACCOUNT_CONFIRMATION_EMAIL_KEY =
+  'cupcal.pending-account-confirmation-email.v1';
 
 export type AccountAuthMode = 'sign-in' | 'sign-up' | 'forgot-password';
 
@@ -193,6 +195,28 @@ export async function saveAccountConfirmationResendAvailableAt(
     throw new Error('Die Ablaufzeit der Bestätigungswartezeit ist ungültig.');
   }
   await storage.setItem(ACCOUNT_CONFIRMATION_RESEND_AVAILABLE_AT_KEY, String(availableAt));
+}
+
+export async function loadPendingAccountConfirmationEmail(): Promise<string | null> {
+  const stored = await storage.getItem(PENDING_ACCOUNT_CONFIRMATION_EMAIL_KEY);
+  const email = stored?.trim() ?? '';
+  if (!email) {
+    if (stored !== null) await storage.removeItem(PENDING_ACCOUNT_CONFIRMATION_EMAIL_KEY);
+    return null;
+  }
+  return email;
+}
+
+export async function savePendingAccountConfirmationEmail(email: string): Promise<void> {
+  const normalizedEmail = email.trim();
+  if (!normalizedEmail) {
+    throw new Error('Die E-Mail-Adresse für die Bestätigung ist ungültig.');
+  }
+  await storage.setItem(PENDING_ACCOUNT_CONFIRMATION_EMAIL_KEY, normalizedEmail);
+}
+
+export async function clearPendingAccountConfirmationEmail(): Promise<void> {
+  await storage.removeItem(PENDING_ACCOUNT_CONFIRMATION_EMAIL_KEY);
 }
 
 export function watchAuthSession(

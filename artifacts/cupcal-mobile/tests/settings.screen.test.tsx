@@ -7,6 +7,7 @@ import { supabase } from '@/services/supabase';
 import {
   ACCOUNT_CONFIRMATION_RESEND_AVAILABLE_AT_KEY,
   ACCOUNT_CONFIRMATION_RESEND_COOLDOWN_SECONDS,
+  PENDING_ACCOUNT_CONFIRMATION_EMAIL_KEY,
 } from '../services/accountAuth';
 
 type AuthListener = (event: string, session: unknown) => void;
@@ -1043,7 +1044,7 @@ test('sendet nach Bestätigung einen zeitlich befristeten Löschlink an das ange
   });
 });
 
-test('stellt die Bestätigungswartezeit nach einem neuen Einstellungsbildschirm wieder her', async () => {
+test('stellt die Bestätigungsadresse nach einem App-Neustart wieder her und entfernt sie nach Anmeldung', async () => {
   const mockedSupabase = jest.requireMock('@/services/supabase') as {
     requestEmailConfirmation: jest.Mock;
   };
@@ -1051,21 +1052,57 @@ test('stellt die Bestätigungswartezeit nach einem neuen Einstellungsbildschirm 
     __values: Map<string, string>;
   };
   const view = await openSettings();
-  await fireEvent.changeText(view.getByTestId('auth-email-input'), 'test@example.invalid');
-  await fireEvent.press(view.getByTestId('resend-confirmation-button'));
-  expect(storageMock.__values.has(ACCOUNT_CONFIRMATION_RESEND_AVAILABLE_AT_KEY)).toBe(true);
+  await fireEvent.press(view.getByTestId('auth-mode-toggle'));
+  await enterCredentials(view);
+  await fireEvent.press(view.getByTestId('auth-submit-button'));
+  await view.findByTestId('registration-resend-confirmation-button');
+  expect(storageMock.__values.get(PENDING_ACCOUNT_CONFIRMATION_EMAIL_KEY))
+    .toBe('test@example.invalid');
+
   await act(async () => {
     view.unmount();
   });
 
   const restartedView = await openSettings();
-  const button = restartedView.getByTestId('resend-confirmation-button');
+  expect(await restartedView.findByTestId('registration-resend-confirmation-button')).toBeTruthy();
+  await fireEvent.changeText(
+    restartedView.getByTestId('auth-email-input'),
+    'changed@example.invalid',
+  );
+  await fireEvent.press(restartedView.getByTestId('registration-resend-confirmation-button'));
+
+  expect(mockedSupabase.requestEmailConfirmation).toHaveBeenCalledWith(
+    'test@example.invalid',
+    'cupcal-test://auth/confirm',
+  );
+  expect(await restartedView.findByText(
+    'Wenn dein Konto noch nicht bestätigt ist, erhältst du in Kürze einen neuen Bestätigungslink.',
+  )).toBeTruthy();
+
+  await act(async () => {
+    mockSupabase.__emitAuthStateChange('SIGNED_IN', testSession);
+  });
+  await waitFor(() => {
+    expect(storageMock.__values.has(PENDING_ACCOUNT_CONFIRMATION_EMAIL_KEY)).toBe(false);
+  });
+  await act(async () => {
+    restartedView.unmount();
+  });
+
+  const cooldownView = await openSettings();
+  await fireEvent.changeText(cooldownView.getByTestId('auth-email-input'), 'test@example.invalid');
+  await fireEvent.press(cooldownView.getByTestId('resend-confirmation-button'));
+  expect(storageMock.__values.has(ACCOUNT_CONFIRMATION_RESEND_AVAILABLE_AT_KEY)).toBe(true);
+  await act(async () => cooldownView.unmount());
+
+  const cooldownRestartedView = await openSettings();
+  const button = cooldownRestartedView.getByTestId('resend-confirmation-button');
   expect(button.props.accessibilityState).toMatchObject({ disabled: true, busy: false });
-  expect(restartedView.getByText(/Erneut senden in \d+ Sekunden/)).toBeTruthy();
+  expect(cooldownRestartedView.getByText(/Erneut senden in \d+ Sekunden/)).toBeTruthy();
 
   await fireEvent.press(button);
   expect(mockedSupabase.requestEmailConfirmation).toHaveBeenCalledTimes(1);
   await act(async () => {
-    restartedView.unmount();
+    cooldownRestartedView.unmount();
   });
 });

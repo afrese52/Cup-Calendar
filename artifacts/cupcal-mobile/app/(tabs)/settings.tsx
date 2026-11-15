@@ -19,9 +19,12 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
 import { useColors } from '@/hooks/useColors';
 import {
+  clearPendingAccountConfirmationEmail,
+  loadPendingAccountConfirmationEmail,
   loadAccountConfirmationResendAvailableAt,
   friendlyAuthError,
   resendAccountConfirmation,
+  savePendingAccountConfirmationEmail,
   saveAccountConfirmationResendAvailableAt,
   signOutAccount,
   submitAccountAuth,
@@ -200,7 +203,10 @@ export default function SettingsScreen() {
     return watchAuthSession(supabase.auth, {
       onSession: (nextSession) => {
         setSession(nextSession);
-        if (nextSession) setRegistrationConfirmationEmail(null);
+        if (nextSession) {
+          setRegistrationConfirmationEmail(null);
+          void clearPendingAccountConfirmationEmail().catch(() => {});
+        }
         setAuthError(null);
       },
       onError: (_error) => {
@@ -211,6 +217,34 @@ export default function SettingsScreen() {
       onReady: () => setIsCheckingSession(false),
     });
   }, []);
+
+  useEffect(() => {
+    if (isCheckingSession) return;
+    let active = true;
+
+    if (session) {
+      setRegistrationConfirmationEmail(null);
+      void clearPendingAccountConfirmationEmail().catch(() => {});
+      return () => {
+        active = false;
+      };
+    }
+
+    void loadPendingAccountConfirmationEmail().then((pendingEmail) => {
+      if (!active || !pendingEmail) return;
+      setRegistrationConfirmationEmail(pendingEmail);
+      setAuthMessage(
+        'Dein Konto ist erstellt. Bitte bestätige deine E-Mail-Adresse über den Link in deinem Postfach.',
+      );
+    }).catch(() => {
+      if (!active) return;
+      reportAuthError('Die ausstehende Bestätigungsadresse konnte nicht geladen werden.');
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [isCheckingSession, session]);
 
   useEffect(() => {
     if (
@@ -271,6 +305,22 @@ export default function SettingsScreen() {
         setAuthMessage(result.message);
         if (result.emailConfirmationRequired) {
           setRegistrationConfirmationEmail(normalizedEmail);
+          try {
+            await savePendingAccountConfirmationEmail(normalizedEmail);
+          } catch {
+            reportAuthError(
+              'Die Registrierung war erfolgreich, aber die Bestätigungsadresse konnte auf diesem Gerät nicht gespeichert werden.',
+            );
+          }
+        } else if (authMode === 'sign-up') {
+          setRegistrationConfirmationEmail(null);
+          try {
+            await clearPendingAccountConfirmationEmail();
+          } catch {
+            reportAuthError(
+              'Die Anmeldung war erfolgreich, aber eine frühere Bestätigungsadresse konnte nicht entfernt werden.',
+            );
+          }
         }
         if (result.clearPassword) setPassword('');
       } else {
