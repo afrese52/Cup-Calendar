@@ -4,6 +4,7 @@ import { fireEvent, render } from '@testing-library/react-native';
 import { Alert, Platform } from 'react-native';
 import { sampleEvents } from '../data/events';
 import { EventCard } from '../components/EventCard';
+import CalendarScreen from '../app/(tabs)/index';
 import EventDetailsScreen from '../app/event/[id]';
 import { promptAccountSignIn } from '../services/accountSignInPrompt';
 
@@ -44,6 +45,7 @@ jest.mock('@/hooks/useColors', () => ({
 jest.mock('@/state/AppContext', () => ({
   useCupCal: () => mockContext.current,
 }));
+jest.mock('@/components/MonthCalendar', () => ({ MonthCalendar: () => null }));
 
 const mockRouterPush = (jest.requireMock('expo-router') as {
   router: { push: jest.Mock };
@@ -186,7 +188,58 @@ test('zeigt Reload-Serie und Zero-Build-Regelwerk getrennt auf der Kalenderkarte
 
   expect(view.getByText('Zero Build')).toBeTruthy();
   expect(view.getByText('Reload')).toBeTruthy();
+  expect(view.getByText('Zero Build').props.accessibilityLabel).toBe('Turnierregelwerk: Zero Build');
+  expect(view.getByText('Reload').props.accessibilityLabel).toBe('Turnierserie: Reload');
 });
+
+test.each([
+  ['Reload', ['Reload Zero Build', 'Reload Battle Royale'], ['Zero Build Duos']],
+  ['Zero Build', ['Reload Zero Build', 'Zero Build Duos'], ['Reload Battle Royale']],
+] as const)(
+  'der Kalenderfilter %s findet Reload-Zero-Build-Termine über das richtige Merkmal',
+  async (filter, expectedTitles, excludedTitles) => {
+    const today = new Date();
+    const makeEvent = (
+      id: string,
+      title: string,
+      gameMode: 'Battle Royale' | 'Zero Build' | 'Reload',
+      gameRuleset: 'Battle Royale' | 'Zero Build',
+      tournamentSeries: 'Reload' | null,
+    ) => ({
+      ...event,
+      id,
+      title,
+      gameMode,
+      gameRuleset,
+      tournamentSeries,
+      startTime: new Date(today.getFullYear(), today.getMonth(), today.getDate(), 12).toISOString(),
+      endTime: new Date(today.getFullYear(), today.getMonth(), today.getDate(), 14).toISOString(),
+    });
+    const matchingEvents = [
+      makeEvent('reload-zero-build', 'Reload Zero Build', 'Reload', 'Zero Build', 'Reload'),
+      makeEvent('reload-battle-royale', 'Reload Battle Royale', 'Reload', 'Battle Royale', 'Reload'),
+      makeEvent('zero-build-duos', 'Zero Build Duos', 'Battle Royale', 'Zero Build', null),
+    ];
+    mockContext.current = {
+      authReady: true,
+      isAuthenticated: false,
+      events: matchingEvents,
+      bookmarkedIds: [],
+      toggleBookmark: mockToggleBookmark,
+    };
+    const view = await render(<CalendarScreen />);
+
+    await fireEvent.press(view.getByTestId('calendar-filter'));
+    await fireEvent.press(view.getByTestId(`calendar-filter-${filter}`));
+
+    for (const title of expectedTitles) {
+      expect(view.getByText(title)).toBeTruthy();
+    }
+    for (const title of excludedTitles) {
+      expect(view.queryByText(title)).toBeNull();
+    }
+  },
+);
 
 test('zeigt Regelwerk und Turnierserie getrennt in den Turnierdetails', async () => {
   const reloadZeroBuildEvent = {

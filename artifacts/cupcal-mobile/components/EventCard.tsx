@@ -60,11 +60,17 @@ export function EventCard({ event, isBookmarked, onBookmarkToggle }: EventCardPr
           <Text style={[styles.meta, { color: colors.mutedForeground }]}>{event.region}</Text>
         </View>
         <View style={styles.tagRow}>
-          <Text style={[styles.tag, { color: colors.secondaryForeground, backgroundColor: colors.secondary }]}>
+          <Text
+            accessibilityLabel={`Turnierregelwerk: ${event.gameRuleset ?? event.gameMode}`}
+            style={[styles.tag, { color: colors.secondaryForeground, backgroundColor: colors.secondary }]}
+          >
             {event.gameRuleset ?? event.gameMode}
           </Text>
           {event.tournamentSeries ? (
-            <Text style={[styles.tag, { color: colors.secondaryForeground, backgroundColor: colors.secondary }]}>
+            <Text
+              accessibilityLabel={`Turnierserie: ${event.tournamentSeries}`}
+              style={[styles.tag, { color: colors.secondaryForeground, backgroundColor: colors.secondary }]}
+            >
               {event.tournamentSeries}
             </Text>
           ) : null}
@@ -137,7 +143,7 @@ const styles = StyleSheet.create({
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
   meta: { fontSize: 12, fontWeight: '500' },
   dot: { width: 3, height: 3, borderRadius: 2 },
-  tagRow: { flexDirection: 'row', gap: 7 },
+  tagRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 },
   tag: { fontSize: 11, fontWeight: '600', borderRadius: 6, overflow: 'hidden', paddingHorizontal: 8, paddingVertical: 5 },
   bookmark: {
     width: 48,

@@ -6,17 +6,22 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { EventCard } from '@/components/EventCard';
 import { MonthCalendar } from '@/components/MonthCalendar';
 import { useColors } from '@/hooks/useColors';
-import { toLocalDateKey, type EventCategory } from '@/data/events';
+import {
+  matchesEventFilter,
+  toLocalDateKey,
+  type CalendarEventFilter,
+  type EventCategory,
+} from '@/data/events';
 import { useCupCal } from '@/state/AppContext';
 
-type CategoryFilter = 'Alle Termine' | EventCategory;
-
-const categoryFilters: CategoryFilter[] = [
+const categoryFilters: CalendarEventFilter[] = [
   'Alle Termine',
   'Turnier',
   'Liga',
   'Qualifikation',
   'Trainingsrunde',
+  'Reload',
+  'Zero Build',
 ];
 
 const categoryColorKey: Record<EventCategory, 'categoryTournament' | 'categoryLeague' | 'categoryQualification' | 'categoryTraining'> = {
@@ -67,13 +72,13 @@ export default function CalendarScreen() {
   const [currentMonth, setCurrentMonth] = useState(
     () => new Date(new Date().getFullYear(), new Date().getMonth(), 1),
   );
-  const [selectedCategory, setSelectedCategory] = useState<CategoryFilter>('Alle Termine');
+  const [selectedCategory, setSelectedCategory] = useState<CalendarEventFilter>('Alle Termine');
   const [filterOpen, setFilterOpen] = useState(false);
 
   const visibleEvents = useMemo(
     () =>
       [...events]
-        .filter((event) => selectedCategory === 'Alle Termine' || event.category === selectedCategory)
+        .filter((event) => matchesEventFilter(event, selectedCategory))
         .sort((a, b) => a.startTime.localeCompare(b.startTime)),
     [events, selectedCategory],
   );
@@ -238,7 +243,12 @@ export default function CalendarScreen() {
             <View style={[styles.filterMenu, { backgroundColor: colors.card, borderColor: colors.border }]}>
               {categoryFilters.map((category) => {
                 const active = selectedCategory === category;
-                const color = category === 'Alle Termine' ? colors.foreground : colors[categoryColorKey[category]];
+                const color =
+                  category === 'Alle Termine'
+                    ? colors.foreground
+                    : category in categoryColorKey
+                      ? colors[categoryColorKey[category as EventCategory]]
+                      : colors.primary;
                 return (
                   <Pressable
                     key={category}

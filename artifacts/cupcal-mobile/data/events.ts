@@ -5,6 +5,7 @@ export type TournamentSeries = 'Reload';
 export type TournamentType = 'FNCS' | 'Cash Cup' | 'Ranked Cup' | 'Community';
 export type TeamFormat = 'Solo' | 'Duos' | 'Trios' | 'Squads';
 export type EventCategory = 'Turnier' | 'Liga' | 'Qualifikation' | 'Trainingsrunde';
+export type CalendarEventFilter = 'Alle Termine' | EventCategory | 'Reload' | 'Zero Build';
 
 export interface TournamentEvent {
   id: string;
@@ -20,6 +21,20 @@ export interface TournamentEvent {
   startTime: string;
   endTime: string;
   featured: boolean;
+}
+
+export function matchesEventFilter(event: TournamentEvent, filter: CalendarEventFilter): boolean {
+  switch (filter) {
+    case 'Alle Termine':
+      return true;
+    case 'Reload':
+      return event.tournamentSeries === 'Reload' || event.gameMode === 'Reload';
+    case 'Zero Build':
+      return event.gameRuleset === 'Zero Build' ||
+        (!event.gameRuleset && event.gameMode === 'Zero Build');
+    default:
+      return event.category === filter;
+  }
 }
 
 export function toLocalDateKey(value: Date | string): string {
