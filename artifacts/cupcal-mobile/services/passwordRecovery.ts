@@ -64,10 +64,35 @@ function getErrorMessage(error: unknown): string {
   return '';
 }
 
+function getHttpStatus(error: unknown): number | null {
+  if (typeof error !== 'object' || error === null) return null;
+
+  const errorDetails = error as {
+    status?: unknown;
+    statusCode?: unknown;
+    response?: { status?: unknown } | null;
+  };
+  if (typeof errorDetails.status === 'number') return errorDetails.status;
+  if (typeof errorDetails.statusCode === 'number') return errorDetails.statusCode;
+  if (
+    typeof errorDetails.response === 'object'
+    && errorDetails.response !== null
+    && typeof errorDetails.response.status === 'number'
+  ) {
+    return errorDetails.response.status;
+  }
+  return null;
+}
+
 function isTransientConnectionError(error: unknown): boolean {
   const message = getErrorMessage(error).toLowerCase();
+  const status = getHttpStatus(error);
   return (
-    message.includes('network')
+    status === 408
+    || status === 425
+    || status === 429
+    || (status !== null && status >= 500 && status < 600)
+    || message.includes('network')
     || message.includes('fetch failed')
     || message.includes('failed to fetch')
     || message.includes('connection')

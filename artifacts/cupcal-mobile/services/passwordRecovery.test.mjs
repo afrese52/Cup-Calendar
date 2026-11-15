@@ -110,6 +110,60 @@ test('erlaubt nach einem vorübergehenden Linkfehler denselben Link erneut', asy
   assert.equal(recovery.isPending(), true);
 });
 
+test('erlaubt nach vorübergehenden HTTP-Fehlern denselben Link erneut', async (t) => {
+  const cases = [
+    ['Zeitüberschreitung', 408],
+    ['zu frühe Anfrage', 425],
+    ['Drosselung', 429],
+    ['Serverfehler', 500],
+    ['Dienst nicht verfügbar', 503],
+    ['Gateway-Zeitüberschreitung', 504],
+    ['oberer Serverfehlerbereich', 599],
+    ['Status in einer HTTP-Antwort', { response: { status: 503 } }],
+  ];
+
+  for (const [name, statusDetails] of cases) {
+    await t.test(name, async () => {
+      let exchangeAttempts = 0;
+      const recovery = createPasswordRecovery(createAuth({
+        exchangeCodeForSession: async () => {
+          exchangeAttempts += 1;
+          if (exchangeAttempts === 1) {
+            const details = typeof statusDetails === 'number'
+              ? { status: statusDetails }
+              : statusDetails;
+            return { error: Object.assign(new Error('Request rejected'), details) };
+          }
+          return { error: null };
+        },
+      }));
+
+      await assert.rejects(recovery.handlePasswordResetUrl(recoveryUrl), /Request rejected/i);
+      assert.equal(recovery.isPending(), false);
+      assert.equal(await recovery.handlePasswordResetUrl(recoveryUrl), true);
+      assert.equal(exchangeAttempts, 2);
+      assert.equal(recovery.isPending(), true);
+    });
+  }
+});
+
+test('verhindert die Wiederholung desselben Links nach einem dauerhaften HTTP-Fehler', async () => {
+  let exchangeAttempts = 0;
+  const recovery = createPasswordRecovery(createAuth({
+    exchangeCodeForSession: async () => {
+      exchangeAttempts += 1;
+      return {
+        error: Object.assign(new Error('Invalid recovery request'), { status: 400 }),
+      };
+    },
+  }));
+
+  await assert.rejects(recovery.handlePasswordResetUrl(recoveryUrl), /Invalid recovery request/i);
+  await assert.rejects(recovery.handlePasswordResetUrl(recoveryUrl), /Invalid recovery request/i);
+  assert.equal(exchangeAttempts, 1);
+  assert.equal(recovery.isPending(), false);
+});
+
 test('weist den Passwortwechsel ohne gültige Wiederherstellungssitzung ab', async () => {
   let updateCalled = false;
   const recovery = createPasswordRecovery(createAuth({
