@@ -89,21 +89,31 @@ test("liefert Snapshot-Alter und Warnstatus über den authentifizierten Admin-Vo
       .map((key) => [key, process.env[key]]),
   );
   const previousRequire = globalThis.require;
+  let eventDatabaseQueryCount = 0;
   const fakeSupabase = createServer((request, response) => {
     response.setHeader("Content-Type", "application/json");
     if (request.url === "/auth/v1/user") {
-      if (request.headers.authorization !== "Bearer valid-admin-preview-token") {
+      const usersByToken = {
+        "Bearer valid-admin-preview-token": {
+          id: "admin-preview-test-user",
+          email: "admin@cupcal.test",
+        },
+        "Bearer valid-non-admin-preview-token": {
+          id: "non-admin-preview-test-user",
+          email: "player@cupcal.test",
+        },
+      };
+      const user = usersByToken[request.headers.authorization];
+      if (!user) {
         response.statusCode = 401;
         response.end(JSON.stringify({ message: "Invalid test session" }));
         return;
       }
-      response.end(JSON.stringify({
-        id: "admin-preview-test-user",
-        email: "admin@cupcal.test",
-      }));
+      response.end(JSON.stringify(user));
       return;
     }
     if (request.url?.startsWith("/rest/v1/fortnite_events")) {
+      eventDatabaseQueryCount += 1;
       response.end("[]");
       return;
     }
@@ -195,6 +205,20 @@ test("liefert Snapshot-Alter und Warnstatus über den authentifizierten Admin-Vo
     assert.equal(timeless.result.snapshotAt, null);
     assert.equal(timeless.result.snapshotAgeMs, null);
     assert.equal(timeless.result.isSnapshotStale, false);
+
+    const queriesBeforeNonAdminPreview = eventDatabaseQueryCount;
+    const deniedResponse = await fetch(`${apiUrl}/api/v1/admin/events/import/preview`, {
+      method: "POST",
+      headers: {
+        Authorization: "Bearer valid-non-admin-preview-token",
+        "Content-Type": "text/plain; charset=utf-8",
+      },
+      body: makeMht(html, { date: freshDate }),
+    });
+    const deniedResult = await deniedResponse.json();
+    assert.equal(deniedResponse.status, 403, JSON.stringify(deniedResult));
+    assert.equal(deniedResult.authorized, false);
+    assert.equal(eventDatabaseQueryCount, queriesBeforeNonAdminPreview);
   } finally {
     if (apiServer?.listening) await closeServer(apiServer);
     if (fakeSupabase.listening) await closeServer(fakeSupabase);
