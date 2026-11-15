@@ -362,6 +362,39 @@ test('blendet den erneuten Versand nach bestätigter Sitzung aus und zeigt das K
   expect(view.getByTestId('sign-out-button')).toBeTruthy();
 });
 
+test('behält nach bestätigter Sitzung trotz verspäteter Registrierungsantwort den Anmeldestatus', async () => {
+  let finishSignUp!: (result: { data: { session: null }; error: null }) => void;
+  auth.signUp.mockImplementation(
+    () => new Promise((resolve) => { finishSignUp = resolve; }),
+  );
+  const view = await openSettings();
+  await fireEvent.press(view.getByTestId('auth-mode-toggle'));
+  await enterCredentials(view);
+
+  await fireEvent.press(view.getByTestId('auth-submit-button'));
+  await waitFor(() => expect(finishSignUp).toBeDefined());
+
+  const confirmedSession = {
+    ...testSession,
+    user: {
+      ...testSession.user,
+      email_confirmed_at: '2026-11-14T12:00:00.000Z',
+    },
+  };
+  await act(async () => {
+    mockSupabase.__emitAuthStateChange('SIGNED_IN', confirmedSession);
+  });
+  expect(view.getByTestId('account-session-status').props.children).toBe('Angemeldet');
+
+  await act(async () => finishSignUp({ data: { session: null }, error: null }));
+
+  expect(view.getByTestId('account-session-status').props.children).toBe('Angemeldet');
+  expect(view.getByText('test@example.invalid')).toBeTruthy();
+  expect(view.getByText('Du bist angemeldet.')).toBeTruthy();
+  expect(view.queryByTestId('registration-resend-confirmation-button')).toBeNull();
+  expect(view.getByTestId('sign-out-button')).toBeTruthy();
+});
+
 test('zeigt nach einer Registrierung ohne Bestätigungsbedarf keine erneute Versandaktion', async () => {
   auth.signUp.mockResolvedValue({
     data: { session: testSession },

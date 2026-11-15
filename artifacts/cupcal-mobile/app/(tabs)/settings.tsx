@@ -113,6 +113,7 @@ export default function SettingsScreen() {
   const [confirmationResendClock, setConfirmationResendClock] = useState(() => Date.now());
   const [confirmationResendCooldownLoaded, setConfirmationResendCooldownLoaded] = useState(false);
   const announcedResendCooldownCompletionRef = useRef<number | null>(null);
+  const sessionRef = useRef<Session | null>(session);
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
   const accountDeletionRequest = useRequestAccountDeletion();
   const reportAuthError = (message: string) => {
@@ -203,6 +204,7 @@ export default function SettingsScreen() {
 
     return watchAuthSession(supabase.auth, {
       onSession: (nextSession) => {
+        sessionRef.current = nextSession;
         setSession(nextSession);
         if (nextSession) {
           setRegistrationConfirmationEmail(null);
@@ -279,6 +281,7 @@ export default function SettingsScreen() {
     if (!supabase || isSubmittingAuthRef.current) return;
 
     const normalizedEmail = email.trim();
+    const submittedMode = authMode;
     if (!normalizedEmail || (authMode !== 'forgot-password' && !password)) {
       reportAuthError(
         authMode === 'forgot-password'
@@ -302,6 +305,13 @@ export default function SettingsScreen() {
         emailConfirmationRedirectTo: getEmailConfirmationRedirectUrl(),
         requestPasswordReset,
       });
+      if (submittedMode === 'sign-up' && sessionRef.current) {
+        setAuthMessage('Du bist angemeldet.');
+        setRegistrationConfirmationEmail(null);
+        setPassword('');
+        void clearPendingAccountConfirmationEmail().catch(() => {});
+        return;
+      }
       if (result.ok) {
         setAuthMessage(result.message);
         if (result.emailConfirmationRequired) {
