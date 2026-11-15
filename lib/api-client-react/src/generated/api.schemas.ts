@@ -242,12 +242,12 @@ export interface MhtImportEvent {
      * Previous ruleset when it differs from the imported value
      * @nullable
      */
-  previousGameRuleset?: string | null;
+  previousGameRuleset: string | null;
   /**
      * Previous tournament series when it differs from the imported value
      * @nullable
      */
-  previousTournamentSeries?: string | null;
+  previousTournamentSeries: string | null;
   /**
      * Previous team format when it differs from the imported value
      * @nullable

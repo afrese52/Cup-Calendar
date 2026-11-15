@@ -390,7 +390,7 @@ components:
           type: ["string", "null"]
           format: date-time
           description: Previous end time when it differs from the imported value
-      required: [id, title, startTime, endTime, gameMode, teamFormat, tournamentType, category, warnings, willUpdate, previousTitle, previousGameMode, previousTeamFormat, previousTournamentType, previousCategory, previousStartTime, previousEndTime]
+      required: [id, title, startTime, endTime, gameMode, teamFormat, tournamentType, category, warnings, willUpdate, previousTitle, previousGameMode, previousGameRuleset, previousTournamentSeries, previousTeamFormat, previousTournamentType, previousCategory, previousStartTime, previousEndTime]
     MhtImportIssue:
       type: object
       properties:

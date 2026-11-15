@@ -7,6 +7,7 @@ import path from "node:path";
 import { pathToFileURL, fileURLToPath } from "node:url";
 import test from "node:test";
 import { build } from "esbuild";
+import { PreviewMhtImportResponse } from "../../../../lib/api-zod/src/generated/api.ts";
 import { parseMhtSchedule } from "../../scripts/dry-run-mht-import.mjs";
 import {
   buildMhtEventUpsertRows,
@@ -383,6 +384,7 @@ test("gibt Zeitänderungen im authentifizierten Import-Vorschau-Endpunkt zurück
     );
     const result = await response.json();
     assert.equal(response.status, 200, JSON.stringify(result));
+    PreviewMhtImportResponse.parse(result);
 
     assert.equal("schedule" in result, false, "Die vollständige Parser-Antwort bleibt intern.");
     assert.equal("importableEvents" in result, false, "Die interne Importliste bleibt intern.");

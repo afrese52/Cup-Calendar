@@ -15,6 +15,7 @@
 - [Supabase-Passwortregel](supabase-password-policy.md) — Beim CupCal-Passwort-Reset gelten mindestens sechs Zeichen, ohne zusätzliche Zeichenklassen.
 - [Bookmark-Zeitordnung](bookmark-clock-ordering.md) — Favoritenänderungen anhand serverseitiger Revisionen statt Gerätezeitstempeln ordnen.
 - [Favoriten über Geräte hinweg](cross-device-bookmarks.md) — Favoriten gehören zum angemeldeten Konto und sollen auf all seinen Geräten erscheinen.
+- [Zod-Schemas in Node-Tests](zod-schemas-node-tests.md) — Generierte Zod-Schemas direkt aus der TS-Ausgabe importieren, wenn Node den Paketindex mit extensionlosen TS-Exports nicht auflöst.
 - [Zustimmung für alte Gast-Favoriten](legacy-bookmark-consent.md) — Vorhandene lokale Gast-Favoriten dürfen erst nach ausdrücklicher Wahl dem aktuellen Konto zugeordnet werden.
 - [Countdown-Screen-Tests](confirmation-cooldown-screen-tests.md) — Nach aktiven Countdowns unmounten und den Neustartfall ans Ende der Bildschirmtests setzen.
 - [Stabile Daten in Hook-Tests](stable-hook-test-data.md) — Mock-Antwortobjekte für useEffect-Abhängigkeiten müssen über Renderings hinweg referenziell stabil bleiben.
