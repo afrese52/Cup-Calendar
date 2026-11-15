@@ -1,4 +1,6 @@
-ALTER TABLE public.fortnite_events
+1
+    
+    ALTER TABLE public.fortnite_events
     ADD COLUMN IF NOT EXISTS tournament_series TEXT
     CHECK (tournament_series IN ('Reload'));
 
