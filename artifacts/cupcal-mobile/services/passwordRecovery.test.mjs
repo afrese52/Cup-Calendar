@@ -133,7 +133,7 @@ test('weist den Passwortwechsel ohne gültige Wiederherstellungssitzung ab', asy
   );
 });
 
-test('weist ein zu kurzes Passwort vor der Serveranfrage ab', async () => {
+test('weist fünf Emoji-Codepoints vor der Serveranfrage ab', async () => {
   let updateCalled = false;
   const recovery = createPasswordRecovery(createAuth({
     updateUser: async () => {
@@ -144,7 +144,7 @@ test('weist ein zu kurzes Passwort vor der Serveranfrage ab', async () => {
   recovery.markRecoverySession(true);
 
   await assert.rejects(
-    recovery.saveNewPassword('A1!xyz'.slice(0, PASSWORD_MIN_LENGTH - 1)),
+    recovery.saveNewPassword('😀'.repeat(PASSWORD_MIN_LENGTH - 1)),
     new RegExp(`mindestens ${PASSWORD_MIN_LENGTH} Zeichen lang sein`, 'i'),
   );
   assert.equal(updateCalled, false);
@@ -179,6 +179,23 @@ test('akzeptiert sechs Buchstaben ohne zusätzliche Zeichenregeln', async () => 
   recovery.markRecoverySession(true);
 
   const password = 'a'.repeat(PASSWORD_MIN_LENGTH);
+  await recovery.saveNewPassword(password);
+
+  assert.equal(updatedPassword, password);
+  assert.equal(recovery.isPending(), false);
+});
+
+test('akzeptiert genau sechs Emoji-Codepoints beim Passwortwechsel', async () => {
+  let updatedPassword;
+  const recovery = createPasswordRecovery(createAuth({
+    updateUser: async ({ password }) => {
+      updatedPassword = password;
+      return { error: null };
+    },
+  }));
+  recovery.markRecoverySession(true);
+
+  const password = '😀'.repeat(PASSWORD_MIN_LENGTH);
   await recovery.saveNewPassword(password);
 
   assert.equal(updatedPassword, password);

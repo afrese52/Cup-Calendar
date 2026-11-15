@@ -192,9 +192,10 @@ test('registriert erfolgreich mit und ohne sofortige Sitzung', async (t) => {
   });
 });
 
-test('prüft die Mindestlänge vor der Registrierung', async (t) => {
-  await t.test('weist ein zu kurzes Passwort ohne Supabase-Aufruf ab', async () => {
+test('prüft die Unicode-Mindestlänge vor der Registrierung', async (t) => {
+  await t.test('weist fünf Emoji-Codepoints ohne Supabase-Aufruf ab', async () => {
     let called = false;
+    const password = '😀'.repeat(5);
     const result = await submitAccountAuth(createAuth({
       signUp: async () => {
         called = true;
@@ -203,7 +204,7 @@ test('prüft die Mindestlänge vor der Registrierung', async (t) => {
     }), {
       mode: 'sign-up',
       email: 'test@example.invalid',
-      password: '12345',
+      password,
       emailConfirmationRedirectTo: 'cupcal-android://auth/confirm',
       requestPasswordReset: async () => {},
     });
@@ -215,8 +216,9 @@ test('prüft die Mindestlänge vor der Registrierung', async (t) => {
     assert.equal(called, false);
   });
 
-  await t.test('akzeptiert ein Passwort genau an der Mindestlänge', async () => {
+  await t.test('akzeptiert genau sechs Emoji-Codepoints', async () => {
     let receivedPassword;
+    const password = '😀'.repeat(6);
     const result = await submitAccountAuth(createAuth({
       signUp: async ({ password }) => {
         receivedPassword = password;
@@ -225,12 +227,12 @@ test('prüft die Mindestlänge vor der Registrierung', async (t) => {
     }), {
       mode: 'sign-up',
       email: 'test@example.invalid',
-      password: '123456',
+      password,
       emailConfirmationRedirectTo: 'cupcal-android://auth/confirm',
       requestPasswordReset: async () => {},
     });
 
-    assert.equal(receivedPassword, '123456');
+    assert.equal(receivedPassword, password);
     assert.equal(result.ok, true);
   });
 });
