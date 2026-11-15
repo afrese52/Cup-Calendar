@@ -663,6 +663,125 @@ Content-Type: text/html; charset=utf-8
   }
 });
 
+test("schützt die Importhistorie vor nicht angemeldeten und nicht freigegebenen Konten", async () => {
+  const originalEnv = new Map(
+    ["NODE_ENV", "SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "CUPCAL_IMPORT_ADMIN_EMAILS"]
+      .map((key) => [key, process.env[key]]),
+  );
+  let historyRequestCount = 0;
+  const historyEntry = {
+    id: 7,
+    imported_at: "2026-11-14T12:00:00.000Z",
+    admin_user_id: "history-admin-user",
+    admin_email: "admin@cupcal.test",
+    source_hint: "www.fortnite.com",
+    inserted_count: 2,
+    updated_count: 1,
+    skipped_count: 3,
+    skipped_warning_count: 1,
+    skipped_past_count: 1,
+    skipped_invalid_count: 1,
+  };
+  const fakeSupabase = createServer((request, response) => {
+    response.setHeader("Content-Type", "application/json");
+    if (request.url === "/auth/v1/user") {
+      const usersByToken = {
+        "authorized-admin-token": {
+          id: "history-admin-user",
+          email: "admin@cupcal.test",
+        },
+        "ordinary-account-token": {
+          id: "ordinary-user",
+          email: "member@cupcal.test",
+        },
+      };
+      const token = request.headers.authorization?.replace(/^Bearer\s+/i, "");
+      const user = usersByToken[token];
+      if (!user) {
+        response.statusCode = 401;
+        response.end(JSON.stringify({ message: "Invalid test session" }));
+        return;
+      }
+      response.end(JSON.stringify(user));
+      return;
+    }
+
+    if (request.url?.startsWith("/rest/v1/admin_import_history") && request.method === "GET") {
+      historyRequestCount += 1;
+      response.end(JSON.stringify([historyEntry]));
+      return;
+    }
+
+    response.statusCode = 404;
+    response.end(JSON.stringify({ message: "Unexpected test request" }));
+  });
+  let apiServer;
+  let tempDir;
+
+  try {
+    const fakeSupabaseUrl = await listen(fakeSupabase);
+    process.env["NODE_ENV"] = "production";
+    process.env["SUPABASE_URL"] = fakeSupabaseUrl;
+    process.env["SUPABASE_SERVICE_ROLE_KEY"] = "test-service-role-key";
+    process.env["CUPCAL_IMPORT_ADMIN_EMAILS"] = "admin@cupcal.test";
+
+    const loaded = await loadAdminImportApiApp();
+    tempDir = loaded.tempDir;
+    apiServer = loaded.app.listen(0, "127.0.0.1");
+    await new Promise((resolve, reject) => {
+      apiServer.once("error", reject);
+      apiServer.once("listening", resolve);
+    });
+
+    const historyUrl =
+      `http://127.0.0.1:${apiServer.address().port}/api/v1/admin/events/import/history`;
+    const anonymousResponse = await fetch(historyUrl);
+    const anonymousResult = await anonymousResponse.json();
+    assert.equal(anonymousResponse.status, 401);
+    assert.equal("entries" in anonymousResult, false);
+    assert.doesNotMatch(JSON.stringify(anonymousResult), /admin@cupcal\.test|www\.fortnite\.com/);
+
+    const ordinaryResponse = await fetch(historyUrl, {
+      headers: { Authorization: "Bearer ordinary-account-token" },
+    });
+    const ordinaryResult = await ordinaryResponse.json();
+    assert.equal(ordinaryResponse.status, 403);
+    assert.equal("entries" in ordinaryResult, false);
+    assert.doesNotMatch(JSON.stringify(ordinaryResult), /admin@cupcal\.test|www\.fortnite\.com/);
+    assert.equal(historyRequestCount, 0);
+
+    const adminResponse = await fetch(historyUrl, {
+      headers: { Authorization: "Bearer authorized-admin-token" },
+    });
+    assert.equal(adminResponse.status, 200);
+    assert.equal(adminResponse.headers.get("cache-control"), "no-store");
+    assert.deepEqual(await adminResponse.json(), {
+      entries: [{
+        id: 7,
+        importedAt: "2026-11-14T12:00:00.000Z",
+        adminUserId: "history-admin-user",
+        adminEmail: "admin@cupcal.test",
+        sourceHint: "www.fortnite.com",
+        insertedCount: 2,
+        updatedCount: 1,
+        skippedCount: 3,
+        skippedWarningCount: 1,
+        skippedPastCount: 1,
+        skippedInvalidCount: 1,
+      }],
+    });
+    assert.equal(historyRequestCount, 1);
+  } finally {
+    if (apiServer?.listening) await closeServer(apiServer);
+    if (fakeSupabase.listening) await closeServer(fakeSupabase);
+    if (tempDir) await rm(tempDir, { recursive: true, force: true });
+    for (const [key, value] of originalEnv) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+});
+
 test("gibt nur die jeweils geänderte bisherige Zeit zurück", () => {
   const imported = event();
   const existing = {
