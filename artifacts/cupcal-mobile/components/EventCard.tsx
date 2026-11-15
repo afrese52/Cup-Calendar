@@ -1,8 +1,8 @@
 import { Feather } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
-import React, { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { AccessibilityInfo, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useColors } from '@/hooks/useColors';
 import type { TournamentEvent } from '@/data/events';
 import { promptAccountSignIn } from '@/services/accountSignInPrompt';
@@ -18,6 +18,7 @@ interface EventCardProps {
 export function EventCard({ event, isBookmarked, onBookmarkToggle }: EventCardProps) {
   const colors = useColors();
   const { authReady, isAuthenticated } = useCupCal();
+  const bookmarkRef = useRef<React.ComponentRef<typeof Pressable>>(null);
   const [now, setNow] = useState(() => Date.now());
   const start = new Date(event.startTime);
   const dateLabel = new Intl.DateTimeFormat('de-DE', {
@@ -80,6 +81,7 @@ export function EventCard({ event, isBookmarked, onBookmarkToggle }: EventCardPr
         </View>
       </Pressable>
       <Pressable
+        ref={bookmarkRef}
         accessibilityRole="button"
         accessibilityLabel={
           !authReady
@@ -97,7 +99,11 @@ export function EventCard({ event, isBookmarked, onBookmarkToggle }: EventCardPr
         disabled={!authReady}
         onPress={() => {
           if (!isAuthenticated) {
-            promptAccountSignIn();
+            promptAccountSignIn(event.title, () => {
+              if (bookmarkRef.current) {
+                AccessibilityInfo.sendAccessibilityEvent(bookmarkRef.current, 'focus');
+              }
+            });
             return;
           }
           void Haptics.selectionAsync();

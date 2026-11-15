@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { Session } from '@supabase/supabase-js';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
 import { useColors } from '@/hooks/useColors';
 import {
@@ -85,6 +85,7 @@ function SettingRow({
 export default function SettingsScreen() {
   const colors = useColors();
   const router = useRouter();
+  const { focusAccount } = useLocalSearchParams<{ focusAccount?: string }>();
   const { storageError } = useCupCal();
   const { width, height } = useWindowDimensions();
   const isCompactWidth = width < 360;
@@ -99,6 +100,7 @@ export default function SettingsScreen() {
   const isSubmittingAuth = submittingAction !== null;
   const [authError, setAuthError] = useState<string | null>(null);
   const authErrorRef = useRef<React.ComponentRef<typeof Text>>(null);
+  const accountFocusRef = useRef<React.ComponentRef<typeof Text>>(null);
   const lastAnnouncedAccountStatusRef = useRef<string | null>(null);
   const hasAnnouncedSessionCheckRef = useRef(false);
   const [authMessage, setAuthMessage] = useState<string | null>(null);
@@ -174,6 +176,17 @@ export default function SettingsScreen() {
       AccessibilityInfo.sendAccessibilityEvent(authErrorRef.current, 'focus');
     }
   }, [authError, isSubmittingAuth]);
+
+  useEffect(() => {
+    if (focusAccount !== 'true' || isCheckingSession || Platform.OS === 'web') return;
+
+    const timer = setTimeout(() => {
+      if (accountFocusRef.current) {
+        AccessibilityInfo.sendAccessibilityEvent(accountFocusRef.current, 'focus');
+      }
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [focusAccount, isCheckingSession]);
 
   useEffect(() => {
     if (!supabase) return;
@@ -388,6 +401,7 @@ export default function SettingsScreen() {
           {isCheckingSession ? (
             <View style={styles.accountStatus}>
               <Text
+                ref={accountFocusRef}
                 accessible
                 accessibilityRole="text"
                 accessibilityLiveRegion="polite"
@@ -405,6 +419,7 @@ export default function SettingsScreen() {
                 </View>
                 <View style={styles.accountCopy}>
                   <Text
+                    ref={accountFocusRef}
                     accessible
                     accessibilityRole="text"
                     accessibilityLiveRegion="polite"
@@ -517,13 +532,19 @@ export default function SettingsScreen() {
               <View style={[styles.accountIcon, { backgroundColor: colors.secondary }]}>
                 <Feather name="cloud-off" size={17} color={colors.mutedForeground} />
               </View>
-              <Text style={[styles.configurationMessage, { color: colors.mutedForeground }]}>
+              <Text
+                ref={accountFocusRef}
+                accessible
+                accessibilityRole="text"
+                style={[styles.configurationMessage, { color: colors.mutedForeground }]}
+              >
                 {supabaseConfigurationMessage}
               </Text>
             </View>
           ) : (
             <>
               <Text
+                ref={accountFocusRef}
                 accessible
                 accessibilityRole="text"
                 accessibilityLiveRegion="polite"

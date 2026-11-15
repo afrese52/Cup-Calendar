@@ -12,6 +12,7 @@ import {
 type AuthListener = (event: string, session: unknown) => void;
 type MockAuth = Record<string, any>;
 type RenderedSettings = Awaited<ReturnType<typeof render>>;
+const mockRouteParams: { focusAccount?: string } = {};
 
 jest.mock('@expo/vector-icons', () => ({ Feather: () => null }));
 jest.mock('@react-native-async-storage/async-storage', () => {
@@ -40,7 +41,10 @@ jest.mock('@workspace/api-client-react', () => {
   };
 });
 jest.mock('expo-haptics', () => ({ impactAsync: jest.fn(), notificationAsync: jest.fn() }));
-jest.mock('expo-router', () => ({ useRouter: () => ({ push: jest.fn() }) }));
+jest.mock('expo-router', () => ({
+  useRouter: () => ({ push: jest.fn() }),
+  useLocalSearchParams: () => mockRouteParams,
+}));
 jest.mock('react-native-safe-area-context', () => {
   const { View } = require('react-native');
   return { SafeAreaView: View };
@@ -179,6 +183,7 @@ async function enterCredentials(view: RenderedSettings) {
 
 beforeEach(() => {
   restoreAuthMocks();
+  mockRouteParams.focusAccount = undefined;
   const storageMock = jest.requireMock('@react-native-async-storage/async-storage') as {
     __values: Map<string, string>;
   };
@@ -189,6 +194,14 @@ beforeEach(() => {
     window: defaultWindowDimensions,
     screen: defaultScreenDimensions,
   });
+});
+
+test('öffnet die Kontoeinstellungen mit Fokus auf der Anmeldeüberschrift', async () => {
+  mockRouteParams.focusAccount = 'true';
+  const view = await openSettings();
+
+  expect(view.getByText('Bei CupCal anmelden').props.accessibilityRole).toBe('text');
+  await waitFor(() => expect(sendAccessibilityFocus).toHaveBeenCalledWith(expect.anything(), 'focus'));
 });
 
 test.each([

@@ -1,8 +1,8 @@
 import { Feather } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { router, useLocalSearchParams } from 'expo-router';
-import React from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useRef } from 'react';
+import { AccessibilityInfo, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useColors } from '@/hooks/useColors';
 import { promptAccountSignIn } from '@/services/accountSignInPrompt';
@@ -19,15 +19,19 @@ export default function EventDetailsScreen() {
     isAuthenticated,
   } = useCupCal();
   const event = events.find((item) => item.id === id);
+  const headerBookmarkRef = useRef<React.ComponentRef<typeof Pressable>>(null);
+  const saveButtonRef = useRef<React.ComponentRef<typeof Pressable>>(null);
   const isBookmarked = event ? bookmarkedIds.includes(event.id) : false;
   const isSavedByUser = isAuthenticated && isBookmarked;
   const handleBack = () => {
     router.replace('/(tabs)');
   };
-  const handleBookmark = () => {
+  const handleBookmark = (restoreFocus: () => void = () => {
+    if (saveButtonRef.current) AccessibilityInfo.sendAccessibilityEvent(saveButtonRef.current, 'focus');
+  }) => {
     if (!authReady) return;
     if (!isAuthenticated) {
-      promptAccountSignIn();
+      promptAccountSignIn(event?.title ?? 'diesen Termin', restoreFocus);
       return;
     }
     if (!event) return;
@@ -72,6 +76,7 @@ export default function EventDetailsScreen() {
           </Pressable>
           <Text style={[styles.navLabel, { color: colors.mutedForeground }]}>TURNIERDETAILS</Text>
           <Pressable
+            ref={headerBookmarkRef}
             accessibilityRole="button"
             accessibilityLabel={
               !authReady
@@ -87,7 +92,11 @@ export default function EventDetailsScreen() {
             }}
             testID="event-detail-bookmark"
             disabled={!authReady}
-            onPress={handleBookmark}
+            onPress={() => handleBookmark(() => {
+              if (headerBookmarkRef.current) {
+                AccessibilityInfo.sendAccessibilityEvent(headerBookmarkRef.current, 'focus');
+              }
+            })}
             style={({ pressed }) => [styles.navButton, { backgroundColor: colors.card }, pressed && styles.pressed]}
           >
             <Feather
@@ -126,6 +135,7 @@ export default function EventDetailsScreen() {
         </View>
 
         <Pressable
+          ref={saveButtonRef}
           accessibilityRole="button"
           accessibilityLabel={
             !authReady
@@ -141,7 +151,9 @@ export default function EventDetailsScreen() {
           }}
           testID="event-save-button"
           disabled={!authReady}
-          onPress={handleBookmark}
+          onPress={() => handleBookmark(() => {
+            if (saveButtonRef.current) AccessibilityInfo.sendAccessibilityEvent(saveButtonRef.current, 'focus');
+          })}
           style={({ pressed }) => [
             styles.saveButton,
             { backgroundColor: isSavedByUser ? colors.secondary : colors.primary },

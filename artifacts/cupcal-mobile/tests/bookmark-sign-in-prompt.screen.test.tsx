@@ -1,7 +1,7 @@
 import React from 'react';
 import { afterEach, beforeEach, expect, jest, test } from '@jest/globals';
-import { fireEvent, render } from '@testing-library/react-native';
-import { Alert, Platform } from 'react-native';
+import { act, fireEvent, render } from '@testing-library/react-native';
+import { AccessibilityInfo, Alert, Platform } from 'react-native';
 import { sampleEvents } from '../data/events';
 import { EventCard } from '../components/EventCard';
 import CalendarScreen from '../app/(tabs)/index';
@@ -130,7 +130,10 @@ test.each(['android', 'ios'] as const)(
 
     await fireEvent.press(view.getByTestId(`bookmark-${event.id}`));
     getDialogButtons().find((button) => button.text === 'Anmelden')?.onPress?.();
-    expect(mockRouterPush).toHaveBeenCalledWith('/(tabs)/settings');
+    expect(mockRouterPush).toHaveBeenCalledWith({
+      pathname: '/(tabs)/settings',
+      params: { focusAccount: 'true' },
+    });
     expect(onBookmarkToggle).not.toHaveBeenCalled();
 
     setAuthState(true);
@@ -282,7 +285,10 @@ test.each(['android', 'ios'] as const)(
 
     await fireEvent.press(view.getByTestId('event-save-button'));
     getDialogButtons().find((button) => button.text === 'Anmelden')?.onPress?.();
-    expect(mockRouterPush).toHaveBeenCalledWith('/(tabs)/settings');
+    expect(mockRouterPush).toHaveBeenCalledWith({
+      pathname: '/(tabs)/settings',
+      params: { focusAccount: 'true' },
+    });
     expect(view.getByText('FNCS Challenger Cup')).toBeTruthy();
 
     setAuthState(true);
@@ -335,13 +341,73 @@ test.each(['android', 'ios'] as const)(
   'Anmeldedialog ordnet Später und Anmelden unter %s dem richtigen Verhalten zu',
   (platform) => {
     setPlatformOS(platform);
-    promptAccountSignIn();
+    const restoreFocus = jest.fn();
+    jest.useFakeTimers();
+    promptAccountSignIn(event.title, restoreFocus);
+    expect(alertSpy).toHaveBeenCalledWith(
+      'Anmeldung erforderlich',
+      `Melde dich an, um „${event.title}“ in deiner persönlichen Merkliste zu speichern.`,
+      expect.any(Array),
+    );
     const buttons = getDialogButtons();
 
     expect(buttons.map((button) => button.text)).toEqual(['Später', 'Anmelden']);
     buttons[0]?.onPress?.();
+    expect(restoreFocus).not.toHaveBeenCalled();
+    jest.advanceTimersByTime(250);
+    expect(restoreFocus).toHaveBeenCalledTimes(1);
     expect(mockRouterPush).not.toHaveBeenCalled();
     buttons[1]?.onPress?.();
-    expect(mockRouterPush).toHaveBeenCalledWith('/(tabs)/settings');
+    expect(mockRouterPush).toHaveBeenCalledWith({
+      pathname: '/(tabs)/settings',
+      params: { focusAccount: 'true' },
+    });
+    jest.useRealTimers();
+  },
+);
+
+test.each(['android', 'ios'] as const)(
+  '„Später“ gibt den Screenreader-Fokus zur Merkliste der Turnierkarte zurück auf %s',
+  async (platform) => {
+    setPlatformOS(platform);
+    jest.useFakeTimers();
+    const focusSpy = jest
+      .spyOn(AccessibilityInfo, 'sendAccessibilityEvent')
+      .mockImplementation(() => {});
+    const view = await render(
+      <EventCard event={event} isBookmarked={false} onBookmarkToggle={() => undefined} />,
+    );
+
+    await fireEvent.press(view.getByTestId(`bookmark-${event.id}`));
+    getDialogButtons().find((button) => button.text === 'Später')?.onPress?.();
+    await act(async () => {
+      jest.advanceTimersByTime(250);
+    });
+
+    expect(focusSpy).toHaveBeenCalledWith(expect.anything(), 'focus');
+    focusSpy.mockRestore();
+    jest.useRealTimers();
+  },
+);
+
+test.each(['android', 'ios'] as const)(
+  '„Später“ gibt den Screenreader-Fokus zum Speichern-Element der Turnierdetails zurück auf %s',
+  async (platform) => {
+    setPlatformOS(platform);
+    jest.useFakeTimers();
+    const focusSpy = jest
+      .spyOn(AccessibilityInfo, 'sendAccessibilityEvent')
+      .mockImplementation(() => {});
+    const view = await render(<EventDetailsScreen />);
+
+    await fireEvent.press(view.getByTestId('event-save-button'));
+    getDialogButtons().find((button) => button.text === 'Später')?.onPress?.();
+    await act(async () => {
+      jest.advanceTimersByTime(250);
+    });
+
+    expect(focusSpy).toHaveBeenCalledWith(expect.anything(), 'focus');
+    focusSpy.mockRestore();
+    jest.useRealTimers();
   },
 );
