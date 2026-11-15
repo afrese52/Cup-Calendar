@@ -501,6 +501,7 @@ export default function SettingsScreen() {
                     ref={accountFocusRef}
                     accessible
                     accessibilityRole="text"
+                    accessibilityLabel={`Angemeldet. ${session.user.email ?? 'Deine CupCal-Sitzung ist aktiv.'}`}
                     accessibilityLiveRegion="polite"
                     testID="account-session-status"
                     style={[styles.accountTitle, { color: colors.foreground }]}

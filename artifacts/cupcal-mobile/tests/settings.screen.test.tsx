@@ -1099,6 +1099,50 @@ test('kündigt auf iOS echte Sitzungswechsel an, aber keine Token-Erneuerung', a
   }
 });
 
+test.each(['ios', 'android'] as const)(
+  'macht einen direkten Kontowechsel auf %s mit der neuen Adresse zugänglich',
+  async (platform) => {
+    const originalPlatformOS = Platform.OS;
+    Object.defineProperty(Platform, 'OS', { configurable: true, value: platform });
+
+    try {
+      auth.getSession.mockResolvedValue({ data: { session: testSession }, error: null });
+      const view = await render(<SettingsScreen />);
+      await waitFor(() => {
+        expect(view.getByTestId('account-session-status').props.accessibilityLabel)
+          .toBe('Angemeldet. test@example.invalid');
+      });
+      announceForAccessibility.mockClear();
+
+      const nextAccount = {
+        ...testSession,
+        user: { id: 'second-user', email: 'second@example.invalid' },
+      };
+      await act(async () => mockSupabase.__emitAuthStateChange('SIGNED_IN', nextAccount));
+
+      const status = view.getByTestId('account-session-status');
+      expect(status.props.children).toBe('Angemeldet');
+      expect(status.props.accessible).toBe(true);
+      expect(status.props.accessibilityRole).toBe('text');
+      expect(status.props.accessibilityLiveRegion).toBe('polite');
+      expect(status.props.accessibilityLabel).toBe('Angemeldet. second@example.invalid');
+      expect(view.getByText('second@example.invalid')).toBeTruthy();
+      expect(view.queryByText('test@example.invalid')).toBeNull();
+
+      if (platform === 'ios') {
+        expect(announceForAccessibility).toHaveBeenCalledTimes(1);
+        expect(announceForAccessibility).toHaveBeenCalledWith(
+          'Angemeldet. second@example.invalid',
+        );
+      } else {
+        expect(announceForAccessibility).not.toHaveBeenCalled();
+      }
+    } finally {
+      Object.defineProperty(Platform, 'OS', { configurable: true, value: originalPlatformOS });
+    }
+  },
+);
+
 test('zeigt einen Abmeldefehler sichtbar an', async () => {
   auth.getSession.mockResolvedValue({ data: { session: testSession }, error: null });
   auth.signOut.mockResolvedValue({ error: new Error('Abmeldung fehlgeschlagen') });
