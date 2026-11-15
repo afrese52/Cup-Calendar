@@ -10,8 +10,10 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  type TextInstance,
   View,
 } from 'react-native';
+import * as ReactNative from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
 import { useColors } from '@/hooks/useColors';
@@ -35,8 +37,16 @@ export default function ResetPasswordScreen() {
   const isSavingRef = useRef(false);
   const [isSaved, setIsSaved] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const successMessageRef = useRef<TextInstance>(null);
 
   const hasUnsavedPassword = !isSaved && Boolean(password || confirmPassword);
+
+  useEffect(() => {
+    if (!isSaved || Platform.OS === 'web') return;
+
+    const reactTag = ReactNative.findNodeHandle(successMessageRef.current);
+    if (typeof reactTag === 'number') AccessibilityInfo.setAccessibilityFocus(reactTag);
+  }, [isSaved]);
 
   usePreventRemove(isSaving || hasUnsavedPassword, ({ repeat }) => {
     if (isSaving) return;
@@ -146,11 +156,6 @@ export default function ResetPasswordScreen() {
       setIsSaved(true);
       setPassword('');
       setConfirmPassword('');
-      if (Platform.OS === 'ios') {
-        AccessibilityInfo.announceForAccessibility(
-          'Dein neues Passwort ist gespeichert. Du kannst dich jetzt mit diesem Passwort anmelden.',
-        );
-      }
     } catch (error) {
       const hasRecoverySession = isPasswordRecoveryPending();
       setIsRecoveryReady(hasRecoverySession);
@@ -193,6 +198,7 @@ export default function ResetPasswordScreen() {
         </Text>
         <Text
           testID={isSaved ? 'reset-password-success-message' : undefined}
+          ref={isSaved ? successMessageRef : undefined}
           accessible={isSaved}
           accessibilityRole={isSaved ? 'status' : undefined}
           accessibilityLiveRegion={isSaved ? 'polite' : undefined}

@@ -4,6 +4,7 @@
 - [Manueller CupCal-Terminimport](cupcal-manual-event-import.md) — Der Kalender erhält Termine über den freigegebenen MHT/MHTML-Import, nicht über FortniteAPI.io.
 - [AsyncStorage in Node-Tests](async-storage-node-tests.md) — Node-Tests für den Expo-Speicher brauchen eine Browser-Speicherattrappe und ggf. Default-Export-Auflösung.
 - [Asynchrone Expo-Bildschirmtests](async-expo-screen-tests.md) — React-Native-Testing-Library-14-Renderings und Interaktionen immer awaiten, bevor der Zustand geprüft wird.
+- [Native Fokus in Expo-Bildschirmtests](native-accessibility-focus-tests.md) — Für Fokuswechsel den nativen Handle und AccessibilityInfo-Fokusaufruf im Test gezielt mocken.
 - [Expo-Router-Testdateien](expo-router-test-placement.md) — Bildschirmtests außerhalb von `app/` ablegen, damit Expo sie nicht als Routen bündelt.
 - [Supabase-Projekt-URL](supabase-base-url.md) — Supabase-Clients brauchen die Projektbasis; API-Endpfade können Auth-Fehler wie 401 oder 404 auslösen.
 - [Supabase-PKCE auf nativen Geräten](supabase-native-pkce.md) — `sb_flow_id` wird nur mit aktivierter Flow-ID-Option angehängt; Redirect-Allowlist und Callback müssen den Namen erhalten.

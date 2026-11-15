@@ -1,6 +1,7 @@
 import React from 'react';
 import { beforeEach, expect, jest, test } from '@jest/globals';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+import * as ReactNative from 'react-native';
 import { AccessibilityInfo, Alert, Platform } from 'react-native';
 
 const mockSaveNewPassword = jest.fn(async (_password: string) => {});
@@ -168,6 +169,8 @@ test.each(['ios', 'android'] as const)(
     const originalPlatformOS = Platform.OS;
     Object.defineProperty(Platform, 'OS', { configurable: true, value: platform });
     const announceSpy = jest.spyOn(AccessibilityInfo, 'announceForAccessibility').mockImplementation(() => {});
+    const focusSpy = jest.spyOn(AccessibilityInfo, 'setAccessibilityFocus').mockImplementation(() => {});
+    const findNodeHandleSpy = jest.spyOn(ReactNative, 'findNodeHandle').mockReturnValue(123);
     mockSaveNewPassword.mockResolvedValue(undefined);
     try {
       const view = await render(<ResetPasswordScreen />);
@@ -189,13 +192,14 @@ test.each(['ios', 'android'] as const)(
       const returnButton = view.getByTestId('reset-password-return-button');
       expect(returnButton.props.accessibilityRole).toBe('button');
       expect(view.getByText('Zu CupCal')).toBeTruthy();
-
-      if (platform === 'ios') {
-        expect(announceSpy).toHaveBeenCalledWith(successMessage.props.children);
-      }
+      expect(findNodeHandleSpy).toHaveBeenCalledWith(expect.anything());
+      await waitFor(() => expect(focusSpy).toHaveBeenCalledWith(expect.any(Number)));
+      if (platform === 'ios') expect(announceSpy).not.toHaveBeenCalledWith(successMessage.props.children);
       expect(mockSaveNewPassword).toHaveBeenCalledTimes(1);
     } finally {
       announceSpy.mockRestore();
+      focusSpy.mockRestore();
+      findNodeHandleSpy.mockRestore();
       Object.defineProperty(Platform, 'OS', { configurable: true, value: originalPlatformOS });
     }
   },
@@ -365,6 +369,8 @@ test('sperrt schnelle wiederholte Speicherversuche bis die Passwortänderung abg
   const originalPlatformOS = Platform.OS;
   Object.defineProperty(Platform, 'OS', { configurable: true, value: 'ios' });
   const announceSpy = jest.spyOn(AccessibilityInfo, 'announceForAccessibility').mockImplementation(() => {});
+  const focusSpy = jest.spyOn(AccessibilityInfo, 'setAccessibilityFocus').mockImplementation(() => {});
+  const findNodeHandleSpy = jest.spyOn(ReactNative, 'findNodeHandle').mockReturnValue(123);
   let finishSave!: () => void;
   mockSaveNewPassword.mockImplementation(
     () => new Promise<void>((resolve) => { finishSave = resolve; }),
@@ -393,10 +399,14 @@ test('sperrt schnelle wiederholte Speicherversuche bis die Passwortänderung abg
     await act(async () => finishSave());
     expect(await view.findByText('Passwort geändert')).toBeTruthy();
     expect(announceSpy).toHaveBeenLastCalledWith(
-      'Dein neues Passwort ist gespeichert. Du kannst dich jetzt mit diesem Passwort anmelden.',
+      'Passwort wird gespeichert …',
     );
+    expect(focusSpy).toHaveBeenCalledWith(expect.any(Number));
+    expect(findNodeHandleSpy).toHaveBeenCalledWith(expect.anything());
   } finally {
     announceSpy.mockRestore();
+    focusSpy.mockRestore();
+    findNodeHandleSpy.mockRestore();
     Object.defineProperty(Platform, 'OS', { configurable: true, value: originalPlatformOS });
   }
 });
