@@ -29,6 +29,18 @@ export function getAccountDeletionSigningKey(
     : null;
 }
 
+export function getPreviousAccountDeletionSigningKey(
+  environment: NodeJS.ProcessEnv = process.env,
+): string | null {
+  const previousSigningKey = environment["CUPCAL_ACCOUNT_DELETION_PREVIOUS_SIGNING_KEY"];
+  const currentSigningKey = getAccountDeletionSigningKey(environment);
+  return isStrongSigningKey(previousSigningKey)
+    && previousSigningKey !== currentSigningKey
+    && previousSigningKey !== environment["SUPABASE_SERVICE_ROLE_KEY"]
+    ? previousSigningKey
+    : null;
+}
+
 export function createAccountDeletionToken(
   userId: string,
   signingKey: string,
@@ -56,6 +68,7 @@ export function verifyAccountDeletionToken(
   token: string,
   signingKey: string,
   now = Date.now(),
+  previousSigningKey: string | null = null,
 ): AccountDeletionClaims | null {
   if (!isStrongSigningKey(signingKey) || token.length > 2048) return null;
 
@@ -67,9 +80,15 @@ export function verifyAccountDeletionToken(
   const [payload, signature] = parts;
   if (!payload || !signature) return null;
 
-  const expected = Buffer.from(signPayload(payload, signingKey), "base64url");
   const provided = Buffer.from(signature, "base64url");
-  if (expected.length !== provided.length || !timingSafeEqual(expected, provided)) {
+  const matchingKey = [signingKey, previousSigningKey]
+    .filter((key): key is string => key !== null && isStrongSigningKey(key))
+    .filter((key, index) => index === 0 || key !== signingKey)
+    .some((key) => {
+      const expected = Buffer.from(signPayload(payload, key), "base64url");
+      return expected.length === provided.length && timingSafeEqual(expected, provided);
+    });
+  if (!matchingKey) {
     return null;
   }
 
@@ -97,9 +116,10 @@ export function getAccountDeletionTokenStatus(
   signingKey: string,
   authenticatedUserId: string,
   now = Date.now(),
+  previousSigningKey: string | null = null,
 ): "valid" | "invalid" | "foreign-account" {
   if (!authenticatedUserId) return "invalid";
-  const claims = verifyAccountDeletionToken(token, signingKey, now);
+  const claims = verifyAccountDeletionToken(token, signingKey, now, previousSigningKey);
   if (!claims) return "invalid";
   return claims.sub === authenticatedUserId ? "valid" : "foreign-account";
 }

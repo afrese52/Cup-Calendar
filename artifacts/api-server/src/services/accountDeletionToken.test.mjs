@@ -5,10 +5,12 @@ import {
   createAccountDeletionToken,
   getAccountDeletionSigningKey,
   getAccountDeletionTokenStatus,
+  getPreviousAccountDeletionSigningKey,
   verifyAccountDeletionToken,
 } from "./accountDeletionToken.ts";
 
 const signingKey = "test-only-signing-key-for-account-deletion";
+const previousSigningKey = "previous-test-only-signing-key-for-deletion";
 const userId = "123e4567-e89b-12d3-a456-426614174000";
 const now = Date.UTC(2026, 10, 12, 12, 0, 0);
 
@@ -48,8 +50,79 @@ test("liest nur den eigenen ausreichend starken Signaturschlüssel", () => {
     }),
     signingKey,
   );
+  assert.equal(
+    getPreviousAccountDeletionSigningKey({
+      CUPCAL_ACCOUNT_DELETION_SIGNING_KEY: signingKey,
+      CUPCAL_ACCOUNT_DELETION_PREVIOUS_SIGNING_KEY: previousSigningKey,
+      SUPABASE_SERVICE_ROLE_KEY: "separate-service-role-key",
+    }),
+    previousSigningKey,
+  );
+  assert.equal(
+    getPreviousAccountDeletionSigningKey({
+      CUPCAL_ACCOUNT_DELETION_SIGNING_KEY: signingKey,
+      SUPABASE_SERVICE_ROLE_KEY: "separate-service-role-key",
+    }),
+    null,
+  );
+  assert.equal(
+    getPreviousAccountDeletionSigningKey({
+      CUPCAL_ACCOUNT_DELETION_SIGNING_KEY: signingKey,
+      CUPCAL_ACCOUNT_DELETION_PREVIOUS_SIGNING_KEY: "too-short",
+      SUPABASE_SERVICE_ROLE_KEY: "separate-service-role-key",
+    }),
+    null,
+  );
+  assert.equal(
+    getPreviousAccountDeletionSigningKey({
+      CUPCAL_ACCOUNT_DELETION_SIGNING_KEY: signingKey,
+      CUPCAL_ACCOUNT_DELETION_PREVIOUS_SIGNING_KEY: signingKey,
+      SUPABASE_SERVICE_ROLE_KEY: "separate-service-role-key",
+    }),
+    null,
+  );
   assert.throws(() => createAccountDeletionToken(userId, "too-short", now));
   assert.equal(verifyAccountDeletionToken("payload.signature", "", now), null);
+});
+
+test("akzeptiert alte Links nur mit freigegebenem vorherigem Schlüssel bis zum ursprünglichen Ablauf", () => {
+  const oldLink = createAccountDeletionToken(userId, previousSigningKey, now);
+  const expiresAt = now + ACCOUNT_DELETION_TOKEN_TTL_SECONDS * 1000;
+
+  assert.equal(verifyAccountDeletionToken(oldLink.token, signingKey, now), null);
+  assert.equal(
+    verifyAccountDeletionToken(oldLink.token, signingKey, now, previousSigningKey)?.sub,
+    userId,
+  );
+  assert.equal(
+    getAccountDeletionTokenStatus(oldLink.token, signingKey, userId, now, previousSigningKey),
+    "valid",
+  );
+  assert.equal(
+    getAccountDeletionTokenStatus(oldLink.token, signingKey, userId, expiresAt, previousSigningKey),
+    "invalid",
+  );
+  assert.equal(
+    getAccountDeletionTokenStatus(
+      oldLink.token,
+      signingKey,
+      userId,
+      expiresAt + 1,
+      previousSigningKey,
+    ),
+    "invalid",
+  );
+});
+
+test("erstellt neue Links mit dem aktuellen Schlüssel und nicht mit dem vorherigen", () => {
+  const newLink = createAccountDeletionToken(userId, signingKey, now);
+
+  assert.equal(verifyAccountDeletionToken(newLink.token, signingKey, now)?.sub, userId);
+  assert.equal(verifyAccountDeletionToken(newLink.token, previousSigningKey, now), null);
+  assert.equal(
+    verifyAccountDeletionToken(newLink.token, previousSigningKey, now, "another-previous-key-that-is-long-enough"),
+    null,
+  );
 });
 
 test("weist manipulierte, fremd signierte und abgelaufene Token ab", () => {

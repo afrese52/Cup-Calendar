@@ -4,6 +4,7 @@ import {
   createAccountDeletionToken,
   getAccountDeletionSigningKey,
   getAccountDeletionTokenStatus,
+  getPreviousAccountDeletionSigningKey,
 } from "../services/accountDeletionToken";
 import { getSupabaseAdmin } from "../services/supabase";
 
@@ -99,6 +100,8 @@ router.post("/v1/account/deletion/confirm", async (req, res): Promise<void> => {
     parsedBody.data.confirmationToken,
     signingKey,
     resolution.user.id,
+    Date.now(),
+    getPreviousAccountDeletionSigningKey(),
   );
   if (tokenStatus === "invalid") {
     res.status(400).json({ error: "Der Bestätigungslink ist ungültig oder abgelaufen. Fordere bitte einen neuen an." });

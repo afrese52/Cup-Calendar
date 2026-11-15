@@ -1,9 +1,12 @@
 import assert from "node:assert/strict";
 import { createServer } from "node:net";
 import test from "node:test";
+import { createAccountDeletionToken, verifyAccountDeletionToken } from "../src/services/accountDeletionToken.ts";
 
 const supabaseUrl = "https://account-deletion-test.supabase.invalid";
 const serviceRoleKey = "test-service-role-key";
+const currentSigningKey = "current-test-signing-key-for-account-deletion";
+const previousSigningKey = "previous-test-signing-key-for-account-deletion";
 const authenticatedUserId = "123e4567-e89b-12d3-a456-426614174000";
 
 function saveEnvironmentValue(name) {
@@ -38,6 +41,7 @@ test("beide Kontolösch-Endpunkte antworten mit fehlendem oder zu schwachem Schl
     saveEnvironmentValue("SUPABASE_URL"),
     saveEnvironmentValue("SUPABASE_SERVICE_ROLE_KEY"),
     saveEnvironmentValue("CUPCAL_ACCOUNT_DELETION_SIGNING_KEY"),
+    saveEnvironmentValue("CUPCAL_ACCOUNT_DELETION_PREVIOUS_SIGNING_KEY"),
   ];
   const deletionRequests = [];
   const port = await getAvailablePort();
@@ -51,6 +55,19 @@ test("beide Kontolösch-Endpunkte antworten mit fehlendem oder zu schwachem Schl
     const url = input instanceof Request ? input.url : String(input);
     if (url.startsWith(supabaseUrl)) {
       if (/\/auth\/v1\/admin\/users(?:\/|$)/.test(url)) deletionRequests.push(url);
+      if (/\/auth\/v1\/admin\/users(?:\/|$)/.test(url)) {
+        return Response.json({
+          id: authenticatedUserId,
+          aud: "authenticated",
+          role: "authenticated",
+          email: "account-deletion-test@example.invalid",
+          app_metadata: { provider: "email", providers: ["email"] },
+          user_metadata: {},
+          identities: [],
+          created_at: "2026-01-01T00:00:00.000Z",
+          updated_at: "2026-01-01T00:00:00.000Z",
+        });
+      }
       if (url.endsWith("/auth/v1/user")) {
         return Response.json({
           id: authenticatedUserId,
@@ -104,7 +121,28 @@ test("beide Kontolösch-Endpunkte antworten mit fehlendem oder zu schwachem Schl
         error: "Das Konto konnte gerade nicht gelöscht werden.",
       });
     }
-    assert.deepEqual(deletionRequests, []);
+
+    process.env.CUPCAL_ACCOUNT_DELETION_SIGNING_KEY = currentSigningKey;
+    process.env.CUPCAL_ACCOUNT_DELETION_PREVIOUS_SIGNING_KEY = previousSigningKey;
+
+    const issueResponse = await originalFetch(`${baseUrl}/request`, {
+      method: "POST",
+      headers,
+    });
+    assert.equal(issueResponse.status, 200);
+    const issued = await issueResponse.json();
+    assert.equal(verifyAccountDeletionToken(issued.confirmationToken, currentSigningKey)?.sub, authenticatedUserId);
+    assert.equal(verifyAccountDeletionToken(issued.confirmationToken, previousSigningKey), null);
+
+    const oldLink = createAccountDeletionToken(authenticatedUserId, previousSigningKey);
+    const confirmResponse = await originalFetch(`${baseUrl}/confirm`, {
+      method: "POST",
+      headers: { ...headers, "Content-Type": "application/json" },
+      body: JSON.stringify({ confirmationToken: oldLink.token }),
+    });
+    assert.equal(confirmResponse.status, 204);
+    assert.ok(deletionRequests.length > 0);
+    assert.ok(deletionRequests.every((url) => url.endsWith(`/${authenticatedUserId}`)));
   } finally {
     if (server?.listening) {
       await new Promise((resolve, reject) => {
