@@ -471,9 +471,12 @@ function extractEventAnchors(html, sourceUrl, timeZone, region) {
     if (!title) errors.push("Der Turniername fehlt.");
     if (!timeRange) errors.push("Die Start- und Endzeit fehlt oder ist nicht lesbar.");
     if (!id) errors.push("Event- oder Rundenkennung fehlt im Link.");
+    if (!isOfficialFortniteEventUrl) {
+      errors.push("Der Eventlink verweist nicht auf eine offizielle Fortnite-Domain.");
+    }
 
     if (errors.length) {
-      issues.push({ anchorId: attributes.id, title, errors });
+      issues.push({ anchorId: attributes.id, id, title, errors });
       cursor = closingAnchorPattern.lastIndex;
       continue;
     }

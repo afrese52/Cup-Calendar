@@ -129,7 +129,7 @@ test("liefert Snapshot-Alter und Warnstatus über den authentifizierten Admin-Vo
       apiServer.once("listening", resolve);
     });
     const apiUrl = `http://127.0.0.1:${apiServer.address().port}`;
-    const eventDate = new Intl.DateTimeFormat("en-GB", {
+    const eventDate = new Intl.DateTimeFormat("de-DE", {
       timeZone: "UTC",
       day: "numeric",
       month: "long",
@@ -141,6 +141,11 @@ test("liefert Snapshot-Alter und Warnstatus über den authentifizierten Admin-Vo
           href="/competitive/events/PreviewAgeCup?round=PreviewAgeRound"
           aria-label="19:00–20:00 Uhr - Battle Royale Solo Cash Cup">
           <span>Battle Royale Solo Cash Cup</span>
+        </a>
+        <a id="schedule-event-link-preview-foreign"
+          href="https://events.example/competitive/events/ForeignPreviewCup?round=ForeignPreviewRound"
+          aria-label="20:00–21:00 Uhr - Battle Royale Duos Cash Cup">
+          <span>Battle Royale Duos Cash Cup</span>
         </a>
       </body></html>`;
 
@@ -168,6 +173,12 @@ test("liefert Snapshot-Alter und Warnstatus über den authentifizierten Admin-Vo
     const fresh = await preview(freshDate);
     const freshSnapshot = Date.parse(fresh.result.snapshotAt);
     assert.equal(fresh.result.isSnapshotStale, false);
+    assert.equal(fresh.result.invalidCount, 1);
+    assert.deepEqual(fresh.result.issues, [{
+      id: "epic:ForeignPreviewCup:ForeignPreviewRound",
+      title: "Battle Royale Duos Cash Cup",
+      errors: ["Der Eventlink verweist nicht auf eine offizielle Fortnite-Domain."],
+    }]);
     assert.ok(fresh.result.snapshotAgeMs >= fresh.startedAt - freshSnapshot);
     assert.ok(fresh.result.snapshotAgeMs <= fresh.completedAt - freshSnapshot);
     assert.ok(fresh.result.snapshotAgeMs <= MAX_SNAPSHOT_AGE_MS);
@@ -330,6 +341,36 @@ test("erkennt ausdrücklich angegebene Solo-, Duo-, Trio- und Squads-Formate", (
   assert.deepEqual(result.issues, []);
 });
 
+test("importiert explizite Formate nur mit offiziellen Fortnite-Eventlinks", () => {
+  const html = `
+    <html><body>
+      <h2>10. November 2026</h2>
+      <a id="schedule-event-link-external"
+        href="https://fortnite.com.attacker.example/competitive/events/ForeignCup?round=ForeignRound"
+        aria-label="19:00–20:00 Uhr - Battle Royale Solo Cash Cup">
+        <span>Battle Royale Solo Cash Cup</span>
+      </a>
+      <a id="schedule-event-link-official"
+        href="https://www.fortnite.com/competitive/events/OfficialCup?round=OfficialRound"
+        aria-label="19:00–20:00 Uhr - Battle Royale Solo Cash Cup">
+        <span>Battle Royale Solo Cash Cup</span>
+      </a>
+    </body></html>`;
+  const result = parseMhtSchedule(makeMht(html));
+
+  assert.equal(result.cardCount, 2);
+  assert.equal(result.validCount, 1);
+  assert.equal(result.invalidCount, 1);
+  assert.deepEqual(result.events.map((event) => event.id), [
+    "epic:OfficialCup:OfficialRound",
+  ]);
+  assert.deepEqual(result.issues.map(({ id, title, errors }) => ({ id, title, errors })), [{
+    id: "epic:ForeignCup:ForeignRound",
+    title: "Battle Royale Solo Cash Cup",
+    errors: ["Der Eventlink verweist nicht auf eine offizielle Fortnite-Domain."],
+  }]);
+});
+
 test("importiert nur eindeutig erkennbare Spielmodi", () => {
   const cards = [
     "Battle Royale Solo Cash Cup",
@@ -452,7 +493,7 @@ test("wertet Squad-Belege nur aus offiziellen und widerspruchsfreien Eventkennun
       {
         id: "epic:S43_SquadsVictoryCup:UnofficialRound",
         title: "Battle Royale Team Cash Cup",
-        errors: ["Spielformat fehlt oder ist nicht eindeutig angegeben."],
+        errors: ["Der Eventlink verweist nicht auf eine offizielle Fortnite-Domain."],
       },
       {
         id: "epic:S43_SquadsVictoryCup:ConflictingRound",
