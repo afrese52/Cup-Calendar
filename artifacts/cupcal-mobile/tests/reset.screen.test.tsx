@@ -122,6 +122,44 @@ test('zeigt die geltende Passwortlänge vor dem Speichern', async () => {
   expect(view.getByTestId('reset-password-submit-button')).toBeTruthy();
 });
 
+test.each([
+  { name: 'leeren Eingaben', password: '', confirmPassword: '' },
+  { name: 'fehlendem neuen Passwort', password: '', confirmPassword: 'Mein-neues-Passwort-123' },
+  { name: 'fehlender Passwortbestätigung', password: 'Mein-neues-Passwort-123', confirmPassword: '' },
+])('verhindert das Speichern bei $name', async ({ password, confirmPassword }) => {
+  const view = await render(<ResetPasswordScreen />);
+
+  await waitFor(() => expect(view.getByTestId('reset-password-submit-button')).toBeTruthy());
+  if (password) {
+    await fireEvent.changeText(view.getByTestId('reset-password-input'), password);
+  }
+  if (confirmPassword) {
+    await fireEvent.changeText(view.getByTestId('reset-password-confirm-input'), confirmPassword);
+  }
+  await fireEvent.press(view.getByTestId('reset-password-submit-button'));
+
+  const errorMessage = await view.findByText('Bitte gib dein neues Passwort zweimal ein.');
+  expect(errorMessage.props.accessible).toBe(true);
+  expect(errorMessage.props.accessibilityRole).toBe('alert');
+  expect(errorMessage.props.accessibilityLiveRegion).toBe('assertive');
+  expect(mockSaveNewPassword).not.toHaveBeenCalled();
+});
+
+test('verhindert das Speichern unterschiedlicher Passwörter mit zugänglicher Fehlermeldung', async () => {
+  const view = await render(<ResetPasswordScreen />);
+
+  await waitFor(() => expect(view.getByTestId('reset-password-submit-button')).toBeTruthy());
+  await fireEvent.changeText(view.getByTestId('reset-password-input'), 'Mein-neues-Passwort-123');
+  await fireEvent.changeText(view.getByTestId('reset-password-confirm-input'), 'Ein-anderes-Passwort-456');
+  await fireEvent.press(view.getByTestId('reset-password-submit-button'));
+
+  const errorMessage = await view.findByText('Die Passwörter stimmen nicht überein.');
+  expect(errorMessage.props.accessible).toBe(true);
+  expect(errorMessage.props.accessibilityRole).toBe('alert');
+  expect(errorMessage.props.accessibilityLiveRegion).toBe('assertive');
+  expect(mockSaveNewPassword).not.toHaveBeenCalled();
+});
+
 test('meldet die erfolgreiche Passwortänderung als Screenreader-Status', async () => {
   mockSaveNewPassword.mockResolvedValue(undefined);
   const view = await render(<ResetPasswordScreen />);
