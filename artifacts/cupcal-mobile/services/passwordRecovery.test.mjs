@@ -50,6 +50,84 @@ test('weist ungültige Wiederherstellungslinks ab und sperrt den Passwortwechsel
   );
 });
 
+test('weist Fehlerparameter in Query und Fragment ohne Sitzungsaustausch ab', async (t) => {
+  const expectedMessage =
+    'Der Wiederherstellungslink ist ungültig, abgelaufen oder wurde bereits verwendet.';
+  const cases = [
+    {
+      name: 'error_description in Query',
+      url: 'cupcal-android://auth/reset?code=must-not-exchange&error_description=Email+link+is+invalid',
+    },
+    {
+      name: 'error_description im Fragment',
+      url: 'cupcal-android://auth/reset#code=must-not-exchange&error_description=Email+link+is+invalid',
+    },
+    {
+      name: 'error_code in Query',
+      url: 'cupcal-android://auth/reset?code=must-not-exchange&error_code=otp_expired',
+    },
+    {
+      name: 'error_code im Fragment',
+      url: 'cupcal-android://auth/reset#code=must-not-exchange&error_code=otp_expired',
+    },
+    {
+      name: 'leere error_description vor error_code in Query',
+      url: 'cupcal-android://auth/reset?code=must-not-exchange&error_description=&error_code=otp_expired',
+    },
+    {
+      name: 'leere error_description vor error_code im Fragment',
+      url: 'cupcal-android://auth/reset#code=must-not-exchange&error_description=&error_code=otp_expired',
+    },
+  ];
+  const messages = new Map();
+
+  for (const { name, url } of cases) {
+    await t.test(name, async () => {
+      const calls = {
+        exchangeCodeForSession: 0,
+        setSession: 0,
+        getSession: 0,
+        updateUser: 0,
+      };
+      const recovery = createPasswordRecovery(createAuth(
+        Object.fromEntries(
+          Object.keys(calls).map((method) => [
+            method,
+            async () => {
+              calls[method] += 1;
+              return method === 'getSession'
+                ? { data: { session: validSession }, error: null }
+                : { error: null };
+            },
+          ]),
+        ),
+      ));
+
+      await assert.rejects(
+        recovery.handlePasswordResetUrl(url),
+        (error) => {
+          messages.set(name, error.message);
+          return error.message === expectedMessage;
+        },
+      );
+      assert.equal(recovery.isPending(), false);
+      assert.deepEqual(calls, {
+        exchangeCodeForSession: 0,
+        setSession: 0,
+        getSession: 0,
+        updateUser: 0,
+      });
+    });
+  }
+
+  assert.equal(messages.get('error_description im Fragment'), messages.get('error_description in Query'));
+  assert.equal(messages.get('error_code im Fragment'), messages.get('error_code in Query'));
+  assert.equal(
+    messages.get('leere error_description vor error_code im Fragment'),
+    messages.get('error_code im Fragment'),
+  );
+});
+
 test('weist abgelaufene Codes ab und zeigt eine verständliche Meldung', async () => {
   const recovery = createPasswordRecovery(createAuth({
     exchangeCodeForSession: async () => ({
@@ -598,6 +676,10 @@ test('ignoriert Codes auf anderen Deep-Link-Routen', async () => {
 
   assert.equal(
     await recovery.handlePasswordResetUrl('cupcal-android://auth/confirm?code=confirmation-code'),
+    false,
+  );
+  assert.equal(
+    await recovery.handlePasswordResetUrl('cupcal-android://auth/confirm#error_code=otp_expired'),
     false,
   );
   assert.equal(exchangeCalled, false);

@@ -119,10 +119,16 @@ export function createPasswordRecovery(auth: PasswordRecoveryAuth) {
     const isRecoveryType = getParameter('type') === 'recovery';
     const code = getParameter('code');
     const isCupCalReset = getParameter('flow') === passwordResetFlowMarker;
+    const hasLinkError = Boolean(
+      getParameter('error_description') || getParameter('error_code'),
+    );
     return {
       query,
       hash,
-      isResetLink: isCupCalReset || isRecoveryType || Boolean(code && isPasswordResetRoute(url)),
+      isResetLink: isCupCalReset
+        || isRecoveryType
+        || Boolean(code && isPasswordResetRoute(url))
+        || Boolean(hasLinkError && isPasswordResetRoute(url)),
     };
   }
 
@@ -135,9 +141,18 @@ export function createPasswordRecovery(auth: PasswordRecoveryAuth) {
     const isRecoveryType = getParameter('type') === 'recovery';
     const code = getParameter('code');
     const isCupCalReset = getParameter('flow') === passwordResetFlowMarker;
-    if (!isCupCalReset && !isRecoveryType && !(code && isPasswordResetRoute(url))) return false;
+    const isResetRoute = isPasswordResetRoute(url);
+    const hasLinkError = Boolean(getParameter('error_description') || getParameter('error_code'));
+    if (
+      !isCupCalReset
+      && !isRecoveryType
+      && !(code && isResetRoute)
+      && !(hasLinkError && isResetRoute)
+    ) {
+      return false;
+    }
 
-    const linkError = getParameter('error_description') ?? getParameter('error_code');
+    const linkError = getParameter('error_description') || getParameter('error_code');
     if (linkError) {
       throw new Error('Der Wiederherstellungslink ist ungültig, abgelaufen oder wurde bereits verwendet.');
     }
