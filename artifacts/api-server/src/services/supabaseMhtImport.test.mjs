@@ -384,6 +384,16 @@ test("gibt Zeitänderungen im authentifizierten Import-Vorschau-Endpunkt zurück
     const result = await response.json();
     assert.equal(response.status, 200, JSON.stringify(result));
 
+    assert.equal("schedule" in result, false, "Die vollständige Parser-Antwort bleibt intern.");
+    assert.equal("importableEvents" in result, false, "Die interne Importliste bleibt intern.");
+    assert.equal("skippedPastCount" in result, false, "Interne Planungszahlen bleiben intern.");
+    assert.equal(typeof result.sourceUrl, "string");
+    assert.equal(typeof result.snapshotAt, "string");
+    assert.equal(typeof result.region, "string");
+    assert.equal(typeof result.timeZone, "string");
+    assert.ok(Array.isArray(result.events), "Öffentliche Vorschautermine bleiben verfügbar.");
+    assert.ok(Array.isArray(result.issues), "Öffentliche Parserhinweise bleiben verfügbar.");
+
     const newEvent = result.events.find((item) => item.id === "epic:S43_ReloadZBDuosCashCup:S43_ReloadZBDuosCashCup_Event1Round2_EU");
     const unchanged = result.events.find((item) => item.id === unchangedEvent.id);
     const changed = result.events.find((item) => item.id === changedEvent.id);
