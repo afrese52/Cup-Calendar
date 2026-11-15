@@ -300,11 +300,23 @@ export interface MhtImportPreview {
   isSnapshotStale: boolean;
   region: string;
   timeZone: string;
+  /**
+     * Inclusive start date of the selected import period
+     * @nullable
+     */
+  startDate: string | null;
+  /**
+     * Inclusive end date of the selected import period
+     * @nullable
+     */
+  endDate: string | null;
   cardCount: number;
   upcomingCount: number;
   importableCount: number;
   warningCount: number;
   invalidCount: number;
+  /** Upcoming events outside the selected date range */
+  outOfRangeCount: number;
   newCount: number;
   updateCount: number;
   events: MhtImportEvent[];
@@ -388,10 +400,29 @@ export const GetEventsTournamentType = {
   ALL: 'ALL',
 } as const;
 
+export type PreviewMhtImportParams = {
+/**
+ * Inclusive schedule-local start date, used together with endDate
+ */
+startDate?: string;
+/**
+ * Inclusive schedule-local end date, used together with startDate
+ */
+endDate?: string;
+};
+
 export type ImportMhtScheduleParams = {
 /**
  * Explicitly confirms importing a snapshot older than 24 hours after the updated preview was reviewed
  */
 confirmStaleSnapshot?: boolean;
+/**
+ * Inclusive schedule-local start date, used together with endDate
+ */
+startDate?: string;
+/**
+ * Inclusive schedule-local end date, used together with startDate
+ */
+endDate?: string;
 };
 

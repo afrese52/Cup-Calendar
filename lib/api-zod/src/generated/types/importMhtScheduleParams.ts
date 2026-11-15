@@ -11,4 +11,12 @@ export type ImportMhtScheduleParams = {
  * Explicitly confirms importing a snapshot older than 24 hours after the updated preview was reviewed
  */
 confirmStaleSnapshot?: boolean;
+/**
+ * Inclusive schedule-local start date, used together with endDate
+ */
+startDate?: Date;
+/**
+ * Inclusive schedule-local end date, used together with startDate
+ */
+endDate?: Date;
 };

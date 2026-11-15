@@ -35,7 +35,8 @@ import type {
   MhtImportHistoryResponse,
   MhtImportPreview,
   MhtImportResult,
-  MhtScheduleFile
+  MhtScheduleFile,
+  PreviewMhtImportParams
 } from './api.schemas';
 
 import { customFetch } from '../custom-fetch';
@@ -376,18 +377,26 @@ export function useGetAdminImportAccess<TData = Awaited<ReturnType<typeof getAdm
 
 
 
-export const getPreviewMhtImportUrl = () => {
+export const getPreviewMhtImportUrl = (params?: PreviewMhtImportParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/api/v1/admin/events/import/preview`
+  return stringifiedParams.length > 0 ? `/api/v1/admin/events/import/preview?${stringifiedParams}` : `/api/v1/admin/events/import/preview`
 }
 
 /**
  * @summary Preview a saved Fortnite schedule before importing
  */
-export const previewMhtImport = async (mhtScheduleFile: MhtScheduleFile, options?: Parameters<typeof customFetch>[1]): Promise<MhtImportPreview> => {
+export const previewMhtImport = async (mhtScheduleFile: MhtScheduleFile,
+    params?: PreviewMhtImportParams, options?: Parameters<typeof customFetch>[1]): Promise<MhtImportPreview> => {
 
     const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
     if (!h) return {};
@@ -403,7 +412,7 @@ export const previewMhtImport = async (mhtScheduleFile: MhtScheduleFile, options
     }
     return headers;
   };
-return customFetch<MhtImportPreview>(getPreviewMhtImportUrl(),
+return customFetch<MhtImportPreview>(getPreviewMhtImportUrl(params),
   {
     ...options,
     method: 'POST',
@@ -433,9 +442,9 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof previewMhtImport>>, PreviewMhtImportMutationVariables> = (props) => {
-          const {data} = props ?? {};
+          const {data,params} = props ?? {};
 
-          return  previewMhtImport(data,requestOptions)
+          return  previewMhtImport(data,params,requestOptions)
         }
 
 
@@ -448,7 +457,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type PreviewMhtImportMutationResult = NonNullable<Awaited<ReturnType<typeof previewMhtImport>>>
     export type PreviewMhtImportMutationBody = BodyType<MhtScheduleFile>
     export type PreviewMhtImportMutationError = ErrorType<void>
-    export type PreviewMhtImportMutationVariables = {data: BodyType<MhtScheduleFile>}
+    export type PreviewMhtImportMutationVariables = {data: BodyType<MhtScheduleFile>;params?: PreviewMhtImportParams}
 
     /**
  * @summary Preview a saved Fortnite schedule before importing

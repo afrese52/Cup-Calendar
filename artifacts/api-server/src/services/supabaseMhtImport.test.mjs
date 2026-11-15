@@ -466,6 +466,10 @@ Content-Type: text/html; charset=utf-8
   <a id="schedule-event-link-warning"
     href="https://www.fortnite.com/competitive/events/WarningDuos?round=WarningRound"
     aria-label="19:00–20:00 Uhr - Battle Royale Duos Cash Cup">Battle Royale Duos Cash Cup</a>
+  <h2>16. November 2026</h2>
+  <a id="schedule-event-link-outside-range"
+    href="https://www.fortnite.com/competitive/events/OutsideRange?round=OutsideRangeRound"
+    aria-label="19:00–20:00 Uhr - Battle Royale Solo Cash Cup">Battle Royale Solo Cash Cup</a>
   <a id="schedule-event-link-invalid"
     href="https://www.fortnite.com/competitive/events/InvalidSolo?round=InvalidRound"
     aria-label="Battle Royale Solo Cash Cup">Battle Royale Solo Cash Cup ohne lesbare Zeit</a>
@@ -552,8 +556,46 @@ Content-Type: text/html; charset=utf-8
       apiServer.once("listening", resolve);
     });
 
+    const dateRange = "startDate=2026-11-15&endDate=2026-11-15";
+    const previewResponse = await fetch(
+      `http://127.0.0.1:${apiServer.address().port}/api/v1/admin/events/import/preview?${dateRange}`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer valid-import-counts-token",
+          "Content-Type": "text/plain; charset=utf-8",
+        },
+        body: sourceText,
+      },
+    );
+    const scopedPreview = await previewResponse.json();
+    assert.equal(previewResponse.status, 200, JSON.stringify(scopedPreview));
+    assert.equal(scopedPreview.startDate, "2026-11-15");
+    assert.equal(scopedPreview.endDate, "2026-11-15");
+    assert.equal(scopedPreview.outOfRangeCount, 1);
+    assert.equal(scopedPreview.importableCount, 1);
+    assert.equal(scopedPreview.warningCount, 1);
+    assert.deepEqual(scopedPreview.events.map((item) => item.id), [
+      "epic:CleanSolo:CleanRound",
+      "epic:WarningDuos:WarningRound",
+    ]);
+
+    const invalidDateResponse = await fetch(
+      `http://127.0.0.1:${apiServer.address().port}/api/v1/admin/events/import/preview?startDate=2026-02-30&endDate=2026-03-01`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer valid-import-counts-token",
+          "Content-Type": "text/plain; charset=utf-8",
+        },
+        body: sourceText,
+      },
+    );
+    assert.equal(invalidDateResponse.status, 400);
+    assert.match((await invalidDateResponse.json()).error, /Datum ist ungültig/);
+
     const response = await fetch(
-      `http://127.0.0.1:${apiServer.address().port}/api/v1/admin/events/import?confirmStaleSnapshot=true`,
+      `http://127.0.0.1:${apiServer.address().port}/api/v1/admin/events/import?confirmStaleSnapshot=true&${dateRange}`,
       {
         method: "POST",
         headers: {
@@ -576,6 +618,7 @@ Content-Type: text/html; charset=utf-8
       skippedCount: 3,
     });
     assert.deepEqual(upsertRows.map((row) => row.id), ["epic:CleanSolo:CleanRound"]);
+    assert.ok(!upsertRows.some((row) => row.id === "epic:OutsideRange:OutsideRangeRound"));
     assert.equal(historyRow.inserted_count, 1);
     assert.equal(historyRow.updated_count, 0);
     assert.equal(historyRow.skipped_count, 3);

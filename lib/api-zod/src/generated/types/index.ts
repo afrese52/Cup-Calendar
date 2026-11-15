@@ -30,6 +30,7 @@ export * from './mhtImportIssue';
 export * from './mhtImportPreview';
 export * from './mhtImportResult';
 export * from './mhtScheduleFile';
+export * from './previewMhtImportParams';
 export * from './tournamentEvent';
 export * from './tournamentEventCategory';
 export * from './tournamentEventGameMode';

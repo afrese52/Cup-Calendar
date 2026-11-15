@@ -12,7 +12,7 @@ import { File as ExpoFile } from 'expo-file-system';
 import * as DocumentPicker from 'expo-document-picker';
 import { Stack, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useQueryClient } from '@tanstack/react-query';
 import { useColors } from '@/hooks/useColors';
@@ -65,22 +65,39 @@ function formatSnapshotAge(ageMs: number | null) {
   return `vor ${totalMinutes} ${totalMinutes === 1 ? 'Minute' : 'Minuten'}`;
 }
 
-function getImportPeriod(preview: MhtImportPreview) {
-  const eligibleEvents = preview.events.filter((event) => event.warnings.length === 0);
-  if (eligibleEvents.length === 0) return null;
+function parseDateInput(value: string): string | null {
+  const match = /^(\d{2})\.(\d{2})\.(\d{4})$/.exec(value.trim());
+  if (!match) return null;
+  const [, dayText, monthText, yearText] = match;
+  const day = Number(dayText);
+  const month = Number(monthText);
+  const year = Number(yearText);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (
+    date.getUTCFullYear() !== year
+    || date.getUTCMonth() !== month - 1
+    || date.getUTCDate() !== day
+  ) return null;
+  return `${yearText}-${monthText}-${dayText}`;
+}
 
-  const start = eligibleEvents.reduce(
-    (earliest, event) => Math.min(earliest, Date.parse(event.startTime)),
-    Number.POSITIVE_INFINITY,
-  );
-  const end = eligibleEvents.reduce(
-    (latest, event) => Math.max(latest, Date.parse(event.endTime)),
-    Number.NEGATIVE_INFINITY,
-  );
-  return {
-    start: new Date(start).toISOString(),
-    end: new Date(end).toISOString(),
-  };
+function formatDateInput(value: string | null | undefined): string {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return '';
+  const [year, month, day] = value.split('-');
+  return `${day}.${month}.${year}`;
+}
+
+function dateRangeFromInputs(startText: string, endText: string) {
+  const startDate = parseDateInput(startText);
+  const endDate = parseDateInput(endText);
+  if (!startText.trim() && !endText.trim()) return { range: null, error: null };
+  if (!startDate || !endDate) {
+    return { range: null, error: 'Bitte gib beide Daten gültig im Format TT.MM.JJJJ ein.' };
+  }
+  if (startDate > endDate) {
+    return { range: null, error: 'Das Startdatum darf nicht nach dem Enddatum liegen.' };
+  }
+  return { range: { startDate, endDate }, error: null };
 }
 
 function hasPreviewChanges(event: MhtImportPreview['events'][number]) {
@@ -140,6 +157,8 @@ export default function AdminImportScreen() {
   const [pickedFile, setPickedFile] = useState<{ name: string; content: string } | null>(null);
   const [preview, setPreview] = useState<MhtImportPreview | null>(null);
   const [importResult, setImportResult] = useState<MhtImportResult | null>(null);
+  const [startDateText, setStartDateText] = useState('');
+  const [endDateText, setEndDateText] = useState('');
   const [error, setError] = useState<string | null>(null);
 
   const chooseFile = async () => {
@@ -224,6 +243,8 @@ export default function AdminImportScreen() {
       setPickedFile({ name: selection.name, content });
       setPreview(null);
       setImportResult(null);
+      setStartDateText('');
+      setEndDateText('');
     } catch (pickError) {
       setError('Die Datei konnte nicht gelesen werden. Bitte prüfe, ob sie noch verfügbar ist, und wähle sie erneut aus.');
     }
@@ -232,43 +253,60 @@ export default function AdminImportScreen() {
   const checkFile = async () => {
     if (!pickedFile) return;
     setError(null);
+    const { range, error: rangeError } = dateRangeFromInputs(startDateText, endDateText);
+    if (rangeError) {
+      setError(rangeError);
+      return;
+    }
+    if (preview && !range) {
+      setError('Bitte wähle einen Start- und Endtag für den Importzeitraum aus.');
+      return;
+    }
     setPreview(null);
     try {
-      const result = await previewMutation.mutateAsync({ data: pickedFile.content });
+      const result = await previewMutation.mutateAsync({
+        data: pickedFile.content,
+        params: range ?? undefined,
+      });
       setPreview(result);
+      setStartDateText(formatDateInput(result.startDate));
+      setEndDateText(formatDateInput(result.endDate));
     } catch (previewError) {
       setError(previewError instanceof Error ? previewError.message : 'Die Datei konnte nicht geprüft werden.');
     }
   };
 
   function showImportConfirmation(currentPreview: MhtImportPreview) {
-    const period = getImportPeriod(currentPreview);
-    const periodCopy = period
-      ? ` Zeitraum: ${formatImportTime(period.start, currentPreview.timeZone)} bis ${formatImportTime(period.end, currentPreview.timeZone)}.`
+    const periodCopy = currentPreview.startDate && currentPreview.endDate
+      ? ` Zeitraum: ${formatDateInput(currentPreview.startDate)} bis ${formatDateInput(currentPreview.endDate)}.`
       : '';
     const message =
       `${currentPreview.importableCount} geprüfte Termine importieren.${periodCopy} ` +
       `${currentPreview.warningCount} Termine mit Zuordnungswarnungen bleiben ausgelassen. ` +
+      `${currentPreview.outOfRangeCount} Termine außerhalb der Spanne bleiben unverändert. ` +
       `${currentPreview.updateCount} vorhandene Einträge werden aktualisiert; persönliche Admin-Notizen bleiben erhalten.` +
       (currentPreview.isSnapshotStale
         ? ' Achtung: Der Snapshot ist inzwischen älter als 24 Stunden. Prüfe eine aktuelle Datei oder bestätige ausdrücklich den Import dieser veralteten Vorschau.'
         : '');
     const confirmedStaleSnapshot = currentPreview.isSnapshotStale;
     if (Platform.OS === 'web') {
-      if (window.confirm(message)) void saveImport(confirmedStaleSnapshot);
+      if (window.confirm(message)) void saveImport(confirmedStaleSnapshot, currentPreview);
       return;
     }
     Alert.alert(confirmedStaleSnapshot ? 'Veralteten Spielplan importieren?' : 'Termine importieren?', message, [
       { text: 'Abbrechen', style: 'cancel' },
-      { text: 'Importieren', onPress: () => void saveImport(confirmedStaleSnapshot) },
+      { text: 'Importieren', onPress: () => void saveImport(confirmedStaleSnapshot, currentPreview) },
     ]);
   }
 
-  async function saveImport(staleSnapshotWasConfirmed: boolean) {
-    if (!pickedFile || !preview || preview.importableCount === 0) return;
+  async function saveImport(staleSnapshotWasConfirmed: boolean, reviewedPreview: MhtImportPreview) {
+    if (!pickedFile || reviewedPreview.importableCount === 0) return;
     setError(null);
+    const range = reviewedPreview.startDate && reviewedPreview.endDate
+      ? { startDate: reviewedPreview.startDate, endDate: reviewedPreview.endDate }
+      : undefined;
     try {
-      const currentPreview = await previewMutation.mutateAsync({ data: pickedFile.content });
+      const currentPreview = await previewMutation.mutateAsync({ data: pickedFile.content, params: range });
       setPreview(currentPreview);
       if (currentPreview.importableCount === 0) {
         setError('Es gibt keine eindeutig zugeordneten zukünftigen Termine zum Importieren.');
@@ -281,7 +319,10 @@ export default function AdminImportScreen() {
 
       const result = await importMutation.mutateAsync({
         data: pickedFile.content,
-        params: { confirmStaleSnapshot: currentPreview.isSnapshotStale },
+        params: {
+          ...range,
+          confirmStaleSnapshot: currentPreview.isSnapshotStale,
+        },
       });
       setImportResult(result);
       setPreview(null);
@@ -297,7 +338,7 @@ export default function AdminImportScreen() {
         pickedFile
       ) {
         try {
-          const currentPreview = await previewMutation.mutateAsync({ data: pickedFile.content });
+          const currentPreview = await previewMutation.mutateAsync({ data: pickedFile.content, params: range });
           setPreview(currentPreview);
           if (currentPreview.isSnapshotStale) {
             showImportConfirmation(currentPreview);
@@ -314,13 +355,20 @@ export default function AdminImportScreen() {
   async function confirmImport() {
     if (!pickedFile || !preview) return;
     setError(null);
+    const { range, error: rangeError } = dateRangeFromInputs(startDateText, endDateText);
+    if (rangeError || !range) {
+      setError(rangeError ?? 'Bitte wähle einen Start- und Endtag für den Importzeitraum aus.');
+      return;
+    }
     try {
-      const currentPreview = await previewMutation.mutateAsync({ data: pickedFile.content });
+      const currentPreview = await previewMutation.mutateAsync({ data: pickedFile.content, params: range });
       setPreview(currentPreview);
       if (currentPreview.importableCount === 0) {
         setError('Es gibt keine eindeutig zugeordneten zukünftigen Termine zum Importieren.');
         return;
       }
+      setStartDateText(formatDateInput(currentPreview.startDate));
+      setEndDateText(formatDateInput(currentPreview.endDate));
       showImportConfirmation(currentPreview);
     } catch (previewError) {
       setError(previewError instanceof Error ? previewError.message : 'Die Vorschau konnte nicht aktualisiert werden.');
@@ -330,7 +378,13 @@ export default function AdminImportScreen() {
   const isAuthorized = accessQuery.data?.authorized === true;
   const busy = previewMutation.isPending || importMutation.isPending;
   const isCheckingAccess = isCheckingSession || (Boolean(accessToken) && accessQuery.isLoading);
-  const importPeriod = preview ? getImportPeriod(preview) : null;
+  const { range: selectedDateRange, error: dateRangeError } = dateRangeFromInputs(startDateText, endDateText);
+  const previewIsCurrent = Boolean(
+    preview
+    && selectedDateRange
+    && preview.startDate === selectedDateRange.startDate
+    && preview.endDate === selectedDateRange.endDate,
+  );
   const visiblePreviewEvents = preview
     ? preview.events.filter((event, index) => (
         index < 20 || event.warnings.length > 0 || hasPreviewChanges(event)
@@ -459,7 +513,11 @@ export default function AdminImportScreen() {
                   <Feather name="search" size={16} color={colors.primaryForeground} />
                 )}
                 <Text style={[styles.primaryButtonText, { color: colors.primaryForeground }]}>
-                  {previewMutation.isPending ? 'Datei wird geprüft …' : 'Datei prüfen'}
+                  {previewMutation.isPending
+                    ? 'Vorschau wird geprüft …'
+                    : preview
+                      ? 'Vorschau aktualisieren'
+                      : 'Datei prüfen'}
                 </Text>
               </Pressable>
             </View>
@@ -473,6 +531,52 @@ export default function AdminImportScreen() {
 
             {preview ? (
               <>
+                <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                  <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Importzeitraum auswählen</Text>
+                  <Text style={[styles.cardCopy, { color: colors.mutedForeground }]}>
+                    Es zählen die Starttage in der Zeitzone {preview.timeZone}. Beide Tage sind eingeschlossen.
+                  </Text>
+                  <View style={styles.dateFields}>
+                    <View style={styles.dateField}>
+                      <Text style={[styles.dateLabel, { color: colors.mutedForeground }]}>Von</Text>
+                      <TextInput
+                        accessibilityLabel="Import ab Datum"
+                        testID="import-start-date"
+                        value={startDateText}
+                        onChangeText={setStartDateText}
+                        placeholder="TT.MM.JJJJ"
+                        keyboardType="numbers-and-punctuation"
+                        maxLength={10}
+                        editable={!busy}
+                        style={[styles.dateInput, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.input }]}
+                      />
+                    </View>
+                    <View style={styles.dateField}>
+                      <Text style={[styles.dateLabel, { color: colors.mutedForeground }]}>Bis</Text>
+                      <TextInput
+                        accessibilityLabel="Import bis Datum"
+                        testID="import-end-date"
+                        value={endDateText}
+                        onChangeText={setEndDateText}
+                        placeholder="TT.MM.JJJJ"
+                        keyboardType="numbers-and-punctuation"
+                        maxLength={10}
+                        editable={!busy}
+                        style={[styles.dateInput, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.input }]}
+                      />
+                    </View>
+                  </View>
+                  {dateRangeError ? (
+                    <Text accessibilityRole="alert" style={[styles.detailCopy, { color: colors.destructive }]}>
+                      {dateRangeError}
+                    </Text>
+                  ) : !previewIsCurrent ? (
+                    <Text accessibilityRole="alert" style={[styles.detailCopy, { color: colors.warning }]}>
+                      Die angezeigten Zahlen gehören noch zur vorherigen Spanne. Aktualisiere die Vorschau vor der Bestätigung.
+                    </Text>
+                  ) : null}
+                </View>
+
                 <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
                   <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Prüfergebnis</Text>
                   <Text style={[styles.cardCopy, { color: colors.mutedForeground }]}>
@@ -499,25 +603,25 @@ export default function AdminImportScreen() {
                   ) : null}
                   <Text style={[styles.periodCopy, { color: colors.foreground }]}>
                     Importzeitraum:{' '}
-                    {importPeriod
-                      ? `${formatImportTime(importPeriod.start, preview.timeZone)} bis ${formatImportTime(importPeriod.end, preview.timeZone)}`
-                      : 'keine eindeutig zugeordneten Termine'}
+                    {startDateText && endDateText
+                      ? `${startDateText} bis ${endDateText}`
+                      : 'bitte Start- und Enddatum eingeben'}
                   </Text>
                   <View style={styles.stats}>
                     <Stat value={preview.importableCount} label="importierbar" color={colors.primary} />
                     <Stat value={preview.newCount} label="neu" color={colors.success} />
                     <Stat value={preview.updateCount} label="aktualisiert" color={colors.categoryLeague} />
-                    <Stat value={preview.warningCount + preview.invalidCount} label="übersprungen" color={colors.warning} />
+                    <Stat value={preview.warningCount} label="Warnungen" color={colors.warning} />
                   </View>
                   <Text style={[styles.detailCopy, { color: colors.mutedForeground }]}>
-                    Vergangene Termine, fehlerhafte Karten und Termine mit uneindeutigem Spielformat werden nicht gespeichert.
+                    Vergangene Termine und Termine mit Zuordnungswarnungen werden nicht gespeichert. Fehlerhafte Karten ohne lesbares Datum lassen sich keinem Zeitraum zuordnen.
                   </Text>
                   {preview.sourceUrl ? (
                     <Text numberOfLines={2} style={[styles.sourceCopy, { color: colors.mutedForeground }]}>{preview.sourceUrl}</Text>
                   ) : null}
                 </View>
 
-                  {visiblePreviewEvents.length > 0 ? (
+                  {previewIsCurrent && visiblePreviewEvents.length > 0 ? (
                   <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
                     <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Zukünftige Termine und Zuordnungswarnungen</Text>
                     {visiblePreviewEvents.map((event) => {
@@ -588,9 +692,12 @@ export default function AdminImportScreen() {
                     ) : null}
                   </View>
                 ) : null}
-                {preview.issues.length > 0 ? (
+                {previewIsCurrent && preview.issues.length > 0 ? (
                   <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.warning }]}>
                     <Text style={[styles.sectionTitle, { color: colors.warning }]}>Nicht importierte Karten</Text>
+                    <Text style={[styles.cardCopy, { color: colors.mutedForeground }]}>
+                      Diese Karten haben kein sicher erkennbares Termindatum und bleiben unabhängig von der ausgewählten Spanne ausgelassen.
+                    </Text>
                     {preview.issues.map((issue, index) => (
                       <View
                         key={`${issue.id ?? issue.title ?? 'karte'}-${index}`}
@@ -617,13 +724,13 @@ export default function AdminImportScreen() {
                   accessibilityRole="button"
                   testID="confirm-import-button"
                   onPress={confirmImport}
-                  disabled={preview.importableCount === 0 || busy}
+                  disabled={!previewIsCurrent || Boolean(dateRangeError) || preview.importableCount === 0 || busy}
                   style={({ pressed }) => [
                     styles.primaryButton,
                     styles.importButton,
                     { backgroundColor: colors.primary },
-                    pressed && preview.importableCount > 0 && !busy ? styles.pressed : null,
-                    preview.importableCount === 0 || busy ? styles.disabled : null,
+                    pressed && previewIsCurrent && preview.importableCount > 0 && !busy ? styles.pressed : null,
+                    !previewIsCurrent || Boolean(dateRangeError) || preview.importableCount === 0 || busy ? styles.disabled : null,
                   ]}
                 >
                   {importMutation.isPending ? (
@@ -737,6 +844,10 @@ const styles = StyleSheet.create({
   cardTitle: { fontSize: 16, fontWeight: '700' },
   cardCopy: { fontSize: 12, lineHeight: 17, marginTop: 5 },
   periodCopy: { fontSize: 12, lineHeight: 18, fontWeight: '700', marginTop: 12 },
+  dateFields: { flexDirection: 'row', gap: 10, marginTop: 14 },
+  dateField: { flex: 1, gap: 5 },
+  dateLabel: { fontSize: 12, fontWeight: '600' },
+  dateInput: { minHeight: 44, borderWidth: 1, borderRadius: 10, paddingHorizontal: 11, fontSize: 14 },
   secondaryButton: { minHeight: 44, borderWidth: 1, borderRadius: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 15 },
   secondaryButtonText: { fontSize: 13, fontWeight: '700' },
   fileBadge: { minHeight: 38, borderRadius: 10, flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 10, marginTop: 10 },

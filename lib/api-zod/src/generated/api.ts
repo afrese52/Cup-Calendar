@@ -60,6 +60,11 @@ export const GetAdminImportAccessResponse = zod.object({
 /**
  * @summary Preview a saved Fortnite schedule before importing
  */
+export const PreviewMhtImportQueryParams = zod.object({
+  "startDate": zod.date().optional().describe('Inclusive schedule-local start date, used together with endDate'),
+  "endDate": zod.date().optional().describe('Inclusive schedule-local end date, used together with startDate')
+})
+
 export const PreviewMhtImportResponse = zod.object({
   "sourceUrl": zod.string().nullable(),
   "snapshotAt": zod.coerce.date().nullable(),
@@ -67,11 +72,14 @@ export const PreviewMhtImportResponse = zod.object({
   "isSnapshotStale": zod.boolean().describe('True when the snapshot is more than 24 hours old'),
   "region": zod.string(),
   "timeZone": zod.string(),
+  "startDate": zod.coerce.date().nullable().describe('Inclusive start date of the selected import period'),
+  "endDate": zod.coerce.date().nullable().describe('Inclusive end date of the selected import period'),
   "cardCount": zod.number().int(),
   "upcomingCount": zod.number().int(),
   "importableCount": zod.number().int(),
   "warningCount": zod.number().int(),
   "invalidCount": zod.number().int(),
+  "outOfRangeCount": zod.number().int().describe('Upcoming events outside the selected date range'),
   "newCount": zod.number().int(),
   "updateCount": zod.number().int(),
   "events": zod.array(zod.object({
@@ -109,7 +117,9 @@ export const PreviewMhtImportResponse = zod.object({
  * @summary Import reviewed schedule entries into Supabase
  */
 export const ImportMhtScheduleQueryParams = zod.object({
-  "confirmStaleSnapshot": zod.coerce.boolean().optional().describe('Explicitly confirms importing a snapshot older than 24 hours after the updated preview was reviewed')
+  "confirmStaleSnapshot": zod.coerce.boolean().optional().describe('Explicitly confirms importing a snapshot older than 24 hours after the updated preview was reviewed'),
+  "startDate": zod.date().optional().describe('Inclusive schedule-local start date, used together with endDate'),
+  "endDate": zod.date().optional().describe('Inclusive schedule-local end date, used together with startDate')
 })
 
 export const ImportMhtScheduleResponse = zod.object({

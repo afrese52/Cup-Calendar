@@ -94,6 +94,9 @@ const preview = {
   snapshotAgeMs: null,
   isSnapshotStale: false,
   timeZone: 'Europe/Berlin',
+  startDate: '2026-11-12',
+  endDate: '2026-11-12',
+  outOfRangeCount: 0,
   sourceUrl: null,
 };
 
@@ -161,8 +164,64 @@ test.each(['plan.mht', 'plan.mhtml'])('liest %s ein und zeigt die Vorschau', asy
   expect(screen.getByText('maximal 25 MB', { exact: false })).toBeTruthy();
 
   await fireEvent.press(screen.getByTestId('preview-import-file-button'));
-  await waitFor(() => expect(mockPreviewImport).toHaveBeenCalledWith({ data: 'MIME-Version: 1.0\n' }));
+  await waitFor(() => expect(mockPreviewImport).toHaveBeenCalledWith({
+    data: 'MIME-Version: 1.0\n',
+    params: undefined,
+  }));
   expect(await screen.findByText('Prüfergebnis')).toBeTruthy();
+  expect(screen.getByTestId('import-start-date').props.value).toBe('12.11.2026');
+  expect(screen.getByTestId('import-end-date').props.value).toBe('12.11.2026');
+});
+
+test('wendet den gewählten Datumsbereich auf Vorschau, Bestätigung und Import an', async () => {
+  mockGetDocumentAsync.mockResolvedValue(selectedFile('plan.mht'));
+  mockPreviewImport.mockImplementation(async ({ params }: { params?: { startDate?: string; endDate?: string } }) => ({
+    ...preview,
+    importableCount: 1,
+    outOfRangeCount: params ? 4 : 0,
+    startDate: params?.startDate ?? preview.startDate,
+    endDate: params?.endDate ?? preview.endDate,
+  }));
+  mockImportSchedule.mockResolvedValue({
+    importedCount: 1,
+    insertedCount: 1,
+    updatedCount: 0,
+    skippedWarningCount: 0,
+    skippedPastCount: 0,
+    skippedInvalidCount: 0,
+    skippedCount: 0,
+  });
+  const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation((_title, message, buttons) => {
+    expect(message).toContain('15.11.2026 bis 15.11.2026');
+    expect(message).toContain('4 Termine außerhalb der Spanne bleiben unverändert.');
+    buttons?.find((button) => button.text === 'Importieren')?.onPress?.();
+  });
+  const screen = await openImportScreen();
+
+  await fireEvent.press(screen.getByTestId('choose-import-file-button'));
+  await fireEvent.press(screen.getByTestId('preview-import-file-button'));
+  await fireEvent.changeText(screen.getByTestId('import-start-date'), '15.11.2026');
+  await fireEvent.changeText(screen.getByTestId('import-end-date'), '15.11.2026');
+  await fireEvent.press(screen.getByTestId('preview-import-file-button'));
+  await waitFor(() => expect(mockPreviewImport).toHaveBeenLastCalledWith({
+    data: 'MIME-Version: 1.0\n',
+    params: { startDate: '2026-11-15', endDate: '2026-11-15' },
+  }));
+  await fireEvent.press(screen.getByTestId('confirm-import-button'));
+
+  await waitFor(() => expect(mockImportSchedule).toHaveBeenCalledWith({
+    data: 'MIME-Version: 1.0\n',
+    params: {
+      startDate: '2026-11-15',
+      endDate: '2026-11-15',
+      confirmStaleSnapshot: false,
+    },
+  }));
+  expect(mockPreviewImport).toHaveBeenCalledWith({
+    data: 'MIME-Version: 1.0\n',
+    params: { startDate: '2026-11-15', endDate: '2026-11-15' },
+  });
+  alertSpy.mockRestore();
 });
 
 test('zeigt Titel, Eventkennung und Prüfgrund für nicht importierte Karten', async () => {
@@ -256,7 +315,11 @@ test('aktualisiert eine zunächst frische Vorschau und verlangt Bestätigung, we
   );
   await waitFor(() => expect(mockImportSchedule).toHaveBeenCalledWith({
     data: 'MIME-Version: 1.0\n',
-    params: { confirmStaleSnapshot: true },
+    params: {
+      startDate: '2026-11-12',
+      endDate: '2026-11-12',
+      confirmStaleSnapshot: true,
+    },
   }));
   expect(mockPreviewImport).toHaveBeenCalledTimes(3);
   alertSpy.mockRestore();

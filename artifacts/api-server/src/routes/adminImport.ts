@@ -18,7 +18,18 @@ import { getMhtImportSkippedCounts } from "../services/mhtImportCounts";
 
 const uploadText = express.text({ type: "text/plain", limit: MAX_MHT_UPLOAD_BYTES });
 const requestBodySchema = z.string().min(1, "Die Datei ist leer.").max(MAX_MHT_UPLOAD_BYTES);
+const importDateSchema = z.string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "Das Datum muss im Format JJJJ-MM-TT angegeben werden.")
+  .refine((value) => {
+    const [year, month, day] = value.split("-").map(Number);
+    const parsed = new Date(Date.UTC(year!, month! - 1, day!));
+    return parsed.getUTCFullYear() === year
+      && parsed.getUTCMonth() === month! - 1
+      && parsed.getUTCDate() === day;
+  }, "Das Datum ist ungültig.");
 const IMPORT_HISTORY_LIMIT = 20;
+
+type ImportDateRange = { startDate: string; endDate: string };
 
 type ImportAdminRequest = Request & {
   importAdminUser?: { id: string; email: string | null };
@@ -111,6 +122,33 @@ function parseUploadBody(req: Request, res: Response): string | null {
   return parsed.data;
 }
 
+function parseImportDateRange(req: Request): { range: ImportDateRange | null; error: string | null } {
+  const rawStart = req.query["startDate"];
+  const rawEnd = req.query["endDate"];
+  if (rawStart === undefined && rawEnd === undefined) return { range: null, error: null };
+  if (typeof rawStart !== "string" || typeof rawEnd !== "string") {
+    return { range: null, error: "Start- und Enddatum müssen gemeinsam angegeben werden." };
+  }
+
+  const start = importDateSchema.safeParse(rawStart);
+  const end = importDateSchema.safeParse(rawEnd);
+  if (!start.success) return { range: null, error: start.error.issues[0]?.message ?? "Das Startdatum ist ungültig." };
+  if (!end.success) return { range: null, error: end.error.issues[0]?.message ?? "Das Enddatum ist ungültig." };
+  if (start.data > end.data) return { range: null, error: "Das Startdatum darf nicht nach dem Enddatum liegen." };
+  return { range: { startDate: start.data, endDate: end.data }, error: null };
+}
+
+function getLocalCalendarDate(value: string, timeZone: string): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date(value));
+  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((item) => item.type === type)?.value ?? "";
+  return `${part("year")}-${part("month")}-${part("day")}`;
+}
+
 function parseSchedule(sourceText: string) {
   try {
     return parseMhtSchedule(Buffer.from(sourceText, "utf8"), { timeZone: "Europe/Berlin" });
@@ -180,11 +218,26 @@ async function findExistingEvents(
 
 async function buildPreview(
   sourceText: string,
+  requestedDateRange: ImportDateRange | null = null,
   scheduleParser: typeof parseSchedule = parseSchedule,
 ) {
   const schedule = scheduleParser(sourceText);
   const plan = getSafeUpcomingEvents(schedule.events, schedule.snapshotAt);
-  const existingEvents = await findExistingEvents(plan.importable.map((event) => event.id));
+  const allUpcomingDates = plan.upcoming.map((event) => getLocalCalendarDate(event.start_time, schedule.timeZone));
+  const dateRange = requestedDateRange ?? (allUpcomingDates.length > 0
+    ? {
+        startDate: allUpcomingDates.reduce((earliest, date) => date < earliest ? date : earliest),
+        endDate: allUpcomingDates.reduce((latest, date) => date > latest ? date : latest),
+      }
+    : null);
+  const upcoming = dateRange
+    ? plan.upcoming.filter((event) => {
+        const eventDate = getLocalCalendarDate(event.start_time, schedule.timeZone);
+        return eventDate >= dateRange.startDate && eventDate <= dateRange.endDate;
+      })
+    : plan.upcoming;
+  const importable = upcoming.filter((event) => event.review_warnings.length === 0);
+  const existingEvents = await findExistingEvents(importable.map((event) => event.id));
 
   return {
     sourceUrl: schedule.sourceUrl,
@@ -193,14 +246,17 @@ async function buildPreview(
     isSnapshotStale: schedule.isSnapshotStale,
     region: schedule.region,
     timeZone: schedule.timeZone,
+    startDate: dateRange?.startDate ?? null,
+    endDate: dateRange?.endDate ?? null,
     cardCount: schedule.cardCount,
-    upcomingCount: plan.upcoming.length,
-    importableCount: plan.importable.length,
-    warningCount: plan.upcoming.length - plan.importable.length,
+    upcomingCount: upcoming.length,
+    importableCount: importable.length,
+    warningCount: upcoming.length - importable.length,
     invalidCount: schedule.invalidCount,
-    newCount: plan.importable.filter((event) => !existingEvents.has(event.id)).length,
-    updateCount: plan.importable.filter((event) => existingEvents.has(event.id)).length,
-    events: plan.upcoming.map((event) => ({
+    outOfRangeCount: plan.upcoming.length - upcoming.length,
+    newCount: importable.filter((event) => !existingEvents.has(event.id)).length,
+    updateCount: importable.filter((event) => existingEvents.has(event.id)).length,
+    events: upcoming.map((event) => ({
       id: event.id,
       title: event.title,
       startTime: event.start_time,
@@ -212,7 +268,7 @@ async function buildPreview(
       tournamentType: event.tournament_type,
       category: event.category,
       warnings: event.review_warnings,
-      willUpdate: plan.importable.includes(event) && existingEvents.has(event.id),
+      willUpdate: importable.includes(event) && existingEvents.has(event.id),
       ...getMhtEventChanges(event, existingEvents.get(event.id) ?? null),
     })),
     issues: schedule.issues.map((issue) => ({
@@ -221,7 +277,7 @@ async function buildPreview(
       errors: issue.errors,
     })),
     schedule,
-    importableEvents: plan.importable,
+    importableEvents: importable,
     skippedPastCount: plan.skippedPastCount,
   };
 }
@@ -258,8 +314,13 @@ router.post(
   async (req, res, next): Promise<void> => {
     const sourceText = parseUploadBody(req, res);
     if (sourceText === null) return;
+    const dateRangeResult = parseImportDateRange(req);
+    if (dateRangeResult.error) {
+      res.status(400).json({ error: dateRangeResult.error });
+      return;
+    }
     try {
-      const preview = await buildPreview(sourceText, scheduleParser);
+      const preview = await buildPreview(sourceText, dateRangeResult.range, scheduleParser);
       const { schedule: _schedule, importableEvents: _events, skippedPastCount: _skipped, ...response } = preview;
       res.json(response);
     } catch (error) {
@@ -282,9 +343,14 @@ router.post(
   async (req, res): Promise<void> => {
     const sourceText = parseUploadBody(req, res);
     if (sourceText === null) return;
+    const dateRangeResult = parseImportDateRange(req);
+    if (dateRangeResult.error) {
+      res.status(400).json({ error: dateRangeResult.error });
+      return;
+    }
 
     try {
-      const preview = await buildPreview(sourceText, scheduleParser);
+      const preview = await buildPreview(sourceText, dateRangeResult.range, scheduleParser);
       if (!preview.schedule.snapshotAt) {
         res.status(400).json({ error: "Der Snapshot-Zeitpunkt fehlt. Diese Datei kann nicht importiert werden." });
         return;

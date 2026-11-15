@@ -22,11 +22,23 @@ export interface MhtImportPreview {
   isSnapshotStale: boolean;
   region: string;
   timeZone: string;
+  /**
+     * Inclusive start date of the selected import period
+     * @nullable
+     */
+  startDate: Date | null;
+  /**
+     * Inclusive end date of the selected import period
+     * @nullable
+     */
+  endDate: Date | null;
   cardCount: number;
   upcomingCount: number;
   importableCount: number;
   warningCount: number;
   invalidCount: number;
+  /** Upcoming events outside the selected date range */
+  outOfRangeCount: number;
   newCount: number;
   updateCount: number;
   events: MhtImportEvent[];
