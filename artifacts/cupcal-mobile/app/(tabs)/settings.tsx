@@ -3,6 +3,7 @@ import { useRequestAccountDeletion } from '@workspace/api-client-react';
 import * as Haptics from 'expo-haptics';
 import React, { useEffect, useRef, useState } from 'react';
 import {
+  AppState,
   AccessibilityInfo,
   ActivityIndicator,
   Platform,
@@ -177,7 +178,13 @@ export default function SettingsScreen() {
     };
     refreshCountdown();
     const timer = setInterval(refreshCountdown, 1000);
-    return () => clearInterval(timer);
+    const appStateSubscription = AppState.addEventListener('change', (nextAppState) => {
+      if (nextAppState === 'active') refreshCountdown();
+    });
+    return () => {
+      clearInterval(timer);
+      appStateSubscription.remove();
+    };
   }, [confirmationResendAvailableAt]);
 
   useEffect(() => {

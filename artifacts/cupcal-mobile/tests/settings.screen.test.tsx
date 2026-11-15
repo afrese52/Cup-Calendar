@@ -1,7 +1,8 @@
 import React from 'react';
 import { beforeEach, expect, jest, test } from '@jest/globals';
 import { act, fireEvent, render, waitFor, within } from '@testing-library/react-native';
-import { AccessibilityInfo, Dimensions, Platform, StyleSheet } from 'react-native';
+import { AccessibilityInfo, AppState, Dimensions, Platform, StyleSheet } from 'react-native';
+import type { AppStateStatus } from 'react-native';
 import SettingsScreen from '../app/(tabs)/settings';
 import { supabase } from '@/services/supabase';
 import {
@@ -1206,4 +1207,60 @@ test('stellt die Bestätigungsadresse nach einem App-Neustart wieder her und ent
   await act(async () => {
     cooldownRestartedView.unmount();
   });
+});
+
+test('berechnet die Bestätigungswartezeit nach einer längeren App-Pause neu', async () => {
+  let notifyAppStateChange: ((state: AppStateStatus) => void) | undefined;
+  const mockedSupabase = jest.requireMock('@/services/supabase') as {
+    requestEmailConfirmation: jest.Mock;
+  };
+  const appStateSubscription = { remove: jest.fn() };
+  const addAppStateListener = jest.spyOn(AppState, 'addEventListener').mockImplementation(
+    (event, listener) => {
+      if (event === 'change') {
+        notifyAppStateChange = listener;
+      }
+      return appStateSubscription;
+    },
+  );
+  const view = await openSettings();
+  await fireEvent.changeText(view.getByTestId('auth-email-input'), 'test@example.invalid');
+  jest.useFakeTimers();
+
+  try {
+    await fireEvent.press(view.getByTestId('resend-confirmation-button'));
+    expect(await view.findByText(
+      `Erneut senden in ${ACCOUNT_CONFIRMATION_RESEND_COOLDOWN_SECONDS} Sekunden`,
+    )).toBeTruthy();
+    expect(notifyAppStateChange).toBeDefined();
+
+    await act(async () => {
+      notifyAppStateChange?.('background');
+      jest.setSystemTime(Date.now() + 20_000);
+      notifyAppStateChange?.('active');
+    });
+
+    expect(view.getByText('Erneut senden in 10 Sekunden')).toBeTruthy();
+    expect(view.getByTestId('resend-confirmation-button').props.accessibilityState)
+      .toMatchObject({ disabled: true, busy: false });
+
+    await act(async () => {
+      notifyAppStateChange?.('background');
+      jest.setSystemTime(Date.now() + 11_000);
+      notifyAppStateChange?.('active');
+    });
+
+    const button = view.getByTestId('resend-confirmation-button');
+    expect(view.queryByText(/Erneut senden in \d+ Sekunden/)).toBeNull();
+    expect(button.props.accessibilityState).toMatchObject({ disabled: false, busy: false });
+
+    await fireEvent.press(button);
+    expect(mockedSupabase.requestEmailConfirmation).toHaveBeenCalledTimes(2);
+  } finally {
+    await act(async () => {
+      view.unmount();
+    });
+    addAppStateListener.mockRestore();
+    jest.useRealTimers();
+  }
 });
