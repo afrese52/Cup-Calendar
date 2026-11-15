@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { createClient } from '@supabase/supabase-js';
 import { createPasswordRecovery, PASSWORD_MIN_LENGTH } from './passwordRecovery.ts';
 import { friendlyAuthError } from './accountAuth.ts';
 
@@ -509,3 +510,87 @@ test('verarbeitet ältere Wiederherstellungslinks mit Token im URL-Fragment', as
   });
   assert.equal(recovery.isPending(), true);
 });
+
+const livePasswordTestEnabled =
+  process.env.CUPCAL_RUN_SUPABASE_PASSWORD_LIVE_TEST === '1';
+
+// Nur mit eigens angelegtem, entbehrlichem Testkonto aktivieren: Der Test setzt
+// dessen Passwort dauerhaft auf NEXT_PASSWORD. Beim nächsten Lauf muss
+// CURRENT_PASSWORD dem dann aktuellen Testkonto-Passwort entsprechen.
+test(
+  'bestätigt bei Supabase Auth, dass fünf Zeichen abgelehnt und sechs akzeptiert werden',
+  { skip: !livePasswordTestEnabled },
+  async () => {
+    const requiredEnv = [
+      'CUPCAL_SUPABASE_PASSWORD_TEST_URL',
+      'CUPCAL_SUPABASE_PASSWORD_TEST_PUBLISHABLE_KEY',
+      'CUPCAL_SUPABASE_PASSWORD_TEST_EMAIL',
+      'CUPCAL_SUPABASE_PASSWORD_TEST_CURRENT_PASSWORD',
+      'CUPCAL_SUPABASE_PASSWORD_TEST_NEXT_PASSWORD',
+    ];
+    const missingEnv = requiredEnv.filter((name) => !process.env[name]?.trim());
+    assert.deepEqual(
+      missingEnv,
+      [],
+      `Für den opt-in Live-Test fehlen: ${missingEnv.join(', ')}`,
+    );
+
+    const email = process.env.CUPCAL_SUPABASE_PASSWORD_TEST_EMAIL.trim();
+    const nextPassword = process.env.CUPCAL_SUPABASE_PASSWORD_TEST_NEXT_PASSWORD;
+    assert.equal(
+      Array.from(nextPassword).length,
+      PASSWORD_MIN_LENGTH,
+      'Das neue Testkonto-Passwort muss genau sechs Zeichen lang sein.',
+    );
+    assert.notEqual(
+      nextPassword,
+      process.env.CUPCAL_SUPABASE_PASSWORD_TEST_CURRENT_PASSWORD,
+      'Das neue Testkonto-Passwort muss sich vom aktuellen Passwort unterscheiden.',
+    );
+
+    const supabase = createClient(
+      process.env.CUPCAL_SUPABASE_PASSWORD_TEST_URL,
+      process.env.CUPCAL_SUPABASE_PASSWORD_TEST_PUBLISHABLE_KEY,
+      {
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false,
+        },
+      },
+    );
+
+    const { data: signInData, error: signInError } =
+      await supabase.auth.signInWithPassword({
+        email,
+        password: process.env.CUPCAL_SUPABASE_PASSWORD_TEST_CURRENT_PASSWORD,
+      });
+    assert.equal(signInError, null, 'Das separate Supabase-Testkonto konnte sich nicht anmelden.');
+    assert.equal(
+      signInData.user?.email?.toLowerCase(),
+      email.toLowerCase(),
+      'Supabase hat nicht das ausdrücklich konfigurierte Testkonto angemeldet.',
+    );
+
+    const shortPasswordResult = await supabase.auth.updateUser({
+      password: 'a'.repeat(PASSWORD_MIN_LENGTH - 1),
+    });
+    assert.ok(
+      shortPasswordResult.error,
+      'Supabase Auth hat ein fünf Zeichen langes Passwort unerwartet akzeptiert.',
+    );
+    assert.match(
+      shortPasswordResult.error.message,
+      /(at least 6|6 characters|minimum.{0,20}6|password.{0,40}(short|length|6))/i,
+      'Supabase hat das Passwort zwar abgelehnt, die Fehlermeldung bestätigte aber keine Sechs-Zeichen-Grenze.',
+    );
+
+    const sixCharacterPasswordResult = await supabase.auth.updateUser({
+      password: nextPassword,
+    });
+    assert.equal(
+      sixCharacterPasswordResult.error,
+      null,
+      'Supabase Auth hat ein genau sechs Zeichen langes Passwort abgelehnt.',
+    );
+  },
+);
