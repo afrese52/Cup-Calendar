@@ -1,9 +1,11 @@
 import 'react-native-url-polyfill/auto';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Linking from 'expo-linking';
+import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 import type { RemoteBookmark, PendingBookmarkChange } from '@/services/localBookmarkStore';
 import { createCupCalSupabaseClient } from './createSupabaseClient';
+import { createMigratingSecureStorage } from './secureSessionStorage';
 import { createPasswordRecovery } from './passwordRecovery';
 import {
   createAccountDeletionRedirectUrl,
@@ -40,7 +42,22 @@ if (configuredSupabaseUrl && supabaseUrl !== configuredSupabaseUrl.replace(/\/+$
 
 export const supabase = isSupabaseConfigured
   && (Platform.OS !== 'web' || typeof window !== 'undefined')
-  ? createCupCalSupabaseClient(supabaseUrl, supabasePublishableKey, AsyncStorage)
+  ? createCupCalSupabaseClient(
+      supabaseUrl,
+      supabasePublishableKey,
+      Platform.OS === 'web'
+        ? AsyncStorage
+        : createMigratingSecureStorage(
+            {
+              getItem: SecureStore.getItemAsync,
+              setItem: (key, value) => SecureStore.setItemAsync(key, value, {
+                keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
+              }),
+              removeItem: SecureStore.deleteItemAsync,
+            },
+            AsyncStorage,
+          ),
+    )
   : null;
 
 const passwordRecovery = supabase

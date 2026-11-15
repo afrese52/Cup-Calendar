@@ -13,7 +13,21 @@ Die Variablen müssen beim Starten des Expo-Entwicklungsservers beziehungsweise 
 
 Beide Werte werden in den nativen und Web-Client eingebettet und sind öffentlich sichtbar. Verwende hier ausschließlich den Publishable Key, niemals einen Service-Role-Key. Ohne vollständige Konfiguration bleibt die App nutzbar; CupCal gibt eine verständliche Warnung in der Entwicklerkonsole aus. Der Status und die Meldung sind außerdem über `isSupabaseConfigured` und `supabaseConfigurationMessage` aus `services/supabase` verfügbar.
 
-Der Client speichert Auth-Sitzungen über AsyncStorage, erneuert sie im Web automatisch und startet beziehungsweise pausiert die Erneuerung auf nativen Geräten passend zum App-Status.
+Der Web-Client speichert Auth-Sitzungen über AsyncStorage. Auf iOS speichert
+`expo-secure-store` die Supabase-Werte in der Keychain; auf Android verschlüsselt
+es sie mit einem Schlüssel aus dem Android Keystore. Die iOS-Keychain-Einträge
+sind auf das entsperrte Gerät beschränkt und werden nicht auf andere Geräte
+migriert. Die automatische Token-Erneuerung bleibt aktiv.
+
+Beim ersten Zugriff auf jeden Supabase-Sitzungsschlüssel wird ein vorhandener
+AsyncStorage-Wert zuerst in den geschützten Speicher kopiert und erst danach
+aus AsyncStorage entfernt. Scheitert das sichere Schreiben, bleibt der alte
+Wert erhalten und der Fehler wird weitergegeben; die Sitzung wird nicht
+still verworfen. Schlägt das Entfernen beim Abmelden fehl, meldet Supabase den
+Speicherfehler, statt eine erfolgreiche Abmeldung vorzutäuschen. Der Adapter
+gilt auch für PKCE-Verifier, damit native Auth-Rücksprünge weiterhin
+funktionieren. Die Migration läuft beim Start nur bei Zugriff auf den jeweiligen
+Schlüssel.
 
 ## Benutzerprofile
 
@@ -49,7 +63,9 @@ Für Registrierungs- und erneut angeforderte Bestätigungs-E-Mails muss außerde
 `cupcal-android://auth/confirm` als Redirect-URL freigegeben sein. CupCal
 verwendet für die Bestätigung den PKCE-Ablauf: Supabase muss nach dem Klick
 einen Code an diese Adresse zurückgeben, den CupCal gegen eine Sitzung tauscht.
-Die Sitzung wird über AsyncStorage gespeichert und beim nächsten Start geladen.
+Die Sitzung wird auf nativen Geräten geschützt gespeichert und beim nächsten
+Start geladen. Vorhandene AsyncStorage-Sitzungen werden beim ersten Zugriff
+übernommen; im Web bleibt AsyncStorage unverändert.
 
 ### Native App-Link
 
