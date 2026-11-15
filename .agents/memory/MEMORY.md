@@ -15,3 +15,4 @@
 - [Favoriten über Geräte hinweg](cross-device-bookmarks.md) — Favoriten gehören zum angemeldeten Konto und sollen auf all seinen Geräten erscheinen.
 - [Zustimmung für alte Gast-Favoriten](legacy-bookmark-consent.md) — Vorhandene lokale Gast-Favoriten dürfen erst nach ausdrücklicher Wahl dem aktuellen Konto zugeordnet werden.
 - [Countdown-Screen-Tests](confirmation-cooldown-screen-tests.md) — Nach aktiven Countdowns unmounten und den Neustartfall ans Ende der Bildschirmtests setzen.
+- [Stabile Daten in Hook-Tests](stable-hook-test-data.md) — Mock-Antwortobjekte für useEffect-Abhängigkeiten müssen über Renderings hinweg referenziell stabil bleiben.

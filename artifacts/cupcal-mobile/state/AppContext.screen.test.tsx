@@ -1,7 +1,7 @@
 import React from 'react';
 import { afterEach, beforeEach, expect, jest, test } from '@jest/globals';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
-import { Pressable, Text } from 'react-native';
+import { AccessibilityInfo, AppState, Pressable, Text } from 'react-native';
 import { AppProvider, useCupCal } from './AppContext';
 
 type AuthListener = (event: string, session: { user: { id: string } } | null) => void;
@@ -20,9 +20,14 @@ function deferred<T>() {
   return { promise, resolve };
 }
 
-jest.mock('@workspace/api-client-react', () => ({
-  useGetEvents: () => ({ data: undefined, isError: false }),
-}));
+jest.mock('@workspace/api-client-react', () => {
+  const eventsResponse = {
+    data: [{ id: 'turnier-neu', title: 'FNCS Challenger Cup' }],
+  };
+  return {
+    useGetEvents: () => ({ data: eventsResponse, isError: false }),
+  };
+});
 
 jest.mock('@/services/localEventStore', () => ({
   loadCachedEvents: jest.fn(async () => null),
@@ -74,10 +79,18 @@ jest.mock('@/services/supabase', () => {
 });
 
 function BookmarkState() {
-  const { bookmarkedIds, storageError, toggleBookmark, clearBookmarks, retryBookmarkSync } = useCupCal();
+  const {
+    bookmarkedIds,
+    bookmarkSyncStatus,
+    storageError,
+    toggleBookmark,
+    clearBookmarks,
+    retryBookmarkSync,
+  } = useCupCal();
   return (
     <>
       <Text testID="bookmark-ids">{bookmarkedIds.join(',')}</Text>
+      <Text testID="bookmark-sync-status">{bookmarkSyncStatus}</Text>
       <Text testID="storage-error">{storageError ?? ''}</Text>
       <Pressable testID="toggle-bookmark" onPress={() => toggleBookmark('turnier-neu')}>
         <Text>Favorit ändern</Text>
@@ -142,7 +155,11 @@ beforeEach(() => {
   mockedSupabase.fetchRemoteBookmarks.mockReset().mockResolvedValue([]);
   mockedSupabase.saveRemoteBookmark.mockReset().mockResolvedValue(undefined);
   bookmarkStore.prepareBookmarksForSync.mockReset().mockResolvedValue({});
-  const shouldUpload = jest.requireMock('@/services/localBookmarkStore').shouldUploadBookmarkChange as jest.Mock;
+  const shouldUpload = (jest.requireMock('@/services/localBookmarkStore') as {
+    shouldUploadBookmarkChange: jest.Mock<
+      (change: { isFavorite: boolean }, remote?: RemoteBookmark) => boolean
+    >;
+  }).shouldUploadBookmarkChange;
   shouldUpload.mockReset().mockImplementation(
     (change: { isFavorite: boolean }, remote?: RemoteBookmark) =>
       !remote || remote.is_favorite !== change.isFavorite,
@@ -150,6 +167,8 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  AppState.currentState = 'unknown';
+  jest.restoreAllMocks();
   jest.clearAllMocks();
 });
 
@@ -190,6 +209,7 @@ test('zeigt beim Kaltstart erst nach der Sitzungsprüfung die Favoriten des ange
 });
 
 test('zeigt ohne gespeicherte Sitzung weiterhin nur lokale Gastfavoriten', async () => {
+  const announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility').mockImplementation(() => {});
   bookmarkStore.loadBookmarksForUser.mockImplementation((userId: string | null) =>
     Promise.resolve(userId === null ? ['gast-favorit'] : ['konto-favorit']),
   );
@@ -202,6 +222,92 @@ test('zeigt ohne gespeicherte Sitzung weiterhin nur lokale Gastfavoriten', async
   expect(bookmarkStore.loadBookmarksForUser).toHaveBeenCalledWith(null);
   expect(bookmarkStore.loadBookmarksForUser).not.toHaveBeenCalledWith('konto-a');
   expect(mockedSupabase.fetchRemoteBookmarks).not.toHaveBeenCalled();
+  expect(announce).not.toHaveBeenCalled();
+});
+
+test('sagt extern synchronisierte Speichern- und Entfernen-Änderungen genau einmal an', async () => {
+  AppState.currentState = 'active';
+  let remoteFavorite = false;
+  mockedSupabase.fetchRemoteBookmarks.mockImplementation(async () => remoteFavorite ? [{
+    event_id: 'turnier-neu',
+    is_favorite: true,
+    updated_at: '2026-01-01T00:00:00.000Z',
+    revision: 1,
+  }] : []);
+  const announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility').mockImplementation(() => {});
+  const view = await renderProvider();
+  await emitUser('konto-a');
+  await waitFor(() => expect(mockedSupabase.fetchRemoteBookmarks).toHaveBeenCalledWith('konto-a'));
+  announce.mockClear();
+
+  remoteFavorite = true;
+  await act(async () => {
+    mockedSupabase.__emitBookmarkRealtime();
+  });
+
+  await waitFor(() => expect(view.getByTestId('bookmark-ids').props.children).toBe('turnier-neu'));
+  await waitFor(() => expect(announce).toHaveBeenCalledTimes(1));
+  expect(announce).toHaveBeenLastCalledWith(
+    'Merkliste aktualisiert: FNCS Challenger Cup zur Merkliste hinzugefügt.',
+  );
+
+  remoteFavorite = false;
+  await act(async () => {
+    mockedSupabase.__emitBookmarkRealtime();
+  });
+
+  await waitFor(() => expect(view.getByTestId('bookmark-ids').props.children).toBe(''));
+  await waitFor(() => expect(announce).toHaveBeenCalledTimes(2));
+  expect(announce).toHaveBeenLastCalledWith(
+    'Merkliste aktualisiert: FNCS Challenger Cup aus der Merkliste entfernt.',
+  );
+});
+
+test('sagt lokale Speichern-Aktionen nicht zusätzlich an', async () => {
+  let remoteFavorite = false;
+  let pendingFavorite: boolean | null = null;
+  bookmarkStore.setBookmarksFavorite.mockImplementation(async (
+    _userId: string,
+    _eventIds: string[],
+    isFavorite: boolean,
+  ) => {
+    pendingFavorite = isFavorite;
+    return isFavorite ? ['turnier-neu'] : [];
+  });
+  bookmarkStore.prepareBookmarksForSync.mockImplementation(async () => pendingFavorite === null
+    ? {}
+    : {
+        'turnier-neu': {
+          isFavorite: pendingFavorite,
+          updatedAt: '2026-01-01T00:00:00.000Z',
+        },
+      });
+  mockedSupabase.fetchRemoteBookmarks.mockImplementation(async () => remoteFavorite ? [{
+    event_id: 'turnier-neu',
+    is_favorite: true,
+    updated_at: '2026-01-01T00:00:00.000Z',
+    revision: 1,
+  }] : []);
+  const announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility').mockImplementation(() => {});
+  const view = await renderProvider();
+  await emitUser('konto-a');
+  await waitFor(() => expect(view.getByTestId('bookmark-sync-status').props.children).toBe('synced'));
+  announce.mockClear();
+
+  remoteFavorite = true;
+  await act(async () => {
+    await fireEvent.press(view.getByTestId('toggle-bookmark'));
+  });
+  await waitFor(() => expect(view.getByTestId('bookmark-ids').props.children).toBe('turnier-neu'));
+  await waitFor(() => expect(view.getByTestId('bookmark-sync-status').props.children).toBe('synced'));
+
+  remoteFavorite = false;
+  await act(async () => {
+    await fireEvent.press(view.getByTestId('toggle-bookmark'));
+  });
+  await waitFor(() => expect(view.getByTestId('bookmark-ids').props.children).toBe(''));
+
+  expect(announce).not.toHaveBeenCalled();
 });
 
 test('meldet einen Fehler beim Laden lokaler Favoriten verständlich', async () => {

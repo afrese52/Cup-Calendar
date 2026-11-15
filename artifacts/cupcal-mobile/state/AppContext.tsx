@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useGetEvents } from '@workspace/api-client-react';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { AppState } from 'react-native';
+import { AccessibilityInfo, AppState } from 'react-native';
 import type { TournamentEvent } from '@/data/events';
 import { loadCachedEvents, saveEventsToCache } from '@/services/localEventStore';
 import {
@@ -54,10 +54,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [eventError, setEventError] = useState<string | null>(null);
   const [storageError, setStorageError] = useState<string | null>(null);
   const hasLoadedServerEvents = useRef(false);
+  const eventsRef = useRef(events);
+  eventsRef.current = events;
   const currentBookmarkIds = useRef<string[]>([]);
   const currentUserId = useRef<string | null>(null);
   const syncingUsers = useRef(new Set<string>());
   const queuedSyncUsers = useRef(new Set<string>());
+  const queuedAnnouncementUsers = useRef(new Set<string>());
   const eventsQuery = useGetEvents(undefined, {
     query: {
       staleTime: 5 * 60 * 1000,
@@ -113,23 +116,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const syncBookmarks = useCallback(async (targetUserId: string) => {
+  const syncBookmarks = useCallback(async (targetUserId: string, announceRemoteChanges = false) => {
     if (
       !supabase ||
       currentUserId.current !== targetUserId
     ) return;
+    if (announceRemoteChanges) queuedAnnouncementUsers.current.add(targetUserId);
     let unclaimedIds: string[];
     try {
       unclaimedIds = await getAnonymousBookmarksForImport(targetUserId);
     } catch (error) {
+      queuedAnnouncementUsers.current.delete(targetUserId);
       if (currentUserId.current === targetUserId) {
         setBookmarkSyncStatus('pending');
         setBookmarkSyncError(getBookmarkSyncErrorMessage(error));
       }
       return;
     }
-    if (currentUserId.current !== targetUserId) return;
+    if (currentUserId.current !== targetUserId) {
+      queuedAnnouncementUsers.current.delete(targetUserId);
+      return;
+    }
     if (unclaimedIds.length) {
+      queuedAnnouncementUsers.current.delete(targetUserId);
       setLegacyBookmarkImport({ userId: targetUserId, count: unclaimedIds.length });
       return;
     }
@@ -169,8 +178,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
           remoteBookmarks = await fetchRemoteBookmarks(targetUserId);
           const reconciled = await reconcileBookmarks(targetUserId, remoteBookmarks);
           if (currentUserId.current === targetUserId) {
-            currentBookmarkIds.current = reconciled.eventIds;
-            setBookmarkedIds(reconciled.eventIds);
+            const previousIds = currentBookmarkIds.current;
+            const nextIds = reconciled.eventIds;
+            const hasBookmarkChanges = previousIds.some((id) => !nextIds.includes(id)) ||
+              nextIds.some((id) => !previousIds.includes(id));
+            if (hasBookmarkChanges && queuedAnnouncementUsers.current.has(targetUserId)) {
+              const getEventTitle = (eventId: string) =>
+                eventsRef.current.find((event) => event.id === eventId)?.title ?? 'Ein Turnier';
+              const added = nextIds
+                .filter((id) => !previousIds.includes(id))
+                .map((id) => `${getEventTitle(id)} zur Merkliste hinzugefügt`);
+              const removed = previousIds
+                .filter((id) => !nextIds.includes(id))
+                .map((id) => `${getEventTitle(id)} aus der Merkliste entfernt`);
+              AccessibilityInfo.announceForAccessibility(
+                `Merkliste aktualisiert: ${[...added, ...removed].join('. ')}.`,
+              );
+              queuedAnnouncementUsers.current.delete(targetUserId);
+            } else if (!queuedSyncUsers.current.has(targetUserId)) {
+              queuedAnnouncementUsers.current.delete(targetUserId);
+            }
+            currentBookmarkIds.current = nextIds;
+            setBookmarkedIds(nextIds);
             const hasPendingChanges = reconciled.pendingCount > 0 || writeError !== null;
             setBookmarkSyncStatus(hasPendingChanges ? 'pending' : 'synced');
             setBookmarkSyncError(
@@ -194,6 +223,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } finally {
       syncingUsers.current.delete(targetUserId);
       queuedSyncUsers.current.delete(targetUserId);
+      queuedAnnouncementUsers.current.delete(targetUserId);
     }
   }, []);
 
@@ -227,7 +257,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
 
     const retrySync = () => {
-      if (AppState.currentState === 'active') void syncBookmarks(userId);
+      if (AppState.currentState === 'active') void syncBookmarks(userId, true);
     };
     const appStateSubscription = AppState.addEventListener('change', (state) => {
       if (state === 'active') retrySync();
@@ -324,7 +354,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const retryBookmarkSync = useCallback(async () => {
     const activeUserId = currentUserId.current;
-    if (activeUserId) await syncBookmarks(activeUserId);
+    if (activeUserId) await syncBookmarks(activeUserId, true);
   }, [syncBookmarks]);
 
   const importLegacyBookmarks = useCallback(async () => {
