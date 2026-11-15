@@ -592,6 +592,7 @@ test('ermöglicht nach einem fehlgeschlagenen Wiederherstellungsversand einen ne
 
   await fireEvent.press(view.getByTestId('auth-submit-button'));
   expect(await view.findByTestId('auth-error-message')).toBeTruthy();
+  expect(view.getByTestId('auth-email-input').props.value).toBe('test@example.invalid');
   expect(view.getByTestId('auth-submit-button').props.accessibilityState).toEqual({
     disabled: false,
     busy: false,
@@ -599,8 +600,13 @@ test('ermöglicht nach einem fehlgeschlagenen Wiederherstellungsversand einen ne
 
   await fireEvent.press(view.getByTestId('auth-submit-button'));
 
-  expect(await view.findByTestId('auth-success-message')).toBeTruthy();
+  expect(await view.findByText(
+    'Wenn zu dieser E-Mail ein CupCal-Konto besteht, erhältst du in Kürze einen Wiederherstellungslink. Der Versand kann etwas dauern. Prüfe auch deinen Spam-Ordner.',
+  )).toBeTruthy();
   expect(auth.resetPasswordForEmail).toHaveBeenCalledTimes(2);
+  expect(auth.resetPasswordForEmail).toHaveBeenNthCalledWith(2, 'test@example.invalid', {
+    redirectTo: 'cupcal-test://auth/reset?flow=cupcal-password-reset',
+  });
 });
 
 test('zeigt den Ladezustand und sperrt die Schaltflächen während der Linkanfrage', async () => {
