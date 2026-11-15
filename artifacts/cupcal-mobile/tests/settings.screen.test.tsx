@@ -1062,7 +1062,7 @@ test('macht spätere An- und Abmeldungen im zugänglichen Kontostatus sichtbar',
   expect(signedOutStatus.props.accessibilityLiveRegion).toBe('polite');
 });
 
-test('kündigt auf iOS echte Sitzungswechsel an, aber keine Token-Erneuerung', async () => {
+test('kündigt auf iOS echte Sitzungswechsel an, aber keine Token-Erneuerung oder doppelte Anmeldung', async () => {
   const originalPlatformOS = Platform.OS;
   Object.defineProperty(Platform, 'OS', { configurable: true, value: 'ios' });
 
@@ -1094,6 +1094,22 @@ test('kündigt auf iOS echte Sitzungswechsel an, aber keine Token-Erneuerung', a
     expect(announceForAccessibility).toHaveBeenLastCalledWith(
       'Angemeldet. test@example.invalid',
     );
+
+    const duplicateSignInSession = {
+      ...testSession,
+      access_token: 'another-refreshed-fake-token',
+      expires_in: 10800,
+    };
+    await act(async () => mockSupabase.__emitAuthStateChange('SIGNED_IN', duplicateSignInSession));
+
+    const status = view.getByTestId('account-session-status');
+    expect(status.props.children).toBe('Angemeldet');
+    expect(status.props.accessible).toBe(true);
+    expect(status.props.accessibilityRole).toBe('text');
+    expect(status.props.accessibilityLiveRegion).toBe('polite');
+    expect(status.props.accessibilityLabel).toBe('Angemeldet. test@example.invalid');
+    expect(view.getByText('test@example.invalid')).toBeTruthy();
+    expect(announceForAccessibility).toHaveBeenCalledTimes(2);
   } finally {
     Object.defineProperty(Platform, 'OS', { configurable: true, value: originalPlatformOS });
   }
