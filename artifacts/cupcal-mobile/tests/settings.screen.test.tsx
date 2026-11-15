@@ -337,13 +337,23 @@ test('verschiebt den Screenreader-Fokus während einer laufenden Registrierung n
   expect(await view.findByTestId('auth-success-message')).toBeTruthy();
 });
 
-test('blendet den erneuten Versand nach bestätigter Sitzung aus und zeigt das Konto', async () => {
+test('zeigt nach bestätigter Registrierung auch nach Abmeldung keine alte Versandaktion', async () => {
+  const storageMock = jest.requireMock('@react-native-async-storage/async-storage') as {
+    __values: Map<string, string>;
+  };
   const view = await openSettings();
   await fireEvent.press(view.getByTestId('auth-mode-toggle'));
   await enterCredentials(view);
 
   await fireEvent.press(view.getByTestId('auth-submit-button'));
   expect(await view.findByTestId('registration-resend-confirmation-button')).toBeTruthy();
+  expect(auth.signUp).toHaveBeenCalledWith({
+    email: 'test@example.invalid',
+    password: 'test-password',
+    options: { emailRedirectTo: 'cupcal-test://auth/confirm' },
+  });
+  expect(storageMock.__values.get(PENDING_ACCOUNT_CONFIRMATION_EMAIL_KEY))
+    .toBe('test@example.invalid');
 
   const confirmedSession = {
     ...testSession,
@@ -360,6 +370,18 @@ test('blendet den erneuten Versand nach bestätigter Sitzung aus und zeigt das K
   expect(view.getByTestId('account-session-status').props.children).toBe('Angemeldet');
   expect(view.getByText('test@example.invalid')).toBeTruthy();
   expect(view.getByTestId('sign-out-button')).toBeTruthy();
+  await waitFor(() => {
+    expect(storageMock.__values.has(PENDING_ACCOUNT_CONFIRMATION_EMAIL_KEY)).toBe(false);
+  });
+
+  await fireEvent.press(view.getByTestId('sign-out-button'));
+
+  expect(await view.findByText('Du bist abgemeldet.')).toBeTruthy();
+  expect(view.getByText('Bei CupCal anmelden')).toBeTruthy();
+  expect(view.getByTestId('auth-email-input').props.value).toBe('');
+  expect(view.queryByTestId('registration-resend-confirmation-button')).toBeNull();
+  expect(view.queryByTestId('confirmation-resend-recipient')).toBeNull();
+  expect(storageMock.__values.has(PENDING_ACCOUNT_CONFIRMATION_EMAIL_KEY)).toBe(false);
 });
 
 test('behält nach bestätigter Sitzung trotz verspäteter Registrierungsantwort den Anmeldestatus', async () => {

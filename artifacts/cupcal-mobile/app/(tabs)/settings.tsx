@@ -395,6 +395,9 @@ export default function SettingsScreen() {
       const result = await signOutAccount(supabase.auth);
       if (result.ok) {
         setAuthMessage(result.message);
+        setAuthMode('sign-in');
+        setRegistrationConfirmationEmail(null);
+        setEmail('');
         if (result.clearPassword) setPassword('');
       } else {
         reportAuthError(result.error);
