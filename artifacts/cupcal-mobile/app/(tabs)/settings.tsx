@@ -184,11 +184,10 @@ export default function SettingsScreen() {
         if (nextSession) setRegistrationConfirmationEmail(null);
         setAuthError(null);
       },
-      onError: (error) => {
-        setAuthError(friendlyAuthError(
-          error,
-          'Die Sitzung konnte nicht geladen werden. Bitte melde dich erneut an.',
-        ));
+      onError: (_error) => {
+        // Keep storage details (which may include malformed persisted data)
+        // out of the account UI and ask the user to authenticate again.
+        setAuthError('Die Sitzung konnte nicht geladen werden. Bitte melde dich erneut an.');
       },
       onReady: () => setIsCheckingSession(false),
     });

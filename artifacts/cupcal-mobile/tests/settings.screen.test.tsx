@@ -665,6 +665,22 @@ test('zeigt nach Wiederherstellung einer gespeicherten Sitzung das angemeldete K
   expect(view.getByTestId('sign-out-button')).toBeTruthy();
 });
 
+test('zeigt bei einer beschädigten gespeicherten Sitzung sicher den Anmeldezustand', async () => {
+  auth.getSession.mockResolvedValue({
+    data: { session: null },
+    error: new Error('corrupted stored session'),
+  });
+  const view = await render(<SettingsScreen />);
+
+  const status = await view.findByTestId('account-session-status');
+  expect(status.props.children).toBe('Bei CupCal anmelden');
+  expect(view.getByTestId('auth-error-message').props.children).toBe(
+    'Die Sitzung konnte nicht geladen werden. Bitte melde dich erneut an.',
+  );
+  expect(view.queryByTestId('sign-out-button')).toBeNull();
+  expect(view.queryByText('Turniertermine importieren')).toBeNull();
+});
+
 test.each([
   ['ios', 'angemeldete', testSession, 'Angemeldet'],
   ['ios', 'abgemeldete', null, 'Bei CupCal anmelden'],

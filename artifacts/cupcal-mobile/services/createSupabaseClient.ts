@@ -12,9 +12,31 @@ export function createCupCalSupabaseClient(
   storage: SessionStorage,
   fetchImpl?: typeof fetch,
 ) {
+  const sessionStorage: SessionStorage = {
+    ...storage,
+    getItem: async (key) => {
+      const value = await storage.getItem(key);
+      if (value === null || !key.endsWith('-auth-token')) return value;
+
+      try {
+        JSON.parse(value);
+        return value;
+      } catch {
+        // A malformed persisted session must never block startup or be logged.
+        // Cleanup is best-effort; this read still fails closed if removal fails.
+        try {
+          await storage.removeItem(key);
+        } catch {
+          // Supabase will continue with no session for this read.
+        }
+        return null;
+      }
+    },
+  };
+
   return createClient(url, publishableKey, {
     auth: {
-      storage,
+      storage: sessionStorage,
       autoRefreshToken: true,
       persistSession: true,
       detectSessionInUrl: false,

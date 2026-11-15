@@ -80,6 +80,33 @@ for (const platform of ['Android', 'iOS']) {
   });
 }
 
+test('verwirft beschädigte und unvollständige gespeicherte Sitzungen sicher', async () => {
+  const storageKey = 'sb-damaged-session-auth-token';
+  for (const [kind, storedValue] of [
+    ['unlesbares JSON', '{not-json'],
+    ['unvollständige Sitzung', JSON.stringify({ access_token: 'partial-test-token' })],
+  ]) {
+    const storage = createPersistentStorage();
+    await storage.setItem(storageKey, storedValue);
+    const client = createCupCalSupabaseClient(
+      'https://damaged-session.supabase.co',
+      'test-publishable-key',
+      storage,
+      fakeUserFetch,
+    );
+
+    try {
+      const { data, error } = await client.auth.getSession();
+
+      assert.equal(error, null, `${kind} darf den App-Start nicht abbrechen`);
+      assert.equal(data.session, null, `${kind} darf kein angemeldetes Konto erzeugen`);
+      assert.equal(await storage.getItem(storageKey), null, `${kind} muss entfernt werden`);
+    } finally {
+      await client.auth.dispose();
+    }
+  }
+});
+
 for (const platform of ['Android', 'iOS']) {
   test(`stellt die bestätigte E-Mail-Sitzung nach einem Neustart auf ${platform} wieder her`, async () => {
     const storage = createPersistentStorage();
