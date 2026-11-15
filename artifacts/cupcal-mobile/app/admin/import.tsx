@@ -370,8 +370,8 @@ export default function AdminImportScreen() {
       setStartDateText(formatDateInput(currentPreview.startDate));
       setEndDateText(formatDateInput(currentPreview.endDate));
       showImportConfirmation(currentPreview);
-    } catch (previewError) {
-      setError(previewError instanceof Error ? previewError.message : 'Die Vorschau konnte nicht aktualisiert werden.');
+    } catch {
+      setError('Die Vorschau konnte vor der Bestätigung nicht aktualisiert werden. Bitte prüfe deine Verbindung und versuche es erneut.');
     }
   }
 

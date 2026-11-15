@@ -224,6 +224,31 @@ test('wendet den gewählten Datumsbereich auf Vorschau, Bestätigung und Import 
   alertSpy.mockRestore();
 });
 
+test('bricht bei fehlgeschlagener Vorschau vor der Bestätigung ab und erlaubt eine neue Dateiauswahl', async () => {
+  mockGetDocumentAsync
+    .mockResolvedValueOnce(selectedFile('plan.mht'))
+    .mockResolvedValueOnce(selectedFile('neuer-plan.mht'));
+  mockPreviewImport
+    .mockResolvedValueOnce({ ...preview, importableCount: 1 })
+    .mockRejectedValueOnce(new Error('temporärer Vorschaufehler'));
+  const screen = await openImportScreen();
+
+  await fireEvent.press(screen.getByTestId('choose-import-file-button'));
+  await fireEvent.press(screen.getByTestId('preview-import-file-button'));
+  await fireEvent.press(await screen.findByTestId('confirm-import-button'));
+
+  expect(await screen.findByText(
+    'Die Vorschau konnte vor der Bestätigung nicht aktualisiert werden. Bitte prüfe deine Verbindung und versuche es erneut.',
+  )).toBeTruthy();
+  expect(mockPreviewImport).toHaveBeenCalledTimes(2);
+  expect(mockImportSchedule).not.toHaveBeenCalled();
+  expect(screen.getByTestId('choose-import-file-button').props.accessibilityState.disabled).not.toBe(true);
+
+  await fireEvent.press(screen.getByTestId('choose-import-file-button'));
+  expect(await screen.findByText('neuer-plan.mht')).toBeTruthy();
+  expect(mockGetDocumentAsync).toHaveBeenCalledTimes(2);
+});
+
 test('zeigt Titel, Eventkennung und Prüfgrund für nicht importierte Karten', async () => {
   mockGetDocumentAsync.mockResolvedValue(selectedFile('plan.mht'));
   mockPreviewImport.mockResolvedValue({
