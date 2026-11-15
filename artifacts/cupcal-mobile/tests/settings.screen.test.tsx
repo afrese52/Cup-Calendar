@@ -543,6 +543,48 @@ test('hält Eingabe, Rückmeldung und Zurück-Aktion auf kleinem Display erreich
   expect(compactScreen.getByText('Zurück zur Anmeldung')).toBeTruthy();
 });
 
+test('hält E-Mail, Absenden und Zurück bei geöffneter Tastatur auf kleinem Display erreichbar', async () => {
+  const compactDimensions = { width: 320, height: 568, scale: 1, fontScale: 1 };
+  Dimensions.set({
+    window: compactDimensions,
+    screen: compactDimensions,
+  });
+  const view = await openSettings();
+  await fireEvent.press(view.getByTestId('forgot-password-button'));
+
+  const emailInput = view.getByTestId('auth-email-input');
+  await fireEvent(emailInput, 'focus');
+  const keyboardVisibleWindow = { ...compactDimensions, height: 320 };
+  await act(async () => {
+    Dimensions.set({
+      window: keyboardVisibleWindow,
+      screen: compactDimensions,
+    });
+  });
+
+  const scrollView = view.getByTestId('settings-scroll-view');
+  expect(scrollView.props.scrollEnabled).toBe(true);
+  expect(scrollView.props.keyboardShouldPersistTaps).toBe('handled');
+  await fireEvent.scroll(scrollView, {
+    nativeEvent: {
+      contentOffset: { x: 0, y: 600 },
+      contentSize: { width: 320, height: 1000 },
+      layoutMeasurement: { width: 320, height: keyboardVisibleWindow.height },
+    },
+  });
+
+  const compactScreen = within(scrollView);
+  expect(compactScreen.getByTestId('auth-email-input')).toBeTruthy();
+  expect(compactScreen.getByTestId('auth-submit-button')).toBeTruthy();
+  expect(compactScreen.getByTestId('auth-mode-toggle')).toBeTruthy();
+  await fireEvent.changeText(compactScreen.getByTestId('auth-email-input'), 'test@example.invalid');
+  await fireEvent.press(compactScreen.getByTestId('auth-submit-button'));
+
+  expect(await compactScreen.findByTestId('auth-success-message')).toBeTruthy();
+  await fireEvent.press(compactScreen.getByTestId('auth-mode-toggle'));
+  expect(compactScreen.getByText('Bei CupCal anmelden')).toBeTruthy();
+});
+
 test('zeigt einen verständlichen Fehler beim Anfordern des Wiederherstellungslinks', async () => {
   auth.resetPasswordForEmail.mockResolvedValue({
     error: new Error('Email rate limit exceeded'),
