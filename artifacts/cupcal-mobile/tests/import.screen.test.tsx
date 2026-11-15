@@ -639,6 +639,71 @@ test('zeigt auch geänderte Termine außerhalb der ersten zwanzig Vorschauzeilen
   expect(screen.queryByText(/weitere Termine ohne Warnung/)).toBeNull();
 });
 
+test('wechselt zwischen allen Vorschauterminen und Änderungen mit passenden Zählern', async () => {
+  mockGetDocumentAsync.mockResolvedValue(selectedFile('plan.mht'));
+  const unchangedEvent = {
+    id: 'unchanged-event',
+    title: 'Unveränderter Termin',
+    startTime: '2026-11-12T18:00:00.000Z',
+    endTime: '2026-11-12T20:00:00.000Z',
+    previousTitle: null,
+    previousGameMode: null,
+    previousTeamFormat: null,
+    previousTournamentType: null,
+    previousCategory: null,
+    previousStartTime: null,
+    previousEndTime: null,
+    gameMode: 'Battle Royale',
+    teamFormat: 'Solo',
+    tournamentType: 'Cash Cup',
+    category: 'Turnier',
+    warnings: [],
+    willUpdate: true,
+  };
+  const changedEvents = [
+    { id: 'changed-start', title: 'Startzeit geändert', previousStartTime: '2026-11-12T17:00:00.000Z' },
+    { id: 'changed-end', title: 'Endzeit geändert', previousEndTime: '2026-11-12T21:00:00.000Z' },
+    { id: 'changed-title', title: 'Titel geändert', previousTitle: 'Alter Titel' },
+    { id: 'changed-mode', title: 'Spielmodus geändert', previousGameMode: 'Reload' },
+    { id: 'changed-format', title: 'Spielformat geändert', previousTeamFormat: 'Duos' },
+    { id: 'changed-type', title: 'Turniertyp geändert', previousTournamentType: 'FNCS' },
+    { id: 'changed-category', title: 'Kategorie geändert', previousCategory: 'Liga' },
+  ].map((change) => ({ ...unchangedEvent, ...change }));
+  mockPreviewImport.mockResolvedValue({
+    ...preview,
+    importableCount: 8,
+    updateCount: 8,
+    events: [unchangedEvent, ...changedEvents],
+  });
+  const screen = await openImportScreen();
+
+  await fireEvent.press(screen.getByTestId('choose-import-file-button'));
+  await fireEvent.press(screen.getByTestId('preview-import-file-button'));
+
+  expect(await screen.findByText('Vorschautermine')).toBeTruthy();
+  expect(screen.getByTestId('import-event-count-summary').props.children.join(''))
+    .toBe('8 Termine · 7 geändert');
+  expect(screen.getByText('Unveränderter Termin')).toBeTruthy();
+  expect(screen.getByTestId('import-event-filter-all').props.accessibilityState.selected).toBe(true);
+  expect(screen.getByText('Alle (8)')).toBeTruthy();
+  expect(screen.getByText('Geändert (7)')).toBeTruthy();
+
+  await fireEvent.press(screen.getByTestId('import-event-filter-changed'));
+
+  expect(screen.getByTestId('import-event-filter-changed').props.accessibilityState.selected).toBe(true);
+  expect(screen.getByTestId('import-event-filter-all').props.accessibilityState.selected).toBe(false);
+  expect(screen.getByTestId('import-event-count-summary').props.children.join(''))
+    .toBe('8 Termine · 7 geändert');
+  expect(screen.queryByText('Unveränderter Termin')).toBeNull();
+  for (const event of changedEvents) {
+    expect(screen.getByText(event.title)).toBeTruthy();
+  }
+
+  await fireEvent.press(screen.getByTestId('import-event-filter-all'));
+  expect(screen.getByTestId('import-event-filter-all').props.accessibilityState.selected).toBe(true);
+  expect(screen.getByText('Unveränderter Termin')).toBeTruthy();
+});
+
 test('meldet einen Abbruch verständlich und lässt die Auswahl erneut zu', async () => {
   mockGetDocumentAsync.mockResolvedValue({ canceled: true, assets: null });
   const screen = await openImportScreen();

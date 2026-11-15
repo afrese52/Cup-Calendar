@@ -159,6 +159,7 @@ export default function AdminImportScreen() {
   const [importResult, setImportResult] = useState<MhtImportResult | null>(null);
   const [startDateText, setStartDateText] = useState('');
   const [endDateText, setEndDateText] = useState('');
+  const [showOnlyChangedEvents, setShowOnlyChangedEvents] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const chooseFile = async () => {
@@ -385,16 +386,12 @@ export default function AdminImportScreen() {
     && preview.startDate === selectedDateRange.startDate
     && preview.endDate === selectedDateRange.endDate,
   );
+  const changedPreviewEvents = preview?.events.filter(hasPreviewChanges) ?? [];
   const visiblePreviewEvents = preview
-    ? preview.events.filter((event, index) => (
-        index < 20 || event.warnings.length > 0 || hasPreviewChanges(event)
-      ))
+    ? showOnlyChangedEvents
+      ? changedPreviewEvents
+      : preview.events
     : [];
-  const omittedUnwarnedEvents = preview
-    ? preview.events.slice(20).filter((event) => (
-        event.warnings.length === 0 && !hasPreviewChanges(event)
-      )).length
-    : 0;
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]} edges={['top']}>
@@ -621,9 +618,54 @@ export default function AdminImportScreen() {
                   ) : null}
                 </View>
 
-                  {previewIsCurrent && visiblePreviewEvents.length > 0 ? (
+                  {previewIsCurrent ? (
                   <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                    <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Zukünftige Termine und Zuordnungswarnungen</Text>
+                    <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Vorschautermine</Text>
+                    <Text
+                      testID="import-event-count-summary"
+                      style={[styles.cardCopy, { color: colors.mutedForeground }]}
+                    >
+                      {preview.events.length} {preview.events.length === 1 ? 'Termin' : 'Termine'}
+                      {' · '}{changedPreviewEvents.length} geändert
+                    </Text>
+                    <View style={[styles.eventFilter, { backgroundColor: colors.secondary }]}>
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={`Alle Vorschautermine, ${preview.events.length}`}
+                        accessibilityState={{ selected: !showOnlyChangedEvents }}
+                        testID="import-event-filter-all"
+                        onPress={() => setShowOnlyChangedEvents(false)}
+                        style={[
+                          styles.eventFilterButton,
+                          !showOnlyChangedEvents ? { backgroundColor: colors.card } : null,
+                        ]}
+                      >
+                        <Text style={[
+                          styles.eventFilterText,
+                          { color: !showOnlyChangedEvents ? colors.foreground : colors.mutedForeground },
+                        ]}>
+                          Alle ({preview.events.length})
+                        </Text>
+                      </Pressable>
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={`Nur geänderte Termine, ${changedPreviewEvents.length}`}
+                        accessibilityState={{ selected: showOnlyChangedEvents }}
+                        testID="import-event-filter-changed"
+                        onPress={() => setShowOnlyChangedEvents(true)}
+                        style={[
+                          styles.eventFilterButton,
+                          showOnlyChangedEvents ? { backgroundColor: colors.card } : null,
+                        ]}
+                      >
+                        <Text style={[
+                          styles.eventFilterText,
+                          { color: showOnlyChangedEvents ? colors.foreground : colors.mutedForeground },
+                        ]}>
+                          Geändert ({changedPreviewEvents.length})
+                        </Text>
+                      </Pressable>
+                    </View>
                     {visiblePreviewEvents.map((event) => {
                       const hasWarnings = event.warnings.length > 0;
                       return (
@@ -685,9 +727,11 @@ export default function AdminImportScreen() {
                         </View>
                       );
                     })}
-                    {omittedUnwarnedEvents > 0 ? (
+                    {visiblePreviewEvents.length === 0 ? (
                       <Text style={[styles.detailCopy, { color: colors.mutedForeground }]}>
-                        {omittedUnwarnedEvents} weitere Termine ohne Warnung sind in der Anzahl enthalten.
+                        {showOnlyChangedEvents
+                          ? 'Keine geänderten Termine in dieser Vorschau.'
+                          : 'Keine Termine in dieser Vorschau.'}
                       </Text>
                     ) : null}
                   </View>
@@ -880,6 +924,9 @@ const styles = StyleSheet.create({
   detailCopy: { fontSize: 11, lineHeight: 16, marginTop: 8 },
   sourceCopy: { fontSize: 10, lineHeight: 14, marginTop: 9 },
   eventRow: { minHeight: 66, flexDirection: 'row', alignItems: 'center', gap: 10, borderBottomWidth: StyleSheet.hairlineWidth, paddingVertical: 10 },
+  eventFilter: { flexDirection: 'row', gap: 5, padding: 4, borderRadius: 12, marginTop: 12, marginBottom: 4 },
+  eventFilterButton: { flex: 1, minHeight: 38, alignItems: 'center', justifyContent: 'center', borderRadius: 9, paddingHorizontal: 6 },
+  eventFilterText: { fontSize: 11, fontWeight: '700', textAlign: 'center' },
   eventCopy: { flex: 1 },
   eventTitle: { fontSize: 12, fontWeight: '700' },
   eventMeta: { fontSize: 10, marginTop: 4 },
