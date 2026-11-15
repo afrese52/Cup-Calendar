@@ -4,6 +4,7 @@ import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { AccessibilityInfo, Alert, Platform } from 'react-native';
 
 const mockSaveNewPassword = jest.fn(async (_password: string) => {});
+let mockRecoveryPending = true;
 let mockPreventRemoveEnabled = false;
 let mockPreventRemoveCallback: ((options: {
   data: { action: unknown };
@@ -58,7 +59,7 @@ jest.mock('@/services/supabase', () => ({
       onAuthStateChange: () => ({ data: { subscription: { unsubscribe: jest.fn() } } }),
     },
   },
-  isPasswordRecoveryPending: () => true,
+  isPasswordRecoveryPending: () => mockRecoveryPending,
   markPasswordRecoverySession: jest.fn(),
   handlePasswordResetUrl: jest.fn(async () => false),
   PASSWORD_MIN_LENGTH: 6,
@@ -108,6 +109,7 @@ const { default: ResetPasswordScreen } = require('../app/auth/reset') as {
 
 beforeEach(() => {
   mockSaveNewPassword.mockReset().mockRejectedValue(new Error('Network request failed'));
+  mockRecoveryPending = true;
   mockUsePreventRemove.mockClear();
   mockPreventRemoveEnabled = false;
   mockPreventRemoveCallback = undefined;
@@ -249,10 +251,35 @@ test('gibt bei einem unerwarteten Speicherfehler eine zugängliche nächste Akti
   await fireEvent.press(view.getByTestId('reset-password-submit-button'));
 
   const errorMessage = await view.findByText(
-    'Das Passwort konnte nicht gespeichert werden. Bitte versuche es erneut oder fordere in den Einstellungen einen neuen Wiederherstellungslink an.',
+    'Das Passwort konnte nicht gespeichert werden. Bitte versuche es erneut.',
   );
   expect(errorMessage.props.accessibilityRole).toBe('alert');
   expect(view.getByTestId('reset-password-submit-button')).toBeTruthy();
+  expect(mockSaveNewPassword).toHaveBeenCalledTimes(1);
+});
+
+test('erklärt eine abgelaufene Sitzung und entfernt das Passwortformular', async () => {
+  mockSaveNewPassword.mockImplementation(async () => {
+    mockRecoveryPending = false;
+    throw Object.assign(new Error('Invalid token: expired'), { code: 'otp_expired' });
+  });
+  const view = await render(<ResetPasswordScreen />);
+
+  await waitFor(() => expect(view.getByTestId('reset-password-submit-button')).toBeTruthy());
+  await fireEvent.changeText(view.getByTestId('reset-password-input'), 'Mein-neues-Passwort-123');
+  await fireEvent.changeText(view.getByTestId('reset-password-confirm-input'), 'Mein-neues-Passwort-123');
+  await fireEvent.press(view.getByTestId('reset-password-submit-button'));
+
+  const errorMessage = await view.findByText(
+    'Die Wiederherstellungssitzung ist abgelaufen oder ungültig. Bitte fordere in den Einstellungen einen neuen Wiederherstellungslink an.',
+  );
+  expect(errorMessage.props.accessible).toBe(true);
+  expect(errorMessage.props.accessibilityRole).toBe('alert');
+  expect(errorMessage.props.accessibilityLiveRegion).toBe('assertive');
+  expect(view.queryByTestId('reset-password-input')).toBeNull();
+  expect(view.queryByTestId('reset-password-confirm-input')).toBeNull();
+  expect(view.queryByTestId('reset-password-submit-button')).toBeNull();
+  expect(view.getByTestId('reset-password-return-button')).toBeTruthy();
   expect(mockSaveNewPassword).toHaveBeenCalledTimes(1);
 });
 

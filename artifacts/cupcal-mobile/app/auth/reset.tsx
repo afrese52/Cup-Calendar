@@ -152,11 +152,18 @@ export default function ResetPasswordScreen() {
         );
       }
     } catch (error) {
-      setIsRecoveryReady(isPasswordRecoveryPending());
-      const message = friendlyAuthError(
-        error,
-        'Das Passwort konnte nicht gespeichert werden. Bitte versuche es erneut oder fordere in den Einstellungen einen neuen Wiederherstellungslink an.',
-      );
+      const hasRecoverySession = isPasswordRecoveryPending();
+      setIsRecoveryReady(hasRecoverySession);
+      if (!hasRecoverySession) {
+        setPassword('');
+        setConfirmPassword('');
+      }
+      const message = hasRecoverySession
+        ? friendlyAuthError(
+          error,
+          'Das Passwort konnte nicht gespeichert werden. Bitte versuche es erneut.',
+        )
+        : 'Die Wiederherstellungssitzung ist abgelaufen oder ungültig. Bitte fordere in den Einstellungen einen neuen Wiederherstellungslink an.';
       setErrorMessage(message);
       if (Platform.OS === 'ios') {
         AccessibilityInfo.announceForAccessibility(message);
