@@ -303,20 +303,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const toggleBookmark = useCallback(
     async (eventId: string) => {
-      if (!currentUserId.current) return;
+      const activeUserId = currentUserId.current;
+      if (!activeUserId) return;
       const isFavorite = !currentBookmarkIds.current.includes(eventId);
-      const next = isFavorite
-        ? [...currentBookmarkIds.current, eventId]
-        : currentBookmarkIds.current.filter((id) => id !== eventId);
-      currentBookmarkIds.current = next;
-      setBookmarkedIds(next);
       setStorageError(null);
       try {
-        await setBookmarksFavorite(currentUserId.current, [eventId], isFavorite);
-        const activeUserId = currentUserId.current;
-        if (activeUserId) void syncBookmarks(activeUserId);
+        const savedIds = await setBookmarksFavorite(activeUserId, [eventId], isFavorite);
+        if (currentUserId.current !== activeUserId) return;
+        currentBookmarkIds.current = savedIds;
+        setBookmarkedIds(savedIds);
+        void syncBookmarks(activeUserId);
       } catch {
-        setStorageError('Favorit konnte nicht dauerhaft gespeichert werden.');
+        if (currentUserId.current === activeUserId) {
+          setStorageError('Favorit konnte nicht gespeichert werden. Bitte versuche es erneut.');
+        }
       }
     },
     [syncBookmarks],
@@ -358,17 +358,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [legacyBookmarkImport, syncBookmarks]);
 
   const clearBookmarks = useCallback(async () => {
-    if (!currentUserId.current) return;
-    const idsToClear = [...currentBookmarkIds.current];
     const activeUserId = currentUserId.current;
-    currentBookmarkIds.current = [];
-    setBookmarkedIds([]);
+    if (!activeUserId) return;
+    const idsToClear = [...currentBookmarkIds.current];
     setStorageError(null);
     try {
-      await setBookmarksFavorite(activeUserId, idsToClear, false);
-      if (activeUserId) void syncBookmarks(activeUserId);
+      const savedIds = await setBookmarksFavorite(activeUserId, idsToClear, false);
+      if (currentUserId.current !== activeUserId) return;
+      currentBookmarkIds.current = savedIds;
+      setBookmarkedIds(savedIds);
+      void syncBookmarks(activeUserId);
     } catch {
-      setStorageError('Favoriten konnten nicht gelöscht werden.');
+      if (currentUserId.current === activeUserId) {
+        setStorageError('Favoriten konnten nicht gelöscht werden. Bitte versuche es erneut.');
+      }
     }
   }, [syncBookmarks]);
 

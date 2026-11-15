@@ -13,18 +13,49 @@ import {
 } from './localBookmarkStore.ts';
 
 const storedValues = new Map();
+const storageFailures = { get: false, set: false, remove: false };
 const localStorage = {
   get length() { return storedValues.size; },
   clear() { storedValues.clear(); },
-  getItem(key) { return storedValues.get(key) ?? null; },
+  getItem(key) {
+    if (storageFailures.get) throw new Error('device storage read failed');
+    return storedValues.get(key) ?? null;
+  },
   key(index) { return [...storedValues.keys()][index] ?? null; },
-  removeItem(key) { storedValues.delete(key); },
-  setItem(key, value) { storedValues.set(key, String(value)); },
+  removeItem(key) {
+    if (storageFailures.remove) throw new Error('device storage remove failed');
+    storedValues.delete(key);
+  },
+  setItem(key, value) {
+    if (storageFailures.set) throw new Error('device storage write failed');
+    storedValues.set(key, String(value));
+  },
 };
 globalThis.window = { localStorage };
 
 beforeEach(async () => {
   localStorage.clear();
+  storageFailures.get = false;
+  storageFailures.set = false;
+  storageFailures.remove = false;
+});
+
+test('gibt Fehler beim Lesen des Gerätespeichers weiter', async () => {
+  storageFailures.get = true;
+
+  await assert.rejects(loadBookmarksForUser(null), /device storage read failed/);
+});
+
+test('meldet fehlgeschriebene Favoritenänderungen und speichert sie nicht', async () => {
+  storageFailures.set = true;
+
+  await assert.rejects(
+    setBookmarksFavorite('konto-a', ['turnier-a'], true),
+    /device storage write failed/,
+  );
+
+  storageFailures.set = false;
+  assert.deepEqual(await loadBookmarksForUser('konto-a'), []);
 });
 
 test('sichert Offline-Favoriten und -Entfernungen bis zur Bestätigung', async () => {

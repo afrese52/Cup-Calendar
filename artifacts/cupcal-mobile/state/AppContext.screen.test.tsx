@@ -1,7 +1,7 @@
 import React from 'react';
 import { afterEach, beforeEach, expect, jest, test } from '@jest/globals';
-import { act, render, waitFor } from '@testing-library/react-native';
-import { Text } from 'react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+import { Pressable, Text } from 'react-native';
 import { AppProvider, useCupCal } from './AppContext';
 
 type AuthListener = (event: string, session: { user: { id: string } } | null) => void;
@@ -69,13 +69,25 @@ jest.mock('@/services/supabase', () => {
 });
 
 function BookmarkState() {
-  const { bookmarkedIds } = useCupCal();
-  return <Text testID="bookmark-ids">{bookmarkedIds.join(',')}</Text>;
+  const { bookmarkedIds, storageError, toggleBookmark, clearBookmarks } = useCupCal();
+  return (
+    <>
+      <Text testID="bookmark-ids">{bookmarkedIds.join(',')}</Text>
+      <Text testID="storage-error">{storageError ?? ''}</Text>
+      <Pressable testID="toggle-bookmark" onPress={() => toggleBookmark('turnier-neu')}>
+        <Text>Favorit ändern</Text>
+      </Pressable>
+      <Pressable testID="clear-bookmarks" onPress={() => clearBookmarks()}>
+        <Text>Favoriten löschen</Text>
+      </Pressable>
+    </>
+  );
 }
 
 const bookmarkStore = jest.requireMock('@/services/localBookmarkStore') as {
   loadBookmarksForUser: jest.Mock<(...args: any[]) => any>;
   reconcileBookmarks: jest.Mock<(...args: any[]) => any>;
+  setBookmarksFavorite: jest.Mock<(...args: any[]) => any>;
 };
 const mockedSupabase = jest.requireMock('@/services/supabase') as {
   __emitAuthStateChange: (event: string, session: { user: { id: string } } | null) => void;
@@ -111,6 +123,7 @@ beforeEach(() => {
       pendingCount: 0,
     }),
   );
+  bookmarkStore.setBookmarksFavorite.mockReset().mockResolvedValue([]);
   mockedSupabase.supabase.auth.getSession.mockReset().mockResolvedValue({
     data: { session: null },
     error: null,
@@ -171,6 +184,59 @@ test('zeigt ohne gespeicherte Sitzung weiterhin nur lokale Gastfavoriten', async
   expect(bookmarkStore.loadBookmarksForUser).toHaveBeenCalledWith(null);
   expect(bookmarkStore.loadBookmarksForUser).not.toHaveBeenCalledWith('konto-a');
   expect(mockedSupabase.fetchRemoteBookmarks).not.toHaveBeenCalled();
+});
+
+test('meldet einen Fehler beim Laden lokaler Favoriten verständlich', async () => {
+  bookmarkStore.loadBookmarksForUser.mockRejectedValue(new Error('device storage unavailable'));
+
+  const view = await renderProvider();
+
+  await waitFor(() => {
+    expect(view.getByTestId('storage-error').props.children).toBe(
+      'Favoriten konnten nicht geladen werden.',
+    );
+  });
+  expect(view.getByTestId('bookmark-ids').props.children).toBe('');
+});
+
+test('zeigt einen Favoriten erst nach erfolgreichem lokalem Speichern an', async () => {
+  bookmarkStore.setBookmarksFavorite.mockRejectedValue(new Error('device storage unavailable'));
+  const view = await renderProvider();
+  await emitUser('konto-a');
+
+  await waitFor(() => expect(bookmarkStore.loadBookmarksForUser).toHaveBeenCalledWith('konto-a'));
+  await act(async () => {
+    await fireEvent.press(view.getByTestId('toggle-bookmark'));
+  });
+
+  expect(view.getByTestId('bookmark-ids').props.children).toBe('');
+  expect(view.getByTestId('storage-error').props.children).toBe(
+    'Favorit konnte nicht gespeichert werden. Bitte versuche es erneut.',
+  );
+});
+
+test('behält Favoriten bei einem fehlgeschlagenen lokalen Löschen bei', async () => {
+  mockedSupabase.fetchRemoteBookmarks.mockResolvedValue([{
+    event_id: 'bereits-gespeichert',
+    is_favorite: true,
+    updated_at: '2026-01-01T00:00:00.000Z',
+    revision: 1,
+  }]);
+  bookmarkStore.setBookmarksFavorite.mockRejectedValue(new Error('device storage unavailable'));
+  const view = await renderProvider();
+  await emitUser('konto-a');
+
+  await waitFor(() => {
+    expect(view.getByTestId('bookmark-ids').props.children).toBe('bereits-gespeichert');
+  });
+  await act(async () => {
+    await fireEvent.press(view.getByTestId('clear-bookmarks'));
+  });
+
+  expect(view.getByTestId('bookmark-ids').props.children).toBe('bereits-gespeichert');
+  expect(view.getByTestId('storage-error').props.children).toBe(
+    'Favoriten konnten nicht gelöscht werden. Bitte versuche es erneut.',
+  );
 });
 
 test('zeigt nach einem Kontowechsel während des lokalen Ladens nur die Favoriten des neuen Kontos', async () => {
