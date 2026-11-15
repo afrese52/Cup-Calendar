@@ -111,6 +111,21 @@ function selectedFile(name: string, size = 128) {
   };
 }
 
+function selectedWebFile(name: string, size = 128) {
+  return {
+    canceled: false,
+    assets: [{
+      name,
+      size,
+      uri: 'blob:test-file',
+      file: {
+        size,
+        text: async () => 'MIME-Version: 1.0\n',
+      },
+    }],
+  };
+}
+
 function selectedFileWithoutSize(name: string) {
   return {
     canceled: false,
@@ -348,6 +363,119 @@ test('aktualisiert eine zunächst frische Vorschau und verlangt Bestätigung, we
   }));
   expect(mockPreviewImport).toHaveBeenCalledTimes(3);
   alertSpy.mockRestore();
+});
+
+test('zeigt auf iOS die aktuelle Veraltung im nativen Dialog und übermittelt die Bestätigung', async () => {
+  setPlatformOS('ios');
+  mockGetDocumentAsync.mockResolvedValue(selectedFile('plan.mht'));
+  const freshPreview = {
+    ...preview,
+    importableCount: 1,
+    snapshotAt: '2026-11-12T12:00:00.000Z',
+    snapshotAgeMs: 23 * 60 * 60 * 1000,
+    isSnapshotStale: false,
+  };
+  const stalePreview = {
+    ...freshPreview,
+    snapshotAt: '2026-11-11T10:00:00.000Z',
+    snapshotAgeMs: 25 * 60 * 60 * 1000,
+    isSnapshotStale: true,
+  };
+  mockPreviewImport.mockResolvedValueOnce(freshPreview).mockResolvedValue(stalePreview);
+  mockImportSchedule.mockResolvedValue({
+    importedCount: 1,
+    insertedCount: 1,
+    updatedCount: 0,
+    skippedWarningCount: 0,
+    skippedPastCount: 0,
+    skippedInvalidCount: 0,
+    skippedCount: 0,
+  });
+  const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation((_title, message, buttons) => {
+    expect(message).toContain(
+      'Achtung: Der Snapshot ist inzwischen älter als 24 Stunden. Prüfe eine aktuelle Datei oder bestätige ausdrücklich den Import dieser veralteten Vorschau.',
+    );
+    buttons?.find((button) => button.text === 'Importieren')?.onPress?.();
+  });
+  const screen = await openImportScreen();
+
+  await fireEvent.press(screen.getByTestId('choose-import-file-button'));
+  await fireEvent.press(screen.getByTestId('preview-import-file-button'));
+  await fireEvent.press(await screen.findByTestId('confirm-import-button'));
+
+  expect(alertSpy).toHaveBeenCalledWith(
+    'Veralteten Spielplan importieren?',
+    expect.stringContaining('Achtung: Der Snapshot ist inzwischen älter als 24 Stunden.'),
+    expect.any(Array),
+  );
+  await waitFor(() => expect(mockImportSchedule).toHaveBeenCalledWith({
+    data: 'MIME-Version: 1.0\n',
+    params: {
+      startDate: '2026-11-12',
+      endDate: '2026-11-12',
+      confirmStaleSnapshot: true,
+    },
+  }));
+  alertSpy.mockRestore();
+});
+
+test('zeigt im Web dieselbe aktuelle Veraltungswarnung und übermittelt die Bestätigung', async () => {
+  setPlatformOS('web');
+  mockGetDocumentAsync.mockResolvedValue(selectedWebFile('plan.mht'));
+  const freshPreview = {
+    ...preview,
+    importableCount: 1,
+    snapshotAt: '2026-11-12T12:00:00.000Z',
+    snapshotAgeMs: 23 * 60 * 60 * 1000,
+    isSnapshotStale: false,
+  };
+  const stalePreview = {
+    ...freshPreview,
+    snapshotAt: '2026-11-11T10:00:00.000Z',
+    snapshotAgeMs: 25 * 60 * 60 * 1000,
+    isSnapshotStale: true,
+  };
+  mockPreviewImport.mockResolvedValueOnce(freshPreview).mockResolvedValue(stalePreview);
+  mockImportSchedule.mockResolvedValue({
+    importedCount: 1,
+    insertedCount: 1,
+    updatedCount: 0,
+    skippedWarningCount: 0,
+    skippedPastCount: 0,
+    skippedInvalidCount: 0,
+    skippedCount: 0,
+  });
+  const originalWindowDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'window');
+  const confirmSpy = jest.fn<(message: string) => boolean>().mockReturnValue(true);
+  Object.defineProperty(globalThis, 'window', {
+    configurable: true,
+    value: { confirm: confirmSpy },
+  });
+
+  try {
+    const screen = await openImportScreen();
+    await fireEvent.press(screen.getByTestId('choose-import-file-button'));
+    await fireEvent.press(screen.getByTestId('preview-import-file-button'));
+    await fireEvent.press(await screen.findByTestId('confirm-import-button'));
+
+    expect(confirmSpy).toHaveBeenCalledWith(expect.stringContaining(
+      'Achtung: Der Snapshot ist inzwischen älter als 24 Stunden. Prüfe eine aktuelle Datei oder bestätige ausdrücklich den Import dieser veralteten Vorschau.',
+    ));
+    await waitFor(() => expect(mockImportSchedule).toHaveBeenCalledWith({
+      data: 'MIME-Version: 1.0\n',
+      params: {
+        startDate: '2026-11-12',
+        endDate: '2026-11-12',
+        confirmStaleSnapshot: true,
+      },
+    }));
+  } finally {
+    if (originalWindowDescriptor) {
+      Object.defineProperty(globalThis, 'window', originalWindowDescriptor);
+    } else {
+      Reflect.deleteProperty(globalThis, 'window');
+    }
+  }
 });
 
 test('meldet ein unbekanntes Snapshot-Alter, ohne es als veraltet auszugeben', async () => {
