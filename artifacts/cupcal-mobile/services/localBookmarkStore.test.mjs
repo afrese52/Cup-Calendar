@@ -211,6 +211,27 @@ test('synchronisiert Änderungen trotz vor- oder nachgehender Geräteuhr', async
   }
 });
 
+test('behält eine neuere lokale Änderung, wenn der vorherige Sync noch aussteht', async () => {
+  const eventId = 'turnier-a';
+  await setBookmarksFavorite('konto-a', [eventId], true);
+  const firstSyncSnapshot = await prepareBookmarksForSync('konto-a');
+  assert.equal(firstSyncSnapshot[eventId].isFavorite, true);
+
+  await setBookmarksFavorite('konto-a', [eventId], false);
+  const nextSyncSnapshot = await prepareBookmarksForSync('konto-a');
+  assert.equal(nextSyncSnapshot[eventId].isFavorite, false);
+
+  const stillPending = await reconcileBookmarks('konto-a', [{
+    event_id: eventId,
+    is_favorite: true,
+    updated_at: firstSyncSnapshot[eventId].updatedAt,
+    revision: 1,
+  }]);
+  assert.deepEqual(stillPending.eventIds, []);
+  assert.equal(stillPending.pendingCount, 1);
+  assert.equal((await prepareBookmarksForSync('konto-a'))[eventId].isFavorite, false);
+});
+
 test('hält Favoriten und ausstehende Änderungen pro Konto getrennt', async () => {
   await setBookmarksFavorite('konto-a', ['nur-a'], true);
   await setBookmarksFavorite('konto-b', ['nur-b'], true);
