@@ -314,6 +314,28 @@ test('registriert ein Konto und zeigt die Bestätigungsmeldung', async () => {
   expect(view.getByTestId('auth-password-input').props.value).toBe('');
 });
 
+test('verschiebt den Screenreader-Fokus während einer laufenden Registrierung nicht', async () => {
+  let finishSignUp!: (result: { data: { session: null }; error: null }) => void;
+  auth.signUp.mockImplementation(
+    () => new Promise((resolve) => { finishSignUp = resolve; }),
+  );
+  const view = await openSettings();
+  await fireEvent.press(view.getByTestId('auth-mode-toggle'));
+  await enterCredentials(view);
+
+  await fireEvent.press(view.getByTestId('auth-submit-button'));
+
+  await waitFor(() => {
+    expect(view.getByTestId('auth-submit-button').props.accessibilityState).toEqual({
+      disabled: true,
+      busy: true,
+    });
+  });
+  expect(sendAccessibilityFocus).not.toHaveBeenCalled();
+  await act(async () => finishSignUp({ data: { session: null }, error: null }));
+  expect(await view.findByTestId('auth-success-message')).toBeTruthy();
+});
+
 test('blendet den erneuten Versand nach bestätigter Sitzung aus und zeigt das Konto', async () => {
   const view = await openSettings();
   await fireEvent.press(view.getByTestId('auth-mode-toggle'));
@@ -633,9 +655,13 @@ test('zeigt einen verständlichen Fehler beim Anfordern des Wiederherstellungsli
 
   await fireEvent.press(view.getByTestId('auth-submit-button'));
 
-  expect(await view.findByText(
+  const errorMessage = await view.findByTestId('auth-error-message');
+  expect(errorMessage.props.accessible).toBe(true);
+  expect(errorMessage.props.accessibilityRole).toBe('alert');
+  expect(errorMessage.props.accessibilityLiveRegion).toBe('assertive');
+  expect(errorMessage.props.children).toBe(
     'Zu viele Versuche in kurzer Zeit. Warte bitte einige Minuten und versuche es dann erneut.',
-  )).toBeTruthy();
+  );
   await waitFor(() => expect(sendAccessibilityFocus).toHaveBeenCalledTimes(1));
 });
 
@@ -713,6 +739,7 @@ test('zeigt den Ladezustand und sperrt die Schaltflächen während der Linkanfra
       disabled: true,
     });
   });
+  expect(sendAccessibilityFocus).not.toHaveBeenCalled();
   await act(async () => finishReset({ error: null }));
 
   expect(await view.findByTestId('auth-success-message')).toBeTruthy();
