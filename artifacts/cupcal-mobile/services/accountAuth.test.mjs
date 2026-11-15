@@ -126,6 +126,27 @@ test('meldet mit bereinigter E-Mail erfolgreich an', async () => {
   assert.deepEqual(result, { ok: true, message: 'Du bist angemeldet.' });
 });
 
+test('lässt bestehende Konten mit einem kurzen Passwort anmelden', async () => {
+  let receivedCredentials;
+  const result = await submitAccountAuth(createAuth({
+    signInWithPassword: async (credentials) => {
+      receivedCredentials = credentials;
+      return { error: null };
+    },
+  }), {
+    mode: 'sign-in',
+    email: 'test@example.invalid',
+    password: '12345',
+    requestPasswordReset: async () => {},
+  });
+
+  assert.deepEqual(receivedCredentials, {
+    email: 'test@example.invalid',
+    password: '12345',
+  });
+  assert.deepEqual(result, { ok: true, message: 'Du bist angemeldet.' });
+});
+
 test('zeigt einen verständlichen Fehler bei abgelehnter Anmeldung', async () => {
   const result = await submitAccountAuth(createAuth({
     signInWithPassword: async () => ({
@@ -235,6 +256,28 @@ test('prüft die Unicode-Mindestlänge vor der Registrierung', async (t) => {
     assert.equal(receivedPassword, password);
     assert.equal(result.ok, true);
   });
+});
+
+test('weist dasselbe kurze Passwort vor der Registrierungsanfrage ab', async () => {
+  let called = false;
+  const result = await submitAccountAuth(createAuth({
+    signUp: async () => {
+      called = true;
+      return { data: { session: null }, error: null };
+    },
+  }), {
+    mode: 'sign-up',
+    email: 'test@example.invalid',
+    password: '12345',
+    emailConfirmationRedirectTo: 'cupcal-android://auth/confirm',
+    requestPasswordReset: async () => {},
+  });
+
+  assert.deepEqual(result, {
+    ok: false,
+    error: 'Das Passwort muss mindestens 6 Zeichen lang sein.',
+  });
+  assert.equal(called, false);
 });
 
 test('zeigt Fehler bei abgelehnter Registrierung verständlich an', async () => {
