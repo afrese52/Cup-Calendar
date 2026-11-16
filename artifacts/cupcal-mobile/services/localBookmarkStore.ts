@@ -90,7 +90,20 @@ async function readStore(): Promise<BookmarkStore> {
   if (stored) {
     try {
       const parsed = parseStore(JSON.parse(stored));
-      if (parsed) return parsed;
+      if (parsed) {
+        const legacy = await storage.getItem(LEGACY_BOOKMARKS_KEY);
+        if (legacy) {
+          try {
+            parsed.anonymousIds = uniqueIds([
+              ...parsed.anonymousIds,
+              ...uniqueIds(JSON.parse(legacy)),
+            ]);
+          } catch {
+            // Keep the current-format data if the legacy value is malformed.
+          }
+        }
+        return parsed;
+      }
     } catch {
       // Keep the existing value intact; a later write can replace malformed data.
     }

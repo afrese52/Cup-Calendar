@@ -124,6 +124,44 @@ test('übernimmt alte anonyme Einträge erst nach ausdrücklicher Zustimmung', a
   assert.deepEqual(await loadBookmarksForUser('konto-b'), []);
 });
 
+test('führt alte Gastfavoriten mit Kontofavoriten und ausstehenden Entfernungen zusammen', async () => {
+  localStorage.setItem('cupcal.bookmarks.v2', JSON.stringify({
+    anonymousIds: [],
+    anonymousImportDeclinedUserIds: [],
+    accounts: {
+      'konto-a': {
+        eventIds: ['konto-favorit'],
+        pending: {
+          'ausstehende-entfernung': {
+            isFavorite: false,
+            updatedAt: '2026-01-01T00:00:00.000Z',
+          },
+        },
+        initialized: true,
+      },
+    },
+  }));
+  localStorage.setItem(
+    'cupcal.bookmarks.v1',
+    JSON.stringify(['gast-favorit', 'ausstehende-entfernung']),
+  );
+
+  const importedIds = await importAnonymousBookmarksForUser('konto-a');
+  assert.deepEqual(importedIds, ['konto-favorit', 'gast-favorit']);
+
+  const pending = await prepareBookmarksForSync('konto-a');
+  assert.equal(pending['ausstehende-entfernung']?.isFavorite, false);
+  assert.deepEqual(await loadBookmarksForUser('konto-a'), ['konto-favorit', 'gast-favorit']);
+
+  const savedStore = JSON.parse(localStorage.getItem('cupcal.bookmarks.v2'));
+  assert.deepEqual(
+    savedStore.accounts['konto-a'].eventIds,
+    ['konto-favorit', 'gast-favorit'],
+  );
+  assert.equal(savedStore.accounts['konto-a'].pending['ausstehende-entfernung'].isFavorite, false);
+  assert.equal(localStorage.getItem('cupcal.bookmarks.v1'), null);
+});
+
 test('behält abgelehnte alte Einträge lokal und fragt dasselbe Konto nicht erneut', async () => {
   localStorage.setItem('cupcal.bookmarks.v1', JSON.stringify(['turnier-alt']));
 
