@@ -358,6 +358,126 @@ test("liefert importierte Fixture-Termine über den passenden Turniertyp-Filter"
   }
 });
 
+test("meldet fehlende Importspalten am Admin-Endpunkt und speichert keine Teildaten", async () => {
+  const originalEnv = new Map(
+    ["NODE_ENV", "SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "CUPCAL_IMPORT_ADMIN_EMAILS"]
+      .map((key) => [key, process.env[key]]),
+  );
+  const fixturePath = new URL("../../scripts/fixtures/real-schedule-format-sample.mht", import.meta.url);
+  const sourceText = (await readFile(fixturePath, "utf8"))
+    .replace("19. Januar 2025", "16. November 2026");
+  const storedEvents = [];
+  const storedHistory = [];
+  let commitPayload;
+  let directEventWriteCalls = 0;
+  let historyWriteCalls = 0;
+  const fakeSupabase = createServer(async (request, response) => {
+    const chunks = [];
+    for await (const chunk of request) chunks.push(chunk);
+    const body = Buffer.concat(chunks).toString("utf8");
+    response.setHeader("Content-Type", "application/json");
+
+    if (request.url === "/auth/v1/user") {
+      if (request.headers.authorization !== "Bearer missing-import-migration-token") {
+        response.statusCode = 401;
+        response.end(JSON.stringify({ message: "Invalid test session" }));
+        return;
+      }
+      response.end(JSON.stringify({
+        id: "missing-import-migration-test-user",
+        email: "admin@cupcal.test",
+      }));
+      return;
+    }
+
+    if (request.url?.startsWith("/rest/v1/fortnite_events")) {
+      if (request.method === "GET") {
+        response.end(JSON.stringify(storedEvents));
+        return;
+      }
+      directEventWriteCalls += 1;
+      storedEvents.push(...JSON.parse(body));
+      response.statusCode = 201;
+      response.end(JSON.stringify(storedEvents));
+      return;
+    }
+
+    if (request.url === "/rest/v1/rpc/commit_mht_import" && request.method === "POST") {
+      commitPayload = JSON.parse(body);
+      response.statusCode = 400;
+      response.end(JSON.stringify({
+        code: "42703",
+        details: null,
+        hint: null,
+        message: "column fortnite_events.tournament_series does not exist",
+      }));
+      return;
+    }
+
+    if (request.url?.startsWith("/rest/v1/admin_import_history") && request.method === "POST") {
+      historyWriteCalls += 1;
+      storedHistory.push(JSON.parse(body));
+      response.statusCode = 201;
+      response.end("");
+      return;
+    }
+
+    response.statusCode = 404;
+    response.end(JSON.stringify({ message: "Unexpected test request" }));
+  });
+  let apiServer;
+  let tempDir;
+
+  try {
+    const fakeSupabaseUrl = await listen(fakeSupabase);
+    process.env["NODE_ENV"] = "production";
+    process.env["SUPABASE_URL"] = fakeSupabaseUrl;
+    process.env["SUPABASE_SERVICE_ROLE_KEY"] = "test-service-role-key";
+    process.env["CUPCAL_IMPORT_ADMIN_EMAILS"] = "admin@cupcal.test";
+
+    const loaded = await loadApiApp();
+    tempDir = loaded.tempDir;
+    apiServer = loaded.app.listen(0, "127.0.0.1");
+    await new Promise((resolve, reject) => {
+      apiServer.once("error", reject);
+      apiServer.once("listening", resolve);
+    });
+
+    const response = await fetch(
+      `http://127.0.0.1:${apiServer.address().port}/api/v1/admin/events/import?confirmStaleSnapshot=true`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer missing-import-migration-token",
+          "Content-Type": "text/plain; charset=utf-8",
+        },
+        body: sourceText,
+      },
+    );
+    const result = await response.json();
+
+    assert.equal(response.status, 503);
+    assert.deepEqual(result, {
+      error: "Die Datenbank ist noch nicht für Turnierserie und Regelwerk migriert. Wende die neue Supabase-Migration an und wiederhole den Import.",
+    });
+    assert.ok(commitPayload?.p_events.length > 0, "Der Test hat den transaktionalen Import mit Terminen erreicht.");
+    assert.equal(commitPayload.p_events[0].tournament_series, "Reload");
+    assert.equal(result.importedCount, undefined, "Die Antwort meldet keinen erfolgreichen Import.");
+    assert.equal(directEventWriteCalls, 0, "Es gab keinen einzelnen Schreibversuch für Termine.");
+    assert.equal(historyWriteCalls, 0, "Es gab keinen einzelnen Schreibversuch für den Importverlauf.");
+    assert.deepEqual(storedEvents, [], "Es wurden keine Termine teilweise gespeichert.");
+    assert.deepEqual(storedHistory, [], "Es wurde kein Importverlauf teilweise gespeichert.");
+  } finally {
+    if (apiServer?.listening) await closeServer(apiServer);
+    if (fakeSupabase.listening) await closeServer(fakeSupabase);
+    if (tempDir) await rm(tempDir, { recursive: true, force: true });
+    for (const [key, value] of originalEnv) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+});
+
 test("meldet bei neuen und unveränderten Terminen keine geänderten Details", () => {
   const imported = event();
 
