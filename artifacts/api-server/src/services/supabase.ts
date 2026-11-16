@@ -187,6 +187,16 @@ export interface MhtImportHistoryInput {
   skippedCards: MhtImportSkippedCard[];
 }
 
+export type MhtImportCommitHistoryInput = Omit<
+  MhtImportHistoryInput,
+  "insertedCount" | "updatedCount"
+>;
+
+export interface MhtImportCommitResult {
+  insertedCount: number;
+  updatedCount: number;
+}
+
 export class ImportHistoryWriteError extends Error {
   constructor() {
     super("Der Import wurde gespeichert, aber die Historie konnte nicht geschrieben werden.");
@@ -349,15 +359,15 @@ export async function recordMhtImportHistory(
 
 export async function commitMhtImport(
   events: MhtImportEvent[],
-  history: MhtImportHistoryInput,
+  history: MhtImportCommitHistoryInput,
   admin: SupabaseClient = getSupabaseAdmin(),
-): Promise<void> {
+): Promise<MhtImportCommitResult> {
   const rows = buildMhtEventUpsertRows(events);
   if (rows.length === 0) {
     throw new MhtImportTransactionError();
   }
 
-  const { error } = await admin.rpc("commit_mht_import", {
+  const { data, error } = await admin.rpc("commit_mht_import", {
     p_events: rows,
     p_history: {
       admin_user_id: history.adminUserId,
@@ -365,8 +375,6 @@ export async function commitMhtImport(
       source_hint: history.sourceHint,
       start_date: history.startDate,
       end_date: history.endDate,
-      inserted_count: history.insertedCount,
-      updated_count: history.updatedCount,
       skipped_count: history.skippedCount,
       skipped_warning_count: history.skippedWarningCount,
       skipped_past_count: history.skippedPastCount,
@@ -380,6 +388,23 @@ export async function commitMhtImport(
     }
     throw new MhtImportTransactionError();
   }
+
+  if (
+    !data
+    || typeof data !== "object"
+    || !Number.isInteger(data.inserted_count)
+    || !Number.isInteger(data.updated_count)
+    || data.inserted_count < 0
+    || data.updated_count < 0
+    || data.inserted_count + data.updated_count !== rows.length
+  ) {
+    throw new MhtImportTransactionError();
+  }
+
+  return {
+    insertedCount: data.inserted_count,
+    updatedCount: data.updated_count,
+  };
 }
 
 export async function listRecentMhtImports(

@@ -263,7 +263,10 @@ test("liefert importierte Fixture-Termine über den passenden Turniertyp-Filter"
       for await (const chunk of request) body += chunk;
       const { p_events: importedEvents } = JSON.parse(body);
       storedRows.push(...importedEvents);
-      response.end(JSON.stringify(null));
+      response.end(JSON.stringify({
+        inserted_count: importedEvents.length,
+        updated_count: 0,
+      }));
       return;
     }
     if (request.url?.startsWith("/rest/v1/fortnite_events")) {
@@ -1120,9 +1123,13 @@ Content-Type: text/html; charset=utf-8
 
     if (request.url === "/rest/v1/rpc/commit_mht_import" && request.method === "POST") {
       importCall = JSON.parse(body);
-      historyRow = importCall.p_history;
+      const counts = {
+        inserted_count: 0,
+        updated_count: importCall.p_events.length,
+      };
+      historyRow = { ...importCall.p_history, ...counts };
       response.statusCode = 200;
-      response.end("null");
+      response.end(JSON.stringify(counts));
       return;
     }
 
@@ -1229,8 +1236,8 @@ Content-Type: text/html; charset=utf-8
     assert.equal(response.status, 200, JSON.stringify(result));
     assert.deepEqual(result, {
       importedCount: 1,
-      insertedCount: 1,
-      updatedCount: 0,
+      insertedCount: 0,
+      updatedCount: 1,
       skippedWarningCount: 1,
       skippedPastCount: 1,
       skippedInvalidCount: 1,
@@ -1245,10 +1252,12 @@ Content-Type: text/html; charset=utf-8
     assert.ok(!historyRow.skipped_cards.some((card) => card.id === "epic:OutsideRange:OutsideRangeRound"));
     assert.deepEqual(importCall.p_events.map((row) => row.id), ["epic:CleanSolo:CleanRound"]);
     assert.ok(!importCall.p_events.some((row) => row.id === "epic:OutsideRange:OutsideRangeRound"));
-    assert.equal(historyRow.inserted_count, 1);
+    assert.equal("inserted_count" in importCall.p_history, false);
+    assert.equal("updated_count" in importCall.p_history, false);
+    assert.equal(historyRow.inserted_count, 0);
     assert.equal(historyRow.start_date, "2026-11-15");
     assert.equal(historyRow.end_date, "2026-11-15");
-    assert.equal(historyRow.updated_count, 0);
+    assert.equal(historyRow.updated_count, 1);
     assert.equal(historyRow.skipped_count, 3);
     assert.equal(historyRow.skipped_warning_count, 1);
     assert.equal(historyRow.skipped_past_count, 1);
@@ -1272,8 +1281,8 @@ Content-Type: text/html; charset=utf-8
         sourceHint: "www.fortnite.com",
         startDate: "2026-11-15",
         endDate: "2026-11-15",
-        insertedCount: 1,
-        updatedCount: 0,
+        insertedCount: 0,
+        updatedCount: 1,
         skippedCount: 3,
         skippedWarningCount: 1,
         skippedPastCount: 1,
@@ -1804,7 +1813,10 @@ test("speichert Termine und Verlauf über einen gemeinsamen Datenbankaufruf", as
   const admin = {
     async rpc(name, args) {
       call = { name, args };
-      return { error: null };
+      return {
+        data: { inserted_count: 0, updated_count: 1 },
+        error: null,
+      };
     },
   };
   const history = {
@@ -1822,8 +1834,9 @@ test("speichert Termine und Verlauf über einen gemeinsamen Datenbankaufruf", as
     skippedCards: [{ id: "epic:ignored", title: "Ignorierter Termin", reason: "Zuordnung prüfen" }],
   };
 
-  await commitMhtImport([event()], history, admin);
+  const committed = await commitMhtImport([event()], history, admin);
 
+  assert.deepEqual(committed, { insertedCount: 0, updatedCount: 1 });
   assert.equal(call.name, "commit_mht_import");
   assert.deepEqual(call.args.p_events.map((row) => row.id), ["epic:cup:round-1"]);
   assert.deepEqual(call.args.p_history, {
@@ -1832,8 +1845,6 @@ test("speichert Termine und Verlauf über einen gemeinsamen Datenbankaufruf", as
     source_hint: history.sourceHint,
     start_date: history.startDate,
     end_date: history.endDate,
-    inserted_count: 1,
-    updated_count: 0,
     skipped_count: 2,
     skipped_warning_count: 1,
     skipped_past_count: 1,

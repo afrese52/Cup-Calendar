@@ -84,11 +84,11 @@ function createPostgresAtomicImportAdmin(pool) {
     async rpc(name, args) {
       assert.equal(name, "commit_mht_import");
       try {
-        await pool.query(
-          "SELECT public.commit_mht_import($1::jsonb, $2::jsonb)",
+        const result = await pool.query(
+          "SELECT public.commit_mht_import($1::jsonb, $2::jsonb) AS result",
           [JSON.stringify(args.p_events), JSON.stringify(args.p_history)],
         );
-        return { error: null };
+        return { data: result.rows[0].result, error: null };
       } catch (error) {
         return { error };
       }
@@ -111,11 +111,11 @@ function createConcurrentPostgresAtomicImportAdmin(pool, expectedCalls) {
       await barrier;
 
       try {
-        await pool.query(
-          "SELECT public.commit_mht_import($1::jsonb, $2::jsonb)",
+        const result = await pool.query(
+          "SELECT public.commit_mht_import($1::jsonb, $2::jsonb) AS result",
           [JSON.stringify(args.p_events), JSON.stringify(args.p_history)],
         );
-        return { error: null };
+        return { data: result.rows[0].result, error: null };
       } catch (error) {
         return { error };
       }
@@ -503,7 +503,7 @@ test("wiederholter Import aktualisiert denselben Termin und erhält Admin-Felder
 
     const concurrentHistoryRows = await pool.query(
       `SELECT admin_user_id, admin_email, source_hint, start_date::text AS start_date,
-              end_date::text AS end_date
+              end_date::text AS end_date, inserted_count, updated_count
        FROM public.admin_import_history
        WHERE source_hint IN ('parallel-a', 'parallel-b')
        ORDER BY source_hint`,
@@ -515,6 +515,8 @@ test("wiederholter Import aktualisiert denselben Termin und erhält Admin-Felder
         source_hint: "parallel-a",
         start_date: "2026-11-13",
         end_date: "2026-11-13",
+        inserted_count: 0,
+        updated_count: 1,
       },
       {
         admin_user_id: concurrentAdminUserId,
@@ -522,8 +524,49 @@ test("wiederholter Import aktualisiert denselben Termin und erhält Admin-Felder
         source_hint: "parallel-b",
         start_date: "2026-11-14",
         end_date: "2026-11-14",
+        inserted_count: 0,
+        updated_count: 1,
       },
     ], "Beide erfolgreichen Importhistorien müssen die zugehörigen Admin- und Importfelder enthalten.");
+
+    const concurrentNewEventId = "epic:cup:concurrent-new-import";
+    const concurrentNewEvents = [
+      { ...concurrentBaseEvent, id: concurrentNewEventId, title: "Paralleler Neuimport A" },
+      { ...concurrentBaseEvent, id: concurrentNewEventId, title: "Paralleler Neuimport B" },
+    ];
+    const concurrentNewHistories = [
+      { ...history, sourceHint: "parallel-new-a" },
+      { ...history, adminUserId: concurrentAdminUserId, sourceHint: "parallel-new-b" },
+    ];
+    const concurrentNewAdmin = createConcurrentPostgresAtomicImportAdmin(pool, 2);
+    const concurrentNewResults = await Promise.all(
+      concurrentNewEvents.map((event, index) =>
+        commitMhtImport([event], concurrentNewHistories[index], concurrentNewAdmin),
+      ),
+    );
+
+    const concurrentNewHistoryRows = await pool.query(
+      `SELECT source_hint, inserted_count AS "insertedCount",
+              updated_count AS "updatedCount"
+       FROM public.admin_import_history
+       WHERE source_hint IN ('parallel-new-a', 'parallel-new-b')
+       ORDER BY source_hint`,
+    );
+    const concurrentNewExpectedHistory = concurrentNewResults
+      .map((result, index) => ({
+        source_hint: concurrentNewHistories[index].sourceHint,
+        insertedCount: result.insertedCount,
+        updatedCount: result.updatedCount,
+      }))
+      .sort((left, right) => left.source_hint.localeCompare(right.source_hint));
+    assert.deepEqual(concurrentNewHistoryRows.rows, concurrentNewExpectedHistory);
+    assert.deepEqual(
+      concurrentNewResults
+        .map(({ insertedCount, updatedCount }) => [insertedCount, updatedCount])
+        .sort((left, right) => left[0] - right[0]),
+      [[0, 1], [1, 0]],
+      "Bei parallelen Imports eines neuen Termins darf nur der tatsächliche Einfüger als neu zählen.",
+    );
 
     const failedNewEvent = {
       ...atomicEvent,

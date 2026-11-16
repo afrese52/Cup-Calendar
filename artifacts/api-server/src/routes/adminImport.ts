@@ -492,10 +492,6 @@ router.post(
       }
       if (rejectUnconfirmedStaleSnapshot(req, res, preview.schedule.snapshotAt)) return;
 
-      const existingEvents = await findExistingEvents(preview.importableEvents.map((event) => event.id));
-      if (rejectUnconfirmedStaleSnapshot(req, res, preview.schedule.snapshotAt)) return;
-      const insertedCount = preview.importableEvents.filter((event) => !existingEvents.has(event.id)).length;
-      const updatedCount = preview.importableEvents.length - insertedCount;
       const adminUser = (req as ImportAdminRequest).importAdminUser;
       if (!adminUser?.email) {
         throw new Error("Die Admin-Anmeldung enthält keine Konto-E-Mail-Adresse.");
@@ -526,14 +522,12 @@ router.post(
           reason: issue.errors.join(" "),
         })),
       ];
-      await commitMhtImport(preview.importableEvents, {
+      const committed = await commitMhtImport(preview.importableEvents, {
         adminUserId: adminUser.id,
         adminEmail: adminUser.email,
         sourceHint: getSourceHint(preview.sourceUrl),
         startDate: preview.startDate,
         endDate: preview.endDate,
-        insertedCount,
-        updatedCount,
         skippedCount: skippedCounts.skippedCount,
         skippedWarningCount: skippedCounts.skippedWarningCount,
         skippedPastCount: skippedCounts.skippedPastCount,
@@ -543,8 +537,8 @@ router.post(
 
       res.json({
         importedCount: preview.importableEvents.length,
-        insertedCount,
-        updatedCount,
+        insertedCount: committed.insertedCount,
+        updatedCount: committed.updatedCount,
         ...skippedCounts,
       });
     } catch (error) {
