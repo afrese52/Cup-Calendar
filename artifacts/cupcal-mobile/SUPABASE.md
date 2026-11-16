@@ -29,6 +29,39 @@ gilt auch für PKCE-Verifier, damit native Auth-Rücksprünge weiterhin
 funktionieren. Die Migration läuft beim Start nur bei Zugriff auf den jeweiligen
 Schlüssel.
 
+### Geräteprüfung: Sitzungsspeicher
+
+Die automatisierten Tests verwenden einen persistenten Speicher-Dummy. Sie
+prüfen die Adapterlogik für iOS und Android, aber nicht die native iOS-Keychain
+oder den Android Keystore. Ein Simulator ist ebenfalls kein Nachweis für die
+Speicherung auf echter Gerätehardware.
+
+Auf einem echten iPhone und Android-Gerät jeweils mit einem nativen CupCal-Build
+oder der Expo-Go-Vorschau prüfen:
+
+1. Mit einem Testkonto anmelden und warten, bis der angemeldete Zustand sichtbar
+   ist.
+2. CupCal vollständig beenden (iOS: App im App-Umschalter schließen; Android:
+   App-Info → **Beenden erzwingen**).
+3. CupCal erneut starten und prüfen, dass das Konto weiter angemeldet ist.
+4. In CupCal abmelden, die App erneut vollständig beenden und starten.
+5. Prüfen, dass die App abgemeldet bleibt und geschützte Kontofunktionen eine
+   neue Anmeldung verlangen.
+6. Gerät, Betriebssystemversion, App-Version und verwendeten App-Modus
+   (nativer Build oder Expo Go) sowie Abweichungen eintragen.
+
+**Ergebnisstand: 16. November 2026 — laut Nutzerrückmeldung auf beiden
+Plattformen bestanden.** Gerätemodelle, Betriebssystemversionen und App-Modus
+(nativer Build oder Expo Go) wurden nicht mitgeteilt. Es wurden keine
+Plattformabweichungen gemeldet. Die Tabelle hält diese fehlenden Angaben fest;
+automatisierte Tests oder Simulatorläufe allein gelten weiterhin nicht als
+Geräteergebnis.
+
+| Plattform | Sitzung nach erzwungenem Beenden erhalten | Abmeldung nach Neustart wirksam | Gerät / Version / Abweichungen |
+| --- | --- | --- | --- |
+| iOS | Bestanden (laut Nutzerrückmeldung) | Bestanden (laut Nutzerrückmeldung) | Modell, Version und App-Modus nicht erfasst; keine Abweichung gemeldet |
+| Android | Bestanden (laut Nutzerrückmeldung) | Bestanden (laut Nutzerrückmeldung) | Modell, Version und App-Modus nicht erfasst; keine Abweichung gemeldet |
+
 ## Benutzerprofile
 
 Supabase Auth ist die Quelle für Konten, E-Mail-Adressen und Anmeldedaten. Diese
