@@ -165,6 +165,11 @@ test("liefert Snapshot-Alter und Warnstatus über den authentifizierten Admin-Vo
           aria-label="20:00–21:00 Uhr - Battle Royale Duos Cash Cup">
           <span>Battle Royale Duos Cash Cup</span>
         </a>
+        <a id="schedule-event-link-preview-missing-id"
+          href="https://www.fortnite.com/competitive/events/PreviewMissingIdCup"
+          aria-label="21:00–22:00 Uhr - Battle Royale Trios Cash Cup">
+          <span>Battle Royale Trios Cash Cup</span>
+        </a>
       </body></html>`;
 
     async function preview(date) {
@@ -191,11 +196,15 @@ test("liefert Snapshot-Alter und Warnstatus über den authentifizierten Admin-Vo
     const fresh = await preview(freshDate);
     const freshSnapshot = Date.parse(fresh.result.snapshotAt);
     assert.equal(fresh.result.isSnapshotStale, false);
-    assert.equal(fresh.result.invalidCount, 1);
+    assert.equal(fresh.result.invalidCount, 2);
     assert.deepEqual(fresh.result.issues, [{
       id: "epic:ForeignPreviewCup:ForeignPreviewRound",
       title: "Battle Royale Duos Cash Cup",
       errors: ["Der Eventlink verweist nicht auf eine offizielle Fortnite-Domain."],
+    }, {
+      id: null,
+      title: "Battle Royale Trios Cash Cup",
+      errors: ["Event- oder Rundenkennung fehlt im Link."],
     }]);
     assert.ok(fresh.result.snapshotAgeMs >= fresh.startedAt - freshSnapshot);
     assert.ok(fresh.result.snapshotAgeMs <= fresh.completedAt - freshSnapshot);
