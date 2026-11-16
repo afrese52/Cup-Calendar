@@ -291,6 +291,24 @@ test("0002 übernimmt Favoriten aus Profil- und Event-gebundenen Tabellen", asyn
   );
   assert.equal(
     psql(`
+      DELETE FROM public.user_profiles
+      WHERE id = '${legacyAccountId}'
+      RETURNING id;
+    `, legacyDatabase),
+    legacyAccountId,
+    "Der veraltete Nutzerprofileintrag muss gelöscht werden.",
+  );
+  assert.equal(
+    psql(`
+      SELECT user_id::text || ':' || event_id
+      FROM public.user_event_bookmarks
+      WHERE user_id = '${legacyAccountId}' AND event_id = 'legacy-event-one';
+    `, legacyDatabase),
+    `${legacyAccountId}:legacy-event-one`,
+    "Das Löschen des Nutzerprofils darf den Favoriten des weiter bestehenden Kontos nicht entfernen.",
+  );
+  assert.equal(
+    psql(`
       SELECT relrowsecurity
       FROM pg_class
       WHERE oid = 'public.user_event_bookmarks'::regclass;
