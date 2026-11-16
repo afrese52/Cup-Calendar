@@ -94,6 +94,44 @@ for (const platform of ['Android', 'iOS']) {
   });
 }
 
+for (const platform of ['Android', 'iOS']) {
+  test(`startet nach Wiederherstellung ohne übertragbaren Geräteschlüssel auf ${platform} abgemeldet`, async () => {
+    const oldSecureStorage = createStorage();
+    const oldLegacyStorage = createStorage();
+    const oldClient = createCupCalSupabaseClient(
+      'https://restored-device.supabase.co',
+      'test-publishable-key',
+      createMigratingSecureStorage(oldSecureStorage, oldLegacyStorage),
+      fakeUserFetch,
+    );
+    const { error: saveError } = await oldClient.auth.setSession({
+      access_token: accessToken,
+      refresh_token: `device-bound-refresh-token-${platform}`,
+    });
+    assert.equal(saveError, null);
+    assert.ok(await oldSecureStorage.getItem('sb-restored-device-auth-token'));
+
+    // Eine Gerätewiederherstellung überträgt den gerätegebundenen SecureStore
+    // nicht. Der neue Gerätespeicher ist absichtlich leer.
+    const restoredStorage = createMigratingSecureStorage(createStorage(), createStorage());
+    const restoredClient = createCupCalSupabaseClient(
+      'https://restored-device.supabase.co',
+      'test-publishable-key',
+      restoredStorage,
+      fakeUserFetch,
+    );
+
+    try {
+      const { data, error } = await restoredClient.auth.getSession();
+      assert.equal(error, null);
+      assert.equal(data.session, null);
+    } finally {
+      await oldClient.auth.dispose();
+      await restoredClient.auth.dispose();
+    }
+  });
+}
+
 test('behält den alten Sitzungswert, wenn die sichere Migration fehlschlägt', async () => {
   const legacyStorage = createStorage();
   const secureStorage = createStorage();

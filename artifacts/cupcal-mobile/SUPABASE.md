@@ -62,6 +62,44 @@ Geräteergebnis.
 | iOS | Bestanden (laut Nutzerrückmeldung) | Bestanden (laut Nutzerrückmeldung) | Modell, Version und App-Modus nicht erfasst; keine Abweichung gemeldet |
 | Android | Bestanden (laut Nutzerrückmeldung) | Bestanden (laut Nutzerrückmeldung) | Modell, Version und App-Modus nicht erfasst; keine Abweichung gemeldet |
 
+### Gerätewechsel, Neuinstallation und Backup-Wiederherstellung
+
+Der Sitzungsadapter ist für einen fehlenden nativen Schlüssel fail-closed:
+Liefert SecureStore keinen Wert und existiert auch kein alter AsyncStorage-Wert,
+lädt Supabase keine Sitzung. Ein neuer Gerätespeicher bleibt damit abgemeldet;
+geschützte Kontofunktionen benötigen eine neue Anmeldung. Tests mit
+Speicher-Doubles bestätigen diesen Ablauf für Android und iOS. Sie simulieren
+keine System-Backups oder echten Geräte.
+
+| Fall | Erwartetes Verhalten laut Plattformkonfiguration | Geräteprüfung |
+| --- | --- | --- |
+| iOS: App-Update oder Neustart auf demselben iPhone | Keychain-Sitzung bleibt normalerweise verfügbar | Nicht auf echter Hardware geprüft |
+| iOS: Neuinstallation mit gleicher Bundle-ID auf demselben iPhone | Keychain-Daten können die Deinstallation überdauern; eine bestehende Sitzung kann deshalb wieder erscheinen. Das ist laut Expo nicht garantiert. | Nicht auf echter Hardware geprüft |
+| iOS: Backup eines anderen iPhones auf neuem Gerät | `WHEN_UNLOCKED_THIS_DEVICE_ONLY` verhindert die Migration dieses Keychain-Eintrags; ohne anderen gespeicherten Wert startet CupCal abgemeldet. | Nicht auf echter Hardware geprüft |
+| Android: App-Update oder Neustart auf demselben Gerät | SecureStore-Sitzung bleibt mit dem lokalen Keystore-Schlüssel verfügbar. | Nicht auf echter Hardware geprüft |
+| Android: Neuinstallation oder Wiederherstellung auf einem anderen Gerät | Android entfernt den Keystore-Schlüssel bei Deinstallation; das SecureStore-Plugin nimmt seine SharedPreferences von Cloud-Backup und Geräteübertragung aus. Ohne Schlüssel startet CupCal abgemeldet. | Nicht auf echter Hardware geprüft |
+
+Die Android-Backup-Ausschlüsse stammen aus der Standardkonfiguration des
+`expo-secure-store`-Plugins (`configureAndroidBackup: true`); `app.json`
+verwendet das Plugin ohne abweichende Optionen. iOS verwendet in
+`services/supabase.ts` ausdrücklich `WHEN_UNLOCKED_THIS_DEVICE_ONLY`.
+Die Supabase-Tests bestätigen zusätzlich: Wenn nach einer simulierten
+Wiederherstellung der geschützte Gerätespeicher leer ist, gibt `getSession()`
+keine Sitzung zurück und keinen Fehler aus.
+
+**Noch offen:** In dieser Umgebung stehen keine iPhones oder Android-Geräte für
+Backup-/Wiederherstellungsversuche zur Verfügung. Die Tabelle enthält daher
+Plattformverhalten aus der Expo-/Apple-Dokumentation und automatisierte
+Adaptertests, keine bestätigten Hardware-Ergebnisse. Vor einer Aussage, dass
+die Fälle praktisch auf Geräten bestanden wurden, sind die Zeilen auf echten
+Geräten zu testen. Besonders die iOS-Neuinstallation auf demselben Gerät ist
+wegen der nicht garantierten Keychain-Aufbewahrung zu prüfen.
+
+Dokumentation:
+
+- [Expo SecureStore – Plattformverhalten und Android-Backups](https://docs.expo.dev/versions/v58.0.0/sdk/securestore/)
+- [Apple – `WhenUnlockedThisDeviceOnly`](https://developer.apple.com/documentation/security/ksecattraccessiblewhenunlockedthisdeviceonly)
+
 ## Benutzerprofile
 
 Supabase Auth ist die Quelle für Konten, E-Mail-Adressen und Anmeldedaten. Diese
