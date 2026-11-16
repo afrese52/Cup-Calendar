@@ -73,6 +73,9 @@ jest.mock('@/services/supabase', () => ({
     },
   },
 }));
+jest.mock('@/services/localBookmarkStore', () => ({
+  removeBookmarksForDeletedUser: jest.fn(async () => undefined),
+}));
 
 const { default: ConfirmEmailScreen } = require('../app/auth/confirm') as {
   default: React.ComponentType;
@@ -80,12 +83,16 @@ const { default: ConfirmEmailScreen } = require('../app/auth/confirm') as {
 const { supabase } = jest.requireMock('@/services/supabase') as {
   supabase: any;
 };
+const { removeBookmarksForDeletedUser } = jest.requireMock('@/services/localBookmarkStore') as {
+  removeBookmarksForDeletedUser: jest.Mock<(...args: any[]) => any>;
+};
 
 beforeEach(() => {
   mockRouteParams.current = {};
   mockInitialUrl.current = null;
   mockUrlListener.current = null;
   mockDeletionConfirm.mockReset().mockResolvedValue(undefined);
+  removeBookmarksForDeletedUser.mockReset().mockResolvedValue(undefined);
   mockPersistedSession = null;
   supabase.auth.exchangeCodeForSession.mockReset().mockResolvedValue({
     data: { session: { user: { id: 'account-id' } } },
@@ -236,6 +243,24 @@ test('löscht das Konto erst nach dem E-Mail-Link und meldet danach ab', async (
     data: { confirmationToken: 'signed-proof' },
   });
   expect(supabase.auth.exchangeCodeForSession.mock.calls[0]?.[0]).toBe('one-time-code');
+  expect(removeBookmarksForDeletedUser).toHaveBeenCalledWith('account-id');
+  expect(mockDeletionConfirm.mock.invocationCallOrder[0]).toBeLessThan(
+    removeBookmarksForDeletedUser.mock.invocationCallOrder[0],
+  );
+  expect(removeBookmarksForDeletedUser.mock.invocationCallOrder[0]).toBeLessThan(
+    supabase.auth.signOut.mock.invocationCallOrder[0],
+  );
+  expect(supabase.auth.signOut).toHaveBeenCalledWith({ scope: 'local' });
+});
+
+test('meldet sich auch ab, wenn lokale Favoriten nach erfolgreicher Löschung nicht bereinigt werden können', async () => {
+  mockInitialUrl.current =
+    'https://cupcal.example/auth/confirm?flow=cupcal-account-deletion&deletion_token=signed-proof&code=one-time-code';
+  removeBookmarksForDeletedUser.mockRejectedValue(new Error('Gerätespeicher nicht verfügbar.'));
+  const view = await render(<ConfirmEmailScreen />);
+
+  expect(await view.findByText('Konto gelöscht')).toBeTruthy();
+  expect(view.getByText(/lokalen Favoriten konnten nicht vollständig entfernt werden/)).toBeTruthy();
   expect(supabase.auth.signOut).toHaveBeenCalledWith({ scope: 'local' });
 });
 
@@ -303,4 +328,5 @@ test('meldet eine kontofremde Löschbestätigung ohne Erfolg oder Abmeldung', as
   expect(await view.findByText('Bestätigung fehlgeschlagen')).toBeTruthy();
   expect(view.queryByText('Konto gelöscht')).toBeNull();
   expect(supabase.auth.signOut).not.toHaveBeenCalled();
+  expect(removeBookmarksForDeletedUser).not.toHaveBeenCalled();
 });

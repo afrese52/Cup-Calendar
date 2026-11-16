@@ -35,6 +35,7 @@ const emptyStore = (): BookmarkStore => ({
   accounts: {},
 });
 let bookmarkWriteQueue: Promise<unknown> = Promise.resolve();
+const deletedAccountIds = new Set<string>();
 
 function enqueueBookmarkWrite<T>(operation: () => Promise<T>): Promise<T> {
   const result = bookmarkWriteQueue.then(operation);
@@ -154,20 +155,35 @@ export async function loadAnonymousBookmarks(): Promise<string[]> {
 }
 
 export async function getAnonymousBookmarksForImport(userId: string): Promise<string[]> {
+  if (deletedAccountIds.has(userId)) return [];
   const store = await readStore();
   if (store.anonymousImportDeclinedUserIds.includes(userId)) return [];
   return [...store.anonymousIds];
 }
 
 export async function loadBookmarksForUser(userId: string | null): Promise<string[]> {
+  if (userId && deletedAccountIds.has(userId)) return [];
   const store = await readStore();
   return userId
     ? [...(store.accounts[userId]?.eventIds ?? [])]
     : [...store.anonymousIds];
 }
 
+export async function removeBookmarksForDeletedUser(userId: string): Promise<void> {
+  if (!userId) return;
+  deletedAccountIds.add(userId);
+  return enqueueBookmarkWrite(async () => {
+    const store = await readStore();
+    delete store.accounts[userId];
+    store.anonymousImportDeclinedUserIds = store.anonymousImportDeclinedUserIds
+      .filter((declinedUserId) => declinedUserId !== userId);
+    await writeStore(store);
+  });
+}
+
 export async function importAnonymousBookmarksForUser(userId: string): Promise<string[]> {
   return enqueueBookmarkWrite(async () => {
+    if (deletedAccountIds.has(userId)) return [];
     const store = await readStore();
     const account = accountFor(store, userId);
     for (const eventId of store.anonymousIds) {
@@ -186,6 +202,7 @@ export async function importAnonymousBookmarksForUser(userId: string): Promise<s
 
 export async function keepAnonymousBookmarksLocal(userId: string): Promise<void> {
   return enqueueBookmarkWrite(async () => {
+    if (deletedAccountIds.has(userId)) return;
     const store = await readStore();
     store.anonymousImportDeclinedUserIds = uniqueIds([
       ...store.anonymousImportDeclinedUserIds,
@@ -201,6 +218,7 @@ export async function setBookmarksFavorite(
   isFavorite: boolean,
 ): Promise<string[]> {
   return enqueueBookmarkWrite(async () => {
+    if (userId && deletedAccountIds.has(userId)) return [];
     if (!userId && isFavorite) {
       throw new Error('Zum Speichern von Terminen musst du angemeldet sein.');
     }
@@ -236,6 +254,7 @@ export async function prepareBookmarksForSync(
   userId: string,
 ): Promise<Record<string, PendingBookmarkChange>> {
   return enqueueBookmarkWrite(async () => {
+    if (deletedAccountIds.has(userId)) return {};
     const store = await readStore();
     const account = accountFor(store, userId);
     if (!account.initialized) {
@@ -256,6 +275,7 @@ export async function reconcileBookmarks(
   remoteBookmarks: RemoteBookmark[],
 ): Promise<{ eventIds: string[]; pendingCount: number }> {
   return enqueueBookmarkWrite(async () => {
+    if (deletedAccountIds.has(userId)) return { eventIds: [], pendingCount: 0 };
     const store = await readStore();
     const account = accountFor(store, userId);
     const remoteById = new Map(remoteBookmarks.map((bookmark) => [bookmark.event_id, bookmark]));

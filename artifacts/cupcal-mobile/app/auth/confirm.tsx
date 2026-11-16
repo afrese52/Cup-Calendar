@@ -11,6 +11,7 @@ import {
   parseAuthCallbackUrl,
   type AuthCallbackParams,
 } from '@/services/accountDeletion';
+import { removeBookmarksForDeletedUser } from '@/services/localBookmarkStore';
 import {
   confirmEmailCode,
   emailConfirmationLinkError,
@@ -132,11 +133,19 @@ export default function ConfirmEmailScreen() {
           await confirmationMutation.mutateAsync({
             data: { confirmationToken: callback.deletionToken },
           });
+          let localBookmarksRemoved = true;
+          try {
+            await removeBookmarksForDeletedUser(session.user.id);
+          } catch {
+            localBookmarksRemoved = false;
+          }
           await supabase.auth.signOut({ scope: 'local' }).catch(() => undefined);
           if (!isMounted) return;
           setCompletedFlow(callback.flow ?? undefined);
           setStatus('success');
-          setMessage('Dein CupCal-Konto und die dazugehörigen Favoriten wurden endgültig gelöscht.');
+          setMessage(localBookmarksRemoved
+            ? 'Dein CupCal-Konto und die dazugehörigen Favoriten wurden endgültig gelöscht.'
+            : 'Dein CupCal-Konto wurde gelöscht. Die lokalen Favoriten konnten nicht vollständig entfernt werden und bleiben nach der Abmeldung verborgen.');
           return;
         }
 

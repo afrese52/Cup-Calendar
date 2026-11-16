@@ -3,6 +3,7 @@ import test, { beforeEach } from 'node:test';
 import {
   loadAnonymousBookmarks,
   loadBookmarksForUser,
+  removeBookmarksForDeletedUser,
   getAnonymousBookmarksForImport,
   importAnonymousBookmarksForUser,
   keepAnonymousBookmarksLocal,
@@ -243,4 +244,29 @@ test('hält Favoriten und ausstehende Änderungen pro Konto getrennt', async () 
   await setBookmarksFavorite('konto-a', ['nur-a'], false);
   assert.deepEqual(await loadBookmarksForUser('konto-a'), []);
   assert.deepEqual(await loadBookmarksForUser('konto-b'), ['nur-b']);
+});
+
+test('entfernt gelöschte Kontofavoriten dauerhaft, ohne andere lokale Listen zu verändern', async () => {
+  localStorage.setItem('cupcal.bookmarks.v1', JSON.stringify(['gast-favorit']));
+  await setBookmarksFavorite('gelöschtes-konto', ['alter-favorit'], true);
+  await prepareBookmarksForSync('gelöschtes-konto');
+  await setBookmarksFavorite('weiteres-konto', ['anderer-favorit'], true);
+
+  await removeBookmarksForDeletedUser('gelöschtes-konto');
+
+  const savedStore = JSON.parse(localStorage.getItem('cupcal.bookmarks.v2'));
+  assert.equal(savedStore.accounts['gelöschtes-konto'], undefined);
+  assert.deepEqual(await loadBookmarksForUser('gelöschtes-konto'), []);
+  assert.deepEqual(await loadBookmarksForUser('weiteres-konto'), ['anderer-favorit']);
+  assert.deepEqual(await loadBookmarksForUser(null), ['gast-favorit']);
+
+  // Ein verspäteter Sync darf den gelöschten Kontoeintrag nicht wiederherstellen.
+  await reconcileBookmarks('gelöschtes-konto', [{
+    event_id: 'alter-favorit',
+    is_favorite: true,
+    updated_at: '2026-01-01T00:00:00.000Z',
+    revision: 1,
+  }]);
+  assert.equal(JSON.parse(localStorage.getItem('cupcal.bookmarks.v2')).accounts['gelöschtes-konto'], undefined);
+  assert.deepEqual(await loadBookmarksForUser('gelöschtes-konto'), []);
 });
