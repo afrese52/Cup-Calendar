@@ -155,6 +155,8 @@ export interface MhtImportHistoryEntry {
   adminUserId: string;
   adminEmail: string;
   sourceHint: string | null;
+  startDate: string | null;
+  endDate: string | null;
   insertedCount: number;
   updatedCount: number;
   skippedCount: number;
@@ -174,6 +176,8 @@ export interface MhtImportHistoryInput {
   adminUserId: string;
   adminEmail: string;
   sourceHint: string | null;
+  startDate: string;
+  endDate: string;
   insertedCount: number;
   updatedCount: number;
   skippedCount: number;
@@ -328,6 +332,8 @@ export async function recordMhtImportHistory(
       admin_user_id: input.adminUserId,
       admin_email: input.adminEmail,
       source_hint: input.sourceHint,
+      start_date: input.startDate,
+      end_date: input.endDate,
       inserted_count: input.insertedCount,
       updated_count: input.updatedCount,
       skipped_count: input.skippedCount,
@@ -357,6 +363,8 @@ export async function commitMhtImport(
       admin_user_id: history.adminUserId,
       admin_email: history.adminEmail,
       source_hint: history.sourceHint,
+      start_date: history.startDate,
+      end_date: history.endDate,
       inserted_count: history.insertedCount,
       updated_count: history.updatedCount,
       skipped_count: history.skippedCount,
@@ -380,7 +388,7 @@ export async function listRecentMhtImports(
 ): Promise<MhtImportHistoryEntry[]> {
   const { data, error } = await admin
     .from("admin_import_history")
-    .select("id, imported_at, admin_user_id, admin_email, source_hint, inserted_count, updated_count, skipped_count, skipped_warning_count, skipped_past_count, skipped_invalid_count, skipped_cards")
+    .select("id, imported_at, admin_user_id, admin_email, source_hint, start_date, end_date, inserted_count, updated_count, skipped_count, skipped_warning_count, skipped_past_count, skipped_invalid_count, skipped_cards")
     .order("imported_at", { ascending: false })
     .limit(limit);
   if (error) {
@@ -392,6 +400,9 @@ export async function listRecentMhtImports(
     adminUserId: row.admin_user_id,
     adminEmail: row.admin_email,
     sourceHint: row.source_hint,
+    // Rows created before the import-period migration remain readable.
+    startDate: row.start_date ?? null,
+    endDate: row.end_date ?? null,
     insertedCount: row.inserted_count,
     updatedCount: row.updated_count,
     skippedCount: row.skipped_count,

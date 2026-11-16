@@ -282,6 +282,8 @@ test("wiederholter Import aktualisiert denselben Termin und erhält Admin-Felder
       adminUserId,
       adminEmail: "admin@cupcal.test",
       sourceHint: "fortnite.com",
+      startDate: "2026-11-10",
+      endDate: "2026-11-20",
       insertedCount: 1,
       updatedCount: 0,
       skippedCount: 0,
@@ -294,7 +296,9 @@ test("wiederholter Import aktualisiert denselben Termin und erhält Admin-Felder
     await commitMhtImport([atomicEvent], history, atomicAdmin);
 
     const committed = await pool.query(
-      `SELECT event.id, event.title, history.admin_email, history.inserted_count, history.skipped_cards
+      `SELECT event.id, event.title, history.admin_email, history.start_date::text AS start_date,
+              history.end_date::text AS end_date,
+              history.inserted_count, history.skipped_cards
        FROM public.fortnite_events AS event
        CROSS JOIN public.admin_import_history AS history
        WHERE event.id = $1`,
@@ -304,6 +308,8 @@ test("wiederholter Import aktualisiert denselben Termin und erhält Admin-Felder
       id: atomicEvent.id,
       title: atomicEvent.title,
       admin_email: "admin@cupcal.test",
+      start_date: "2026-11-10",
+      end_date: "2026-11-20",
       inserted_count: 1,
       skipped_cards: [],
     }], "Der Datenbankaufruf muss Termin und Historie gemeinsam schreiben.");

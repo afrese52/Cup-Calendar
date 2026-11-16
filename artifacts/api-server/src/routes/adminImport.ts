@@ -486,6 +486,10 @@ router.post(
         res.status(400).json({ error: "Es gibt keine eindeutig zugeordneten zukünftigen Termine zum Importieren." });
         return;
       }
+      if (!preview.startDate || !preview.endDate) {
+        res.status(400).json({ error: "Der Importzeitraum fehlt. Bitte prüfe die Vorschau erneut." });
+        return;
+      }
       if (rejectUnconfirmedStaleSnapshot(req, res, preview.schedule.snapshotAt)) return;
 
       const existingEvents = await findExistingEvents(preview.importableEvents.map((event) => event.id));
@@ -526,6 +530,8 @@ router.post(
         adminUserId: adminUser.id,
         adminEmail: adminUser.email,
         sourceHint: getSourceHint(preview.sourceUrl),
+        startDate: preview.startDate,
+        endDate: preview.endDate,
         insertedCount,
         updatedCount,
         skippedCount: skippedCounts.skippedCount,

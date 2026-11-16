@@ -448,6 +448,8 @@ components:
         adminUserId: { type: string, format: uuid }
         adminEmail: { type: string, format: email }
         sourceHint: { type: ["string", "null"] }
+        startDate: { type: ["string", "null"], format: date, description: Inclusive start date of the selected import period }
+        endDate: { type: ["string", "null"], format: date, description: Inclusive end date of the selected import period }
         insertedCount: { type: integer }
         updatedCount: { type: integer }
         skippedCount: { type: integer }
@@ -463,7 +465,7 @@ components:
               title: { type: ["string", "null"] }
               reason: { type: string }
             required: [id, title, reason]
-      required: [id, importedAt, adminUserId, adminEmail, sourceHint, insertedCount, updatedCount, skippedCount, skippedWarningCount, skippedPastCount, skippedInvalidCount, skippedCards]
+      required: [id, importedAt, adminUserId, adminEmail, sourceHint, startDate, endDate, insertedCount, updatedCount, skippedCount, skippedWarningCount, skippedPastCount, skippedInvalidCount, skippedCards]
     MhtImportHistoryResponse:
       type: object
       properties:

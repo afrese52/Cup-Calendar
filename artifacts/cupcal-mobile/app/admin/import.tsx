@@ -858,6 +858,15 @@ export default function AdminImportScreen() {
                     <Text style={[styles.historyAdmin, { color: colors.mutedForeground }]}>
                       Admin: {entry.adminEmail}
                     </Text>
+                    {entry.startDate && entry.endDate ? (
+                      <Text
+                        allowFontScaling
+                        style={[styles.historyReason, { color: colors.mutedForeground }]}
+                        testID={`import-history-period-${entry.id}`}
+                      >
+                        Zeitraum: {formatDateInput(entry.startDate)} – {formatDateInput(entry.endDate)}
+                      </Text>
+                    ) : null}
                     <View
                       accessible
                       accessibilityRole="text"

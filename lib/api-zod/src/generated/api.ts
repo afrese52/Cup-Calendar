@@ -143,6 +143,8 @@ export const GetAdminImportHistoryResponse = zod.object({
   "adminUserId": zod.string().uuid(),
   "adminEmail": zod.string().email(),
   "sourceHint": zod.string().nullable(),
+  "startDate": zod.coerce.date().nullable().describe('Inclusive start date of the selected import period'),
+  "endDate": zod.coerce.date().nullable().describe('Inclusive end date of the selected import period'),
   "insertedCount": zod.number().int(),
   "updatedCount": zod.number().int(),
   "skippedCount": zod.number().int(),

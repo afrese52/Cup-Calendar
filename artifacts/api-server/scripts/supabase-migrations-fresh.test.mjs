@@ -216,11 +216,13 @@ test("alle Supabase-Migrationen laufen auf einer frischen Datenbank durch", asyn
         AND column_name = ANY (ARRAY[
           'skipped_invalid_count',
           'skipped_past_count',
-          'skipped_warning_count'
+          'skipped_warning_count',
+          'start_date',
+          'end_date'
         ]);
     `),
-    "skipped_invalid_count,skipped_past_count,skipped_warning_count",
-    "Die Importhistorie muss die drei Ausschlusskategorien speichern.",
+    "end_date,skipped_invalid_count,skipped_past_count,skipped_warning_count,start_date",
+    "Die Importhistorie muss Zeitraum und Ausschlusskategorien speichern.",
   );
 
   assert.equal(

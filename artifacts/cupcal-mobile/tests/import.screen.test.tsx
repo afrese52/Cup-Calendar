@@ -863,6 +863,8 @@ test.each(['android', 'ios'])(
           adminUserId: '2d81b842-8d9c-4de3-8411-6787a91e68e9',
           adminEmail: 'admin@example.org',
           sourceHint: 'fortnite.com',
+          startDate: '2026-11-10',
+          endDate: '2026-11-20',
           insertedCount: 2,
           updatedCount: 1,
           skippedCount: 4,
@@ -884,6 +886,8 @@ test.each(['android', 'ios'])(
     expect(screen.getByTestId('admin-import-history')).toBeTruthy();
     expect(screen.getByText('Admin: admin@example.org')).toBeTruthy();
     expect(screen.getByText('fortnite.com')).toBeTruthy();
+    expect(screen.getByTestId('import-history-period-19').props.allowFontScaling).toBe(true);
+    expect(screen.getByText('Zeitraum: 10.11.2026 – 20.11.2026')).toBeTruthy();
     const totalCounts = screen.getByText('2 neu · 1 aktualisiert · 4 übersprungen');
     expect(totalCounts.props.allowFontScaling).toBe(true);
     for (const reason of [
@@ -917,6 +921,8 @@ test('zeigt bei älteren Historieneinträgen weiterhin die Gesamtzahl ohne erfun
         adminUserId: '2d81b842-8d9c-4de3-8411-6787a91e68e9',
         adminEmail: 'admin@example.org',
         sourceHint: null,
+        startDate: null,
+        endDate: null,
         insertedCount: 1,
         updatedCount: 0,
         skippedCount: 3,

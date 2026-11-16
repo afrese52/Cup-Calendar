@@ -14,6 +14,16 @@ export interface MhtImportHistoryEntry {
   adminEmail: string;
   /** @nullable */
   sourceHint: string | null;
+  /**
+     * Inclusive start date of the selected import period
+     * @nullable
+     */
+  startDate: Date | null;
+  /**
+     * Inclusive end date of the selected import period
+     * @nullable
+     */
+  endDate: Date | null;
   insertedCount: number;
   updatedCount: number;
   skippedCount: number;
