@@ -426,6 +426,9 @@ export default function SettingsScreen() {
     setSubmittingAction('delete-account');
     setAuthError(null);
     setAuthMessage(null);
+    if (Platform.OS !== 'web') {
+      AccessibilityInfo.announceForAccessibility('Die Anfrage für den Bestätigungslink läuft.');
+    }
     try {
       const request = await accountDeletionRequest.mutateAsync();
       await requestAccountDeletionConfirmation(
@@ -539,21 +542,35 @@ export default function SettingsScreen() {
               </Pressable>
               {showDeleteConfirmation ? (
                 <View
-                  accessibilityLiveRegion="polite"
                   style={[
                     styles.deleteConfirmation,
                     { backgroundColor: colors.destructive + '12', borderColor: colors.destructive + '66' },
                   ]}
                 >
-                  <Text style={[styles.deleteConfirmationTitle, { color: colors.foreground }]}>
-                    Konto wirklich löschen?
-                  </Text>
-                  <Text style={[styles.deleteConfirmationCopy, { color: colors.mutedForeground }]}>
-                    Dein Konto und deine gespeicherten Favoriten werden endgültig entfernt. Zuerst senden wir einen Link an deine E-Mail-Adresse. Gelöscht wird erst, wenn du diesen Link öffnest.
-                  </Text>
+                    <Text
+                      accessible
+                      accessibilityRole="header"
+                      testID="delete-account-confirmation-title"
+                      style={[styles.deleteConfirmationTitle, { color: colors.foreground }]}
+                    >
+                      Konto wirklich löschen?
+                    </Text>
+                    <Text
+                      accessible
+                      accessibilityRole="text"
+                      testID="delete-account-confirmation-description"
+                      style={[styles.deleteConfirmationCopy, { color: colors.mutedForeground }]}
+                    >
+                      Dein Konto und deine gespeicherten Favoriten werden endgültig entfernt. Zuerst senden wir einen Link an deine E-Mail-Adresse. Gelöscht wird erst, wenn du diesen Link öffnest.
+                    </Text>
                   <Pressable
                     accessibilityRole="button"
-                    accessibilityLabel="Bestätigungslink senden"
+                    accessibilityLabel={
+                      submittingAction === 'delete-account'
+                        ? 'Bestätigungslink wird angefordert'
+                        : 'Bestätigungslink senden'
+                    }
+                    accessibilityHint="Fordert einen Link per E-Mail an. Das Konto wird erst gelöscht, wenn du den Link öffnest."
                     accessibilityState={{
                       disabled: isSubmittingAuth,
                       busy: submittingAction === 'delete-account',
@@ -578,10 +595,19 @@ export default function SettingsScreen() {
                   </Pressable>
                   <Pressable
                     accessibilityRole="button"
+                    accessibilityLabel="Abbrechen"
+                    accessibilityHint="Schließt die Bestätigung, ohne einen Link anzufordern."
                     accessibilityState={{ disabled: isSubmittingAuth }}
                     testID="delete-account-cancel-button"
                     disabled={isSubmittingAuth}
-                    onPress={() => setShowDeleteConfirmation(false)}
+                    onPress={() => {
+                      setShowDeleteConfirmation(false);
+                      if (Platform.OS !== 'web') {
+                        AccessibilityInfo.announceForAccessibility(
+                          'Abgebrochen. Es wurde kein Bestätigungslink angefordert.',
+                        );
+                      }
+                    }}
                     style={styles.modeToggle}
                   >
                     <Text style={[styles.modeToggleText, { color: colors.mutedForeground }]}>Abbrechen</Text>
@@ -597,6 +623,11 @@ export default function SettingsScreen() {
                     setAuthError(null);
                     setAuthMessage(null);
                     setShowDeleteConfirmation(true);
+                    if (Platform.OS !== 'web') {
+                      AccessibilityInfo.announceForAccessibility(
+                        'Konto wirklich löschen? Dein Konto und deine gespeicherten Favoriten werden endgültig entfernt. Bestätigungslink senden oder Abbrechen.',
+                      );
+                    }
                   }}
                   style={({ pressed }) => [
                     styles.deleteAccountButton,
@@ -831,6 +862,7 @@ export default function SettingsScreen() {
           {authMessage ? (
             <View>
               <Text
+                accessible
                 accessibilityRole="alert"
                 accessibilityLiveRegion="polite"
                 testID="auth-success-message"

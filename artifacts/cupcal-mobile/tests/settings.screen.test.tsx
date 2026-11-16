@@ -1215,6 +1215,107 @@ test('sendet nach Bestätigung einen zeitlich befristeten Löschlink an das ange
   });
 });
 
+test.each(['ios', 'android'] as const)(
+  'macht Bestätigung, Abbruch und laufende Löschlinkanfrage auf %s zugänglich',
+  async (platform) => {
+    const originalPlatformOS = Platform.OS;
+    Object.defineProperty(Platform, 'OS', { configurable: true, value: platform });
+    let finishDeletionRequest!: (result: {
+      confirmationToken: string;
+      expiresAt: string;
+    }) => void;
+    const mockedApi = jest.requireMock('@workspace/api-client-react') as {
+      __requestAccountDeletion: jest.Mock;
+    };
+    mockedApi.__requestAccountDeletion.mockImplementation(
+      () => new Promise((resolve) => {
+        finishDeletionRequest = resolve;
+      }),
+    );
+
+    try {
+      auth.getSession.mockResolvedValue({ data: { session: testSession }, error: null });
+      const view = await render(<SettingsScreen />);
+      expect(await view.findByText('test@example.invalid')).toBeTruthy();
+      announceForAccessibility.mockClear();
+
+      await fireEvent.press(view.getByTestId('delete-account-button'));
+      const title = view.getByTestId('delete-account-confirmation-title');
+      const description = view.getByTestId('delete-account-confirmation-description');
+      const confirmButton = view.getByTestId('delete-account-confirm-button');
+      const cancelButton = view.getByTestId('delete-account-cancel-button');
+      expect(title.props.accessible).toBe(true);
+      expect(title.props.accessibilityRole).toBe('header');
+      expect(description.props.accessible).toBe(true);
+      expect(description.props.accessibilityRole).toBe('text');
+      expect(confirmButton.props.accessibilityRole).toBe('button');
+      expect(confirmButton.props.accessibilityLabel).toBe('Bestätigungslink senden');
+      expect(confirmButton.props.accessibilityHint).toContain('erst gelöscht');
+      expect(cancelButton.props.accessibilityRole).toBe('button');
+      expect(cancelButton.props.accessibilityLabel).toBe('Abbrechen');
+      expect(cancelButton.props.accessibilityHint).toContain('ohne einen Link');
+      expect(announceForAccessibility).toHaveBeenCalledWith(
+        'Konto wirklich löschen? Dein Konto und deine gespeicherten Favoriten werden endgültig entfernt. Bestätigungslink senden oder Abbrechen.',
+      );
+
+      await fireEvent.press(cancelButton);
+      expect(view.queryByTestId('delete-account-confirmation-title')).toBeNull();
+      expect(announceForAccessibility).toHaveBeenLastCalledWith(
+        'Abgebrochen. Es wurde kein Bestätigungslink angefordert.',
+      );
+      expect(mockedApi.__requestAccountDeletion).not.toHaveBeenCalled();
+
+      await fireEvent.press(view.getByTestId('delete-account-button'));
+      await fireEvent.press(view.getByTestId('delete-account-confirm-button'));
+      const pendingButton = view.getByTestId('delete-account-confirm-button');
+      expect(pendingButton.props.accessibilityLabel).toBe('Bestätigungslink wird angefordert');
+      expect(pendingButton.props.accessibilityState).toMatchObject({
+        disabled: true,
+        busy: true,
+      });
+      expect(announceForAccessibility).toHaveBeenLastCalledWith(
+        'Die Anfrage für den Bestätigungslink läuft.',
+      );
+
+      await act(async () => finishDeletionRequest({
+        confirmationToken: 'signed.confirmation.token',
+        expiresAt: '2026-11-12T12:30:00.000Z',
+      }));
+      const successMessage = await view.findByTestId('auth-success-message');
+      expect(successMessage.props.accessible).toBe(true);
+      expect(successMessage.props.accessibilityRole).toBe('alert');
+      expect(successMessage.props.accessibilityLiveRegion).toBe('polite');
+      expect(successMessage.props.children).toMatch(/Bestätigungslink an test@example\.invalid gesendet/);
+    } finally {
+      Object.defineProperty(Platform, 'OS', { configurable: true, value: originalPlatformOS });
+    }
+  },
+);
+
+test.each(['ios', 'android'] as const)(
+  'macht einen Fehler beim Anfordern des Kontolöschlinks auf %s hörbar',
+  async (platform) => {
+    const originalPlatformOS = Platform.OS;
+    Object.defineProperty(Platform, 'OS', { configurable: true, value: platform });
+    try {
+      auth.getSession.mockResolvedValue({ data: { session: testSession }, error: null });
+      auth.signInWithOtp.mockResolvedValue({ error: new Error('Mailversand nicht verfügbar') });
+      const view = await render(<SettingsScreen />);
+      expect(await view.findByText('test@example.invalid')).toBeTruthy();
+      await fireEvent.press(view.getByTestId('delete-account-button'));
+      await fireEvent.press(view.getByTestId('delete-account-confirm-button'));
+
+      const errorMessage = await view.findByTestId('auth-error-message');
+      expect(errorMessage.props.accessible).toBe(true);
+      expect(errorMessage.props.accessibilityRole).toBe('alert');
+      expect(errorMessage.props.accessibilityLiveRegion).toBe('assertive');
+      expect(errorMessage.props.children).toContain('Mailversand nicht verfügbar');
+    } finally {
+      Object.defineProperty(Platform, 'OS', { configurable: true, value: originalPlatformOS });
+    }
+  },
+);
+
 test('stellt die Bestätigungsadresse nach einem App-Neustart wieder her und entfernt sie nach Anmeldung', async () => {
   const mockedSupabase = jest.requireMock('@/services/supabase') as {
     requestEmailConfirmation: jest.Mock;
