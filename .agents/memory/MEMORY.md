@@ -20,4 +20,5 @@
 - [Zustimmung für alte Gast-Favoriten](legacy-bookmark-consent.md) — Vorhandene lokale Gast-Favoriten dürfen erst nach ausdrücklicher Wahl dem aktuellen Konto zugeordnet werden.
 - [Supabase-Admin-Löschtests](supabase-admin-delete-tests.md) — `auth.admin.deleteUser()` lädt das Konto zuerst per Admin-GET und sendet danach erst das DELETE.
 - [Countdown-Screen-Tests](confirmation-cooldown-screen-tests.md) — Nach aktiven Countdowns unmounten und den Neustartfall ans Ende der Bildschirmtests setzen.
+- [Screenreader-Ansagen im Passwortspeicher](password-save-screenreader.md) — iOS-Ansagen und Android-Live-Regionen getrennt halten, damit Speicherfehler nicht doppelt vorgelesen werden.
 - [Stabile Daten in Hook-Tests](stable-hook-test-data.md) — Mock-Antwortobjekte für useEffect-Abhängigkeiten müssen über Renderings hinweg referenziell stabil bleiben.

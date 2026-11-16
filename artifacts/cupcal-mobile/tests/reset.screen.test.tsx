@@ -7,18 +7,14 @@ import { AccessibilityInfo, Alert, Platform } from 'react-native';
 const mockSaveNewPassword = jest.fn(async (_password: string) => {});
 let mockRecoveryPending = true;
 let mockPreventRemoveEnabled = false;
-let mockPreventRemoveCallback: ((options: {
-  data: { action: unknown };
-  repeat: () => void;
-}) => void) | undefined;
-const mockUsePreventRemove = jest.fn((
-  preventRemove: boolean,
-  callback?: (options: { data: { action: unknown }; repeat: () => void }) => void,
-) => {
-  mockPreventRemoveEnabled = preventRemove;
-  mockPreventRemoveCallback = callback;
-  return jest.fn();
-});
+let mockPreventRemoveCallback: ((options: { data: { action: unknown }; repeat: () => void }) => void) | undefined;
+const mockUsePreventRemove = jest.fn(
+  (preventRemove: boolean, callback?: (options: { data: { action: unknown }; repeat: () => void }) => void) => {
+    mockPreventRemoveEnabled = preventRemove;
+    mockPreventRemoveCallback = callback;
+    return jest.fn();
+  },
+);
 
 jest.mock('@expo/vector-icons', () => ({ Feather: () => null }));
 jest.mock('expo-linking', () => ({
@@ -57,7 +53,9 @@ jest.mock('@/services/supabase', () => ({
         data: { session: { user: { id: 'account-id' } } },
         error: null,
       })),
-      onAuthStateChange: () => ({ data: { subscription: { unsubscribe: jest.fn() } } }),
+      onAuthStateChange: () => ({
+        data: { subscription: { unsubscribe: jest.fn() } },
+      }),
     },
   },
   isPasswordRecoveryPending: () => mockRecoveryPending,
@@ -67,39 +65,39 @@ jest.mock('@/services/supabase', () => ({
   saveNewPassword: mockSaveNewPassword,
   friendlyAuthError: (error: unknown, fallback: string) => {
     const message = error instanceof Error ? error.message.toLowerCase() : '';
-    const code = typeof error === 'object' && error !== null && 'code' in error
-      ? String((error as { code?: unknown }).code).toLowerCase()
-      : '';
+    const code =
+      typeof error === 'object' && error !== null && 'code' in error
+        ? String((error as { code?: unknown }).code).toLowerCase()
+        : '';
     if (message.includes('network')) {
       return 'Keine Verbindung möglich. Prüfe deine Internetverbindung und versuche es erneut.';
     }
     if (
-      code === 'over_request_rate_limit'
-      || code === 'over_email_send_rate_limit'
-      || message.includes('rate limit')
-      || message.includes('too many requests')
-      || (
-        typeof error === 'object'
-        && error !== null
-        && 'status' in error
-        && (error as { status?: unknown }).status === 429
-      )
+      code === 'over_request_rate_limit' ||
+      code === 'over_email_send_rate_limit' ||
+      message.includes('rate limit') ||
+      message.includes('too many requests') ||
+      (typeof error === 'object' &&
+        error !== null &&
+        'status' in error &&
+        (error as { status?: unknown }).status === 429)
     ) {
-      const retryAfter = typeof error === 'object' && error !== null && 'retryAfter' in error
-        ? Number((error as { retryAfter?: unknown }).retryAfter)
-        : 0;
+      const retryAfter =
+        typeof error === 'object' && error !== null && 'retryAfter' in error
+          ? Number((error as { retryAfter?: unknown }).retryAfter)
+          : 0;
       if (retryAfter > 0) {
         return `Zu viele Versuche in kurzer Zeit. Bitte warte noch ${retryAfter} ${retryAfter === 1 ? 'Sekunde' : 'Sekunden'} und versuche es dann erneut.`;
       }
       return 'Zu viele Versuche in kurzer Zeit. Warte bitte einige Minuten und versuche es dann erneut.';
     }
     if (
-      typeof error === 'object'
-      && error !== null
-      && 'status' in error
-      && typeof (error as { status?: unknown }).status === 'number'
-      && (error as { status: number }).status >= 500
-      && (error as { status: number }).status < 600
+      typeof error === 'object' &&
+      error !== null &&
+      'status' in error &&
+      typeof (error as { status?: unknown }).status === 'number' &&
+      (error as { status: number }).status >= 500 &&
+      (error as { status: number }).status < 600
     ) {
       return 'Supabase ist vorübergehend nicht verfügbar. Warte bitte kurz und versuche es dann erneut.';
     }
@@ -130,9 +128,9 @@ beforeEach(() => {
 test('zeigt die geltende Passwortlänge vor dem Speichern', async () => {
   const view = await render(<ResetPasswordScreen />);
 
-  expect(await view.findByText(
-    'Mindestens 6 Zeichen. Es sind keine weiteren Zeichenregeln erforderlich.',
-  )).toBeTruthy();
+  expect(
+    await view.findByText('Mindestens 6 Zeichen. Es sind keine weiteren Zeichenregeln erforderlich.'),
+  ).toBeTruthy();
   expect(view.getByTestId('reset-password-submit-button')).toBeTruthy();
 });
 
@@ -161,7 +159,10 @@ test.each([
     const listener = addEventListener.mock.calls.find(([eventName]) => eventName === 'beforeunload')?.[1];
     if (typeof listener !== 'function') throw new Error('beforeunload-Listener wurde nicht registriert.');
     const preventDefault = jest.fn();
-    const event = { preventDefault, returnValue: undefined } as unknown as BeforeUnloadEvent;
+    const event = {
+      preventDefault,
+      returnValue: undefined,
+    } as unknown as BeforeUnloadEvent;
     (listener as (event: BeforeUnloadEvent) => void)(event);
 
     expect(preventDefault).toHaveBeenCalledTimes(1);
@@ -170,7 +171,10 @@ test.each([
     await fireEvent.changeText(view.getByTestId(testID), '');
     expect(removeEventListener).toHaveBeenCalledWith('beforeunload', listener);
   } finally {
-    Object.defineProperty(Platform, 'OS', { configurable: true, value: originalPlatformOS });
+    Object.defineProperty(Platform, 'OS', {
+      configurable: true,
+      value: originalPlatformOS,
+    });
     if (originalWindow) {
       Object.defineProperty(globalThis, 'window', originalWindow);
     } else {
@@ -203,22 +207,25 @@ test('schaltet jedes Passwortfeld einzeln sichtbar und behält die Eingaben', as
   await fireEvent.press(passwordToggle);
 
   expect(view.getByTestId('reset-password-input').props.secureTextEntry).toBe(false);
-  expect(view.getByTestId('reset-password-visibility-toggle').props.accessibilityLabel)
-    .toBe('Neues Passwort verbergen');
-  expect(view.getByTestId('reset-password-visibility-toggle').props.accessibilityState)
-    .toEqual({ checked: true });
+  expect(view.getByTestId('reset-password-visibility-toggle').props.accessibilityLabel).toBe(
+    'Neues Passwort verbergen',
+  );
+  expect(view.getByTestId('reset-password-visibility-toggle').props.accessibilityState).toEqual({ checked: true });
   expect(view.getByTestId('reset-password-confirm-input').props.secureTextEntry).toBe(true);
-  expect(view.getByTestId('reset-password-confirm-visibility-toggle').props.accessibilityState)
-    .toEqual({ checked: false });
+  expect(view.getByTestId('reset-password-confirm-visibility-toggle').props.accessibilityState).toEqual({
+    checked: false,
+  });
 
   await fireEvent.press(view.getByTestId('reset-password-confirm-visibility-toggle'));
 
   expect(view.getByTestId('reset-password-input').props.secureTextEntry).toBe(false);
   expect(view.getByTestId('reset-password-confirm-input').props.secureTextEntry).toBe(false);
-  expect(view.getByTestId('reset-password-confirm-visibility-toggle').props.accessibilityLabel)
-    .toBe('Bestätigung verbergen');
-  expect(view.getByTestId('reset-password-confirm-visibility-toggle').props.accessibilityState)
-    .toEqual({ checked: true });
+  expect(view.getByTestId('reset-password-confirm-visibility-toggle').props.accessibilityLabel).toBe(
+    'Bestätigung verbergen',
+  );
+  expect(view.getByTestId('reset-password-confirm-visibility-toggle').props.accessibilityState).toEqual({
+    checked: true,
+  });
   expect(view.getByTestId('reset-password-input').props.value).toBe('Mein-neues-Passwort-123');
   expect(view.getByTestId('reset-password-confirm-input').props.value).toBe('Mein-neues-Passwort-123');
 });
@@ -247,8 +254,16 @@ test('vergleicht Passwörter nach dem Sichtbar-Schalten weiterhin vor dem Speich
 
 test.each([
   { name: 'leeren Eingaben', password: '', confirmPassword: '' },
-  { name: 'fehlendem neuen Passwort', password: '', confirmPassword: 'Mein-neues-Passwort-123' },
-  { name: 'fehlender Passwortbestätigung', password: 'Mein-neues-Passwort-123', confirmPassword: '' },
+  {
+    name: 'fehlendem neuen Passwort',
+    password: '',
+    confirmPassword: 'Mein-neues-Passwort-123',
+  },
+  {
+    name: 'fehlender Passwortbestätigung',
+    password: 'Mein-neues-Passwort-123',
+    confirmPassword: '',
+  },
 ])('verhindert das Speichern bei $name', async ({ password, confirmPassword }) => {
   const view = await render(<ResetPasswordScreen />);
 
@@ -263,8 +278,8 @@ test.each([
 
   const errorMessage = await view.findByText('Bitte gib dein neues Passwort zweimal ein.');
   expect(errorMessage.props.accessible).toBe(true);
-  expect(errorMessage.props.accessibilityRole).toBe('alert');
-  expect(errorMessage.props.accessibilityLiveRegion).toBe('assertive');
+  expect(errorMessage.props.accessibilityRole).toBe(Platform.OS === 'ios' ? 'alert' : 'text');
+  expect(errorMessage.props.accessibilityLiveRegion).toBe(Platform.OS === 'android' ? 'assertive' : undefined);
   expect(mockSaveNewPassword).not.toHaveBeenCalled();
 });
 
@@ -278,8 +293,8 @@ test('verhindert das Speichern unterschiedlicher Passwörter mit zugänglicher F
 
   const errorMessage = await view.findByText('Die Passwörter stimmen nicht überein.');
   expect(errorMessage.props.accessible).toBe(true);
-  expect(errorMessage.props.accessibilityRole).toBe('alert');
-  expect(errorMessage.props.accessibilityLiveRegion).toBe('assertive');
+  expect(errorMessage.props.accessibilityRole).toBe(Platform.OS === 'ios' ? 'alert' : 'text');
+  expect(errorMessage.props.accessibilityLiveRegion).toBe(Platform.OS === 'android' ? 'assertive' : undefined);
   expect(mockSaveNewPassword).not.toHaveBeenCalled();
 });
 
@@ -287,7 +302,10 @@ test.each(['ios', 'android'] as const)(
   'meldet die erfolgreiche Passwortänderung unter %s als Screenreader-Status und lässt die Rückkehr zu',
   async (platform) => {
     const originalPlatformOS = Platform.OS;
-    Object.defineProperty(Platform, 'OS', { configurable: true, value: platform });
+    Object.defineProperty(Platform, 'OS', {
+      configurable: true,
+      value: platform,
+    });
     const announceSpy = jest.spyOn(AccessibilityInfo, 'announceForAccessibility').mockImplementation(() => {});
     const focusSpy = jest.spyOn(AccessibilityInfo, 'setAccessibilityFocus').mockImplementation(() => {});
     const findNodeHandleSpy = jest.spyOn(ReactNative, 'findNodeHandle').mockReturnValue(123);
@@ -320,45 +338,71 @@ test.each(['ios', 'android'] as const)(
       announceSpy.mockRestore();
       focusSpy.mockRestore();
       findNodeHandleSpy.mockRestore();
-      Object.defineProperty(Platform, 'OS', { configurable: true, value: originalPlatformOS });
+      Object.defineProperty(Platform, 'OS', {
+        configurable: true,
+        value: originalPlatformOS,
+      });
     }
   },
 );
 
-test('behält Formular und Eingaben nach einem Verbindungsfehler für einen erneuten Versuch', async () => {
-  const view = await render(<ResetPasswordScreen />);
+test.each(['ios', 'android'] as const)(
+  'kündigt einen Speicherfehler auf %s plattformgerecht an und erlaubt einen erneuten Versuch',
+  async (platform) => {
+    const originalPlatformOS = Platform.OS;
+    Object.defineProperty(Platform, 'OS', {
+      configurable: true,
+      value: platform,
+    });
+    const announceSpy = jest.spyOn(AccessibilityInfo, 'announceForAccessibility').mockImplementation(() => {});
+    try {
+      const view = await render(<ResetPasswordScreen />);
 
-  await waitFor(() => expect(view.getByTestId('reset-password-submit-button')).toBeTruthy());
-  await fireEvent.changeText(view.getByTestId('reset-password-input'), 'Mein-neues-Passwort-123');
-  await fireEvent.changeText(view.getByTestId('reset-password-confirm-input'), 'Mein-neues-Passwort-123');
-  await fireEvent.press(view.getByTestId('reset-password-submit-button'));
+      await waitFor(() => expect(view.getByTestId('reset-password-submit-button')).toBeTruthy());
+      await fireEvent.changeText(view.getByTestId('reset-password-input'), 'Mein-neues-Passwort-123');
+      await fireEvent.changeText(view.getByTestId('reset-password-confirm-input'), 'Mein-neues-Passwort-123');
+      await fireEvent.press(view.getByTestId('reset-password-submit-button'));
 
-  const errorMessage = await view.findByText(
-    'Keine Verbindung möglich. Prüfe deine Internetverbindung und versuche es erneut.',
-  );
-  expect(errorMessage.props.accessible).toBe(true);
-  expect(errorMessage.props.accessibilityRole).toBe('alert');
-  expect(errorMessage.props.accessibilityLiveRegion).toBe('assertive');
-  expect(errorMessage.props.children).toContain('versuche es erneut');
-  expect(view.getByTestId('reset-password-input').props.value).toBe('Mein-neues-Passwort-123');
-  expect(view.getByTestId('reset-password-confirm-input').props.value).toBe('Mein-neues-Passwort-123');
-  expect(view.getByTestId('reset-password-submit-button')).toBeTruthy();
-  expect(mockSaveNewPassword).toHaveBeenCalledTimes(1);
+      const errorMessage = await view.findByText(
+        'Keine Verbindung möglich. Prüfe deine Internetverbindung und versuche es erneut.',
+      );
+      expect(errorMessage.props.accessible).toBe(true);
+      expect(errorMessage.props.accessibilityRole).toBe(platform === 'ios' ? 'alert' : 'text');
+      expect(errorMessage.props.accessibilityLiveRegion).toBe(platform === 'android' ? 'assertive' : undefined);
+      expect(errorMessage.props.children).toContain('versuche es erneut');
+      expect(announceSpy).toHaveBeenCalledTimes(platform === 'ios' ? 1 : 0);
+      expect(announceSpy).not.toHaveBeenCalledWith(
+        'Keine Verbindung möglich. Prüfe deine Internetverbindung und versuche es erneut.',
+      );
+      expect(view.getByTestId('reset-password-input').props.value).toBe('Mein-neues-Passwort-123');
+      expect(view.getByTestId('reset-password-confirm-input').props.value).toBe('Mein-neues-Passwort-123');
+      expect(view.getByTestId('reset-password-submit-button')).toBeTruthy();
+      expect(mockSaveNewPassword).toHaveBeenCalledTimes(1);
 
-  mockSaveNewPassword.mockResolvedValue(undefined);
-  await fireEvent.press(view.getByTestId('reset-password-submit-button'));
+      mockSaveNewPassword.mockResolvedValue(undefined);
+      await fireEvent.press(view.getByTestId('reset-password-submit-button'));
 
-  await waitFor(() => expect(view.getByText('Passwort geändert')).toBeTruthy());
-  expect(mockSaveNewPassword).toHaveBeenCalledTimes(2);
-});
+      await waitFor(() => expect(view.getByText('Passwort geändert')).toBeTruthy());
+      expect(mockSaveNewPassword).toHaveBeenCalledTimes(2);
+    } finally {
+      announceSpy.mockRestore();
+      Object.defineProperty(Platform, 'OS', {
+        configurable: true,
+        value: originalPlatformOS,
+      });
+    }
+  },
+);
 
 test('behält Eingaben und ermöglicht nach vorübergehender Passwort-Drosselung einen erneuten Versuch', async () => {
   mockSaveNewPassword
     .mockReset()
-    .mockRejectedValueOnce(Object.assign(new Error('Too many requests'), {
-      code: 'over_request_rate_limit',
-      status: 429,
-    }))
+    .mockRejectedValueOnce(
+      Object.assign(new Error('Too many requests'), {
+        code: 'over_request_rate_limit',
+        status: 429,
+      }),
+    )
     .mockResolvedValueOnce(undefined);
   const view = await render(<ResetPasswordScreen />);
 
@@ -370,7 +414,7 @@ test('behält Eingaben und ermöglicht nach vorübergehender Passwort-Drosselung
   const errorMessage = await view.findByText(
     'Zu viele Versuche in kurzer Zeit. Warte bitte einige Minuten und versuche es dann erneut.',
   );
-  expect(errorMessage.props.accessibilityRole).toBe('alert');
+  expect(errorMessage.props.accessibilityRole).toBe(Platform.OS === 'ios' ? 'alert' : 'text');
   expect(view.getByTestId('reset-password-input').props.value).toBe('Mein-neues-Passwort-123');
   expect(view.getByTestId('reset-password-confirm-input').props.value).toBe('Mein-neues-Passwort-123');
   expect(view.getByTestId('reset-password-submit-button').props.accessibilityState).toEqual({
@@ -388,11 +432,13 @@ test('behält Eingaben und ermöglicht nach vorübergehender Passwort-Drosselung
 test('zeigt eine verlässliche Wartezeit und lässt nach Ablauf erneut absenden', async () => {
   mockSaveNewPassword
     .mockReset()
-    .mockRejectedValueOnce(Object.assign(new Error('Too many requests'), {
-      code: 'over_request_rate_limit',
-      status: 429,
-      retryAfter: 1,
-    }))
+    .mockRejectedValueOnce(
+      Object.assign(new Error('Too many requests'), {
+        code: 'over_request_rate_limit',
+        status: 429,
+        retryAfter: 1,
+      }),
+    )
     .mockResolvedValueOnce(undefined);
   const view = await render(<ResetPasswordScreen />);
 
@@ -403,14 +449,15 @@ test('zeigt eine verlässliche Wartezeit und lässt nach Ablauf erneut absenden'
   try {
     await fireEvent.press(view.getByTestId('reset-password-submit-button'));
 
-    expect(view.getByText(
-      'Zu viele Versuche in kurzer Zeit. Bitte warte noch 1 Sekunde und versuche es dann erneut.',
-    )).toBeTruthy();
+    expect(
+      view.getByText('Zu viele Versuche in kurzer Zeit. Bitte warte noch 1 Sekunde und versuche es dann erneut.'),
+    ).toBeTruthy();
     expect(view.getByTestId('reset-password-retry-countdown').props.children.join('')).toBe(
       'Du kannst es in 1 Sekunde erneut versuchen.',
     );
     expect(view.getByTestId('reset-password-submit-button').props.accessibilityState).toMatchObject({
-      disabled: true, busy: false,
+      disabled: true,
+      busy: false,
     });
     expect(view.getByTestId('reset-password-input').props.value).toBe('Mein-neues-Passwort-123');
     expect(view.getByTestId('reset-password-confirm-input').props.value).toBe('Mein-neues-Passwort-123');
@@ -419,7 +466,8 @@ test('zeigt eine verlässliche Wartezeit und lässt nach Ablauf erneut absenden'
       jest.advanceTimersByTime(1_000);
     });
     expect(view.getByTestId('reset-password-submit-button').props.accessibilityState).toMatchObject({
-      disabled: false, busy: false,
+      disabled: false,
+      busy: false,
     });
     expect(view.getByTestId('reset-password-retry-ready')).toBeTruthy();
 
@@ -440,10 +488,8 @@ test('gibt bei einem unerwarteten Speicherfehler eine zugängliche nächste Akti
   await fireEvent.changeText(view.getByTestId('reset-password-confirm-input'), 'Mein-neues-Passwort-123');
   await fireEvent.press(view.getByTestId('reset-password-submit-button'));
 
-  const errorMessage = await view.findByText(
-    'Das Passwort konnte nicht gespeichert werden. Bitte versuche es erneut.',
-  );
-  expect(errorMessage.props.accessibilityRole).toBe('alert');
+  const errorMessage = await view.findByText('Das Passwort konnte nicht gespeichert werden. Bitte versuche es erneut.');
+  expect(errorMessage.props.accessibilityRole).toBe(Platform.OS === 'ios' ? 'alert' : 'text');
   expect(view.getByTestId('reset-password-submit-button')).toBeTruthy();
   expect(mockSaveNewPassword).toHaveBeenCalledTimes(1);
 });
@@ -451,7 +497,9 @@ test('gibt bei einem unerwarteten Speicherfehler eine zugängliche nächste Akti
 test('erklärt eine abgelaufene Sitzung und entfernt das Passwortformular', async () => {
   mockSaveNewPassword.mockImplementation(async () => {
     mockRecoveryPending = false;
-    throw Object.assign(new Error('Invalid token: expired'), { code: 'otp_expired' });
+    throw Object.assign(new Error('Invalid token: expired'), {
+      code: 'otp_expired',
+    });
   });
   const view = await render(<ResetPasswordScreen />);
 
@@ -464,8 +512,8 @@ test('erklärt eine abgelaufene Sitzung und entfernt das Passwortformular', asyn
     'Die Wiederherstellungssitzung ist abgelaufen oder ungültig. Bitte fordere in den Einstellungen einen neuen Wiederherstellungslink an.',
   );
   expect(errorMessage.props.accessible).toBe(true);
-  expect(errorMessage.props.accessibilityRole).toBe('alert');
-  expect(errorMessage.props.accessibilityLiveRegion).toBe('assertive');
+  expect(errorMessage.props.accessibilityRole).toBe(Platform.OS === 'ios' ? 'alert' : 'text');
+  expect(errorMessage.props.accessibilityLiveRegion).toBe(Platform.OS === 'android' ? 'assertive' : undefined);
   expect(view.queryByTestId('reset-password-input')).toBeNull();
   expect(view.queryByTestId('reset-password-confirm-input')).toBeNull();
   expect(view.queryByTestId('reset-password-submit-button')).toBeNull();
@@ -474,9 +522,7 @@ test('erklärt eine abgelaufene Sitzung und entfernt das Passwortformular', asyn
 });
 
 test('behält Formular und Eingaben nach einer Passwort-Ablehnung für eine Korrektur', async () => {
-  mockSaveNewPassword.mockRejectedValue(
-    Object.assign(new Error('Password is too weak'), { code: 'weak_password' }),
-  );
+  mockSaveNewPassword.mockRejectedValue(Object.assign(new Error('Password is too weak'), { code: 'weak_password' }));
   const view = await render(<ResetPasswordScreen />);
 
   await waitFor(() => expect(view.getByTestId('reset-password-submit-button')).toBeTruthy());
@@ -484,9 +530,9 @@ test('behält Formular und Eingaben nach einer Passwort-Ablehnung für eine Korr
   await fireEvent.changeText(view.getByTestId('reset-password-confirm-input'), 'kurz');
   await fireEvent.press(view.getByTestId('reset-password-submit-button'));
 
-  expect(await view.findByText(
-    'Das Passwort ist zu kurz oder zu unsicher. Bitte wähle ein stärkeres Passwort.',
-  )).toBeTruthy();
+  expect(
+    await view.findByText('Das Passwort ist zu kurz oder zu unsicher. Bitte wähle ein stärkeres Passwort.'),
+  ).toBeTruthy();
   expect(view.getByTestId('reset-password-input').props.value).toBe('kurz');
   expect(view.getByTestId('reset-password-confirm-input').props.value).toBe('kurz');
   expect(view.getByTestId('reset-password-submit-button').props.accessibilityState).toEqual({
@@ -500,7 +546,9 @@ test('speichert nach einer Passwort-Ablehnung beide korrigierten Eingaben erfolg
   mockSaveNewPassword
     .mockReset()
     .mockRejectedValueOnce(
-      Object.assign(new Error('Password is too weak'), { code: 'weak_password' }),
+      Object.assign(new Error('Password is too weak'), {
+        code: 'weak_password',
+      }),
     )
     .mockResolvedValueOnce(undefined);
   const view = await render(<ResetPasswordScreen />);
@@ -513,7 +561,7 @@ test('speichert nach einer Passwort-Ablehnung beide korrigierten Eingaben erfolg
   const errorMessage = await view.findByText(
     'Das Passwort ist zu kurz oder zu unsicher. Bitte wähle ein stärkeres Passwort.',
   );
-  expect(errorMessage.props.accessibilityRole).toBe('alert');
+  expect(errorMessage.props.accessibilityRole).toBe(Platform.OS === 'ios' ? 'alert' : 'text');
 
   await fireEvent.changeText(view.getByTestId('reset-password-input'), 'Mein-neues-Passwort-123');
   await fireEvent.changeText(view.getByTestId('reset-password-confirm-input'), 'Mein-neues-Passwort-123');
@@ -523,9 +571,9 @@ test('speichert nach einer Passwort-Ablehnung beide korrigierten Eingaben erfolg
   await fireEvent.press(view.getByTestId('reset-password-submit-button'));
 
   expect(await view.findByText('Passwort geändert')).toBeTruthy();
-  expect(view.getByText(
-    'Dein neues Passwort ist gespeichert. Du kannst dich jetzt mit diesem Passwort anmelden.',
-  )).toBeTruthy();
+  expect(
+    view.getByText('Dein neues Passwort ist gespeichert. Du kannst dich jetzt mit diesem Passwort anmelden.'),
+  ).toBeTruthy();
   expect(mockSaveNewPassword).toHaveBeenCalledTimes(2);
   expect(mockSaveNewPassword).toHaveBeenNthCalledWith(1, 'kurz');
   expect(mockSaveNewPassword).toHaveBeenNthCalledWith(2, 'Mein-neues-Passwort-123');
@@ -535,7 +583,9 @@ test('behält korrigierte Eingaben nach einer zweiten Passwort-Ablehnung für ei
   mockSaveNewPassword
     .mockReset()
     .mockRejectedValueOnce(
-      Object.assign(new Error('Password is too weak'), { code: 'weak_password' }),
+      Object.assign(new Error('Password is too weak'), {
+        code: 'weak_password',
+      }),
     )
     .mockRejectedValueOnce(new Error('Unexpected server error'))
     .mockResolvedValueOnce(undefined);
@@ -546,9 +596,9 @@ test('behält korrigierte Eingaben nach einer zweiten Passwort-Ablehnung für ei
   await fireEvent.changeText(view.getByTestId('reset-password-confirm-input'), 'kurz');
   await fireEvent.press(view.getByTestId('reset-password-submit-button'));
 
-  expect(await view.findByText(
-    'Das Passwort ist zu kurz oder zu unsicher. Bitte wähle ein stärkeres Passwort.',
-  )).toBeTruthy();
+  expect(
+    await view.findByText('Das Passwort ist zu kurz oder zu unsicher. Bitte wähle ein stärkeres Passwort.'),
+  ).toBeTruthy();
 
   await fireEvent.changeText(view.getByTestId('reset-password-input'), 'Mein-neues-Passwort-123');
   await fireEvent.changeText(view.getByTestId('reset-password-confirm-input'), 'Mein-neues-Passwort-123');
@@ -558,8 +608,8 @@ test('behält korrigierte Eingaben nach einer zweiten Passwort-Ablehnung für ei
     'Das Passwort konnte nicht gespeichert werden. Bitte versuche es erneut.',
   );
   expect(secondErrorMessage.props.accessible).toBe(true);
-  expect(secondErrorMessage.props.accessibilityRole).toBe('alert');
-  expect(secondErrorMessage.props.accessibilityLiveRegion).toBe('assertive');
+  expect(secondErrorMessage.props.accessibilityRole).toBe(Platform.OS === 'ios' ? 'alert' : 'text');
+  expect(secondErrorMessage.props.accessibilityLiveRegion).toBe(Platform.OS === 'android' ? 'assertive' : undefined);
   expect(view.getByTestId('reset-password-input').props.value).toBe('Mein-neues-Passwort-123');
   expect(view.getByTestId('reset-password-confirm-input').props.value).toBe('Mein-neues-Passwort-123');
   expect(view.getByTestId('reset-password-submit-button').props.accessibilityState).toEqual({
@@ -581,7 +631,9 @@ test('prüft nach einer Passwort-Ablehnung weiterhin beide Eingaben vor jedem Sp
   mockSaveNewPassword
     .mockReset()
     .mockRejectedValueOnce(
-      Object.assign(new Error('Password is too weak'), { code: 'weak_password' }),
+      Object.assign(new Error('Password is too weak'), {
+        code: 'weak_password',
+      }),
     )
     .mockResolvedValueOnce(undefined);
   const view = await render(<ResetPasswordScreen />);
@@ -591,9 +643,9 @@ test('prüft nach einer Passwort-Ablehnung weiterhin beide Eingaben vor jedem Sp
   await fireEvent.changeText(view.getByTestId('reset-password-confirm-input'), 'kurz');
   await fireEvent.press(view.getByTestId('reset-password-submit-button'));
 
-  expect(await view.findByText(
-    'Das Passwort ist zu kurz oder zu unsicher. Bitte wähle ein stärkeres Passwort.',
-  )).toBeTruthy();
+  expect(
+    await view.findByText('Das Passwort ist zu kurz oder zu unsicher. Bitte wähle ein stärkeres Passwort.'),
+  ).toBeTruthy();
   expect(mockSaveNewPassword).toHaveBeenCalledTimes(1);
 
   await fireEvent.changeText(view.getByTestId('reset-password-input'), 'Mein-neues-Passwort-123');
@@ -602,8 +654,8 @@ test('prüft nach einer Passwort-Ablehnung weiterhin beide Eingaben vor jedem Sp
 
   const mismatchMessage = await view.findByText('Die Passwörter stimmen nicht überein.');
   expect(mismatchMessage.props.accessible).toBe(true);
-  expect(mismatchMessage.props.accessibilityRole).toBe('alert');
-  expect(mismatchMessage.props.accessibilityLiveRegion).toBe('assertive');
+  expect(mismatchMessage.props.accessibilityRole).toBe(Platform.OS === 'ios' ? 'alert' : 'text');
+  expect(mismatchMessage.props.accessibilityLiveRegion).toBe(Platform.OS === 'android' ? 'assertive' : undefined);
   expect(mockSaveNewPassword).toHaveBeenCalledTimes(1);
 
   await fireEvent.changeText(view.getByTestId('reset-password-confirm-input'), 'Mein-neues-Passwort-123');
@@ -615,56 +667,79 @@ test('prüft nach einer Passwort-Ablehnung weiterhin beide Eingaben vor jedem Sp
   expect(mockSaveNewPassword).toHaveBeenNthCalledWith(2, 'Mein-neues-Passwort-123');
 });
 
-test('sperrt schnelle wiederholte Speicherversuche bis die Passwortänderung abgeschlossen ist', async () => {
-  const originalPlatformOS = Platform.OS;
-  Object.defineProperty(Platform, 'OS', { configurable: true, value: 'ios' });
-  const announceSpy = jest.spyOn(AccessibilityInfo, 'announceForAccessibility').mockImplementation(() => {});
-  const focusSpy = jest.spyOn(AccessibilityInfo, 'setAccessibilityFocus').mockImplementation(() => {});
-  const findNodeHandleSpy = jest.spyOn(ReactNative, 'findNodeHandle').mockReturnValue(123);
-  let finishSave!: () => void;
-  mockSaveNewPassword.mockImplementation(
-    () => new Promise<void>((resolve) => { finishSave = resolve; }),
-  );
-  try {
-    const view = await render(<ResetPasswordScreen />);
-
-    await waitFor(() => expect(view.getByTestId('reset-password-submit-button')).toBeTruthy());
-    await fireEvent.changeText(view.getByTestId('reset-password-input'), 'Mein-neues-Passwort-123');
-    await fireEvent.changeText(view.getByTestId('reset-password-confirm-input'), 'Mein-neues-Passwort-123');
-
-    await fireEvent.press(view.getByTestId('reset-password-submit-button'));
-    await fireEvent.press(view.getByTestId('reset-password-submit-button'));
-    await fireEvent.press(view.getByTestId('reset-password-submit-button'));
-
-    expect(mockSaveNewPassword).toHaveBeenCalledTimes(1);
-    const savingButton = view.getByTestId('reset-password-submit-button');
-    expect(savingButton.props.accessibilityState).toEqual({
-      disabled: true,
-      busy: true,
+test.each(['ios', 'android'] as const)(
+  'kündigt den laufenden Speichervorgang auf %s an und sperrt weitere Versuche',
+  async (platform) => {
+    const originalPlatformOS = Platform.OS;
+    Object.defineProperty(Platform, 'OS', {
+      configurable: true,
+      value: platform,
     });
-    expect(savingButton.props.accessibilityLiveRegion).toBe('polite');
-    expect(view.getByText('Wird gespeichert …')).toBeTruthy();
-    expect(announceSpy).toHaveBeenCalledWith('Passwort wird gespeichert …');
-
-    await act(async () => finishSave());
-    expect(await view.findByText('Passwort geändert')).toBeTruthy();
-    expect(announceSpy).toHaveBeenLastCalledWith(
-      'Passwort wird gespeichert …',
+    const announceSpy = jest.spyOn(AccessibilityInfo, 'announceForAccessibility').mockImplementation(() => {});
+    const focusSpy = jest.spyOn(AccessibilityInfo, 'setAccessibilityFocus').mockImplementation(() => {});
+    const findNodeHandleSpy = jest.spyOn(ReactNative, 'findNodeHandle').mockReturnValue(123);
+    let finishSave!: () => void;
+    mockSaveNewPassword.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          finishSave = resolve;
+        }),
     );
-    expect(focusSpy).toHaveBeenCalledWith(expect.any(Number));
-    expect(findNodeHandleSpy).toHaveBeenCalledWith(expect.anything());
-  } finally {
-    announceSpy.mockRestore();
-    focusSpy.mockRestore();
-    findNodeHandleSpy.mockRestore();
-    Object.defineProperty(Platform, 'OS', { configurable: true, value: originalPlatformOS });
-  }
-});
+    try {
+      const view = await render(<ResetPasswordScreen />);
+
+      await waitFor(() => expect(view.getByTestId('reset-password-submit-button')).toBeTruthy());
+      await fireEvent.changeText(view.getByTestId('reset-password-input'), 'Mein-neues-Passwort-123');
+      await fireEvent.changeText(view.getByTestId('reset-password-confirm-input'), 'Mein-neues-Passwort-123');
+      announceSpy.mockClear();
+
+      await fireEvent.press(view.getByTestId('reset-password-submit-button'));
+      await fireEvent.press(view.getByTestId('reset-password-submit-button'));
+      await fireEvent.press(view.getByTestId('reset-password-submit-button'));
+
+      expect(mockSaveNewPassword).toHaveBeenCalledTimes(1);
+      const savingButton = view.getByTestId('reset-password-submit-button');
+      expect(savingButton.props.accessibilityState).toEqual({
+        disabled: true,
+        busy: true,
+      });
+      expect(savingButton.props.accessibilityLabel).toBe('Passwort wird gespeichert');
+      expect(savingButton.props.accessibilityLiveRegion).toBe(platform === 'android' ? 'polite' : undefined);
+      expect(view.getByText('Wird gespeichert …')).toBeTruthy();
+      const savingAnnouncements = announceSpy.mock.calls.filter(
+        ([message]) => message === 'Passwort wird gespeichert …',
+      );
+      expect(savingAnnouncements).toHaveLength(platform === 'ios' ? 1 : 0);
+      if (platform === 'ios') {
+        expect(announceSpy).toHaveBeenCalledWith('Passwort wird gespeichert …');
+      }
+
+      await act(async () => finishSave());
+      expect(await view.findByText('Passwort geändert')).toBeTruthy();
+      expect(announceSpy.mock.calls.filter(([message]) => message === 'Passwort wird gespeichert …')).toHaveLength(
+        platform === 'ios' ? 1 : 0,
+      );
+      expect(focusSpy).toHaveBeenCalledWith(expect.any(Number));
+      expect(findNodeHandleSpy).toHaveBeenCalledWith(expect.anything());
+    } finally {
+      announceSpy.mockRestore();
+      focusSpy.mockRestore();
+      findNodeHandleSpy.mockRestore();
+      Object.defineProperty(Platform, 'OS', {
+        configurable: true,
+        value: originalPlatformOS,
+      });
+    }
+  },
+);
 
 test('verhindert das Verlassen, solange die Passwortänderung noch gespeichert wird', async () => {
   let finishSave!: () => void;
   mockSaveNewPassword.mockImplementation(
-    () => new Promise<void>((resolve) => { finishSave = resolve; }),
+    () =>
+      new Promise<void>((resolve) => {
+        finishSave = resolve;
+      }),
   );
   const view = await render(<ResetPasswordScreen />);
 
@@ -696,7 +771,10 @@ test.each(['ios', 'android'] as const)(
   async (platform) => {
     const originalPlatformOS = Platform.OS;
     const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
-    Object.defineProperty(Platform, 'OS', { configurable: true, value: platform });
+    Object.defineProperty(Platform, 'OS', {
+      configurable: true,
+      value: platform,
+    });
 
     try {
       const view = await render(<ResetPasswordScreen />);
@@ -719,8 +797,14 @@ test.each(['ios', 'android'] as const)(
       );
       const buttons = alertSpy.mock.calls[0]?.[2];
       expect(buttons?.map((button) => button.text)).toEqual(['Abbrechen', 'Verwerfen']);
-      expect(buttons?.[0]).toMatchObject({ text: 'Abbrechen', style: 'cancel' });
-      expect(buttons?.[1]).toMatchObject({ text: 'Verwerfen', style: 'destructive' });
+      expect(buttons?.[0]).toMatchObject({
+        text: 'Abbrechen',
+        style: 'cancel',
+      });
+      expect(buttons?.[1]).toMatchObject({
+        text: 'Verwerfen',
+        style: 'destructive',
+      });
 
       buttons?.find((button) => button.text === 'Abbrechen')?.onPress?.();
 
@@ -730,7 +814,10 @@ test.each(['ios', 'android'] as const)(
       expect(mockPreventRemoveEnabled).toBe(true);
     } finally {
       alertSpy.mockRestore();
-      Object.defineProperty(Platform, 'OS', { configurable: true, value: originalPlatformOS });
+      Object.defineProperty(Platform, 'OS', {
+        configurable: true,
+        value: originalPlatformOS,
+      });
     }
   },
 );

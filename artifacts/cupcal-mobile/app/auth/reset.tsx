@@ -116,9 +116,11 @@ export default function ResetPasswordScreen() {
 
       const isReady = isPasswordRecoveryPending() && Boolean(data.session);
       setIsRecoveryReady(isReady);
-      setErrorMessage(isReady
-        ? null
-        : 'Der Wiederherstellungslink ist ungültig, abgelaufen oder wurde bereits verwendet. Fordere bitte einen neuen Link an.');
+      setErrorMessage(
+        isReady
+          ? null
+          : 'Der Wiederherstellungslink ist ungültig, abgelaufen oder wurde bereits verwendet. Fordere bitte einen neuen Link an.',
+      );
     };
     const processRecoveryUrl = async (url: string) => {
       try {
@@ -138,7 +140,11 @@ export default function ResetPasswordScreen() {
       markPasswordRecoverySession(hasRecoverySession);
       setIsRecoveryReady(hasRecoverySession);
       setIsCheckingLink(false);
-      setErrorMessage(hasRecoverySession ? null : 'Die Wiederherstellungssitzung ist abgelaufen oder ungültig. Fordere bitte einen neuen Link an.');
+      setErrorMessage(
+        hasRecoverySession
+          ? null
+          : 'Die Wiederherstellungssitzung ist abgelaufen oder ungültig. Fordere bitte einen neuen Link an.',
+      );
     });
 
     const linkSubscription = Linking.addEventListener('url', ({ url }) => {
@@ -201,23 +207,15 @@ export default function ResetPasswordScreen() {
         setConfirmPassword('');
       }
       const message = hasRecoverySession
-        ? friendlyAuthError(
-          error,
-          'Das Passwort konnte nicht gespeichert werden. Bitte versuche es erneut.',
-        )
+        ? friendlyAuthError(error, 'Das Passwort konnte nicht gespeichert werden. Bitte versuche es erneut.')
         : 'Die Wiederherstellungssitzung ist abgelaufen oder ungültig. Bitte fordere in den Einstellungen einen neuen Wiederherstellungslink an.';
-      const retryAfterSeconds = hasRecoverySession
-        ? getRateLimitRetryAfterSeconds(error)
-        : null;
+      const retryAfterSeconds = hasRecoverySession ? getRateLimitRetryAfterSeconds(error) : null;
       if (retryAfterSeconds !== null) {
         setRetryAvailableAt(Date.now() + retryAfterSeconds * 1_000);
         setRetryWaitSeconds(retryAfterSeconds);
         setRetryWaitFinished(false);
       }
       setErrorMessage(message);
-      if (Platform.OS === 'ios') {
-        AccessibilityInfo.announceForAccessibility(message);
-      }
     } finally {
       isSavingRef.current = false;
       setIsSaving(false);
@@ -229,7 +227,10 @@ export default function ResetPasswordScreen() {
       <KeyboardAwareScrollViewCompat
         contentContainerStyle={[
           styles.content,
-          { paddingTop: Platform.OS === 'web' ? 67 : 24, paddingBottom: Platform.OS === 'web' ? 34 : 32 },
+          {
+            paddingTop: Platform.OS === 'web' ? 67 : 24,
+            paddingBottom: Platform.OS === 'web' ? 34 : 32,
+          },
         ]}
         showsVerticalScrollIndicator={false}
         bottomOffset={20}
@@ -260,18 +261,10 @@ export default function ResetPasswordScreen() {
 
         {!isCheckingLink && isRecoveryReady && !isSaved ? (
           <>
-            <Text
-              testID="reset-password-policy"
-              style={[styles.passwordPolicy, { color: colors.mutedForeground }]}
-            >
+            <Text testID="reset-password-policy" style={[styles.passwordPolicy, { color: colors.mutedForeground }]}>
               Mindestens {PASSWORD_MIN_LENGTH} Zeichen. Es sind keine weiteren Zeichenregeln erforderlich.
             </Text>
-            <View
-              style={[
-                styles.inputRow,
-                { backgroundColor: colors.input, borderColor: colors.border },
-              ]}
-            >
+            <View style={[styles.inputRow, { backgroundColor: colors.input, borderColor: colors.border }]}>
               <TextInput
                 accessibilityLabel="Neues Passwort"
                 testID="reset-password-input"
@@ -295,19 +288,10 @@ export default function ResetPasswordScreen() {
                 onPress={() => setIsPasswordVisible((visible) => !visible)}
                 style={styles.visibilityToggle}
               >
-                <Feather
-                  name={isPasswordVisible ? 'eye-off' : 'eye'}
-                  size={20}
-                  color={colors.mutedForeground}
-                />
+                <Feather name={isPasswordVisible ? 'eye-off' : 'eye'} size={20} color={colors.mutedForeground} />
               </Pressable>
             </View>
-            <View
-              style={[
-                styles.inputRow,
-                { backgroundColor: colors.input, borderColor: colors.border },
-              ]}
-            >
+            <View style={[styles.inputRow, { backgroundColor: colors.input, borderColor: colors.border }]}>
               <TextInput
                 accessibilityLabel="Neues Passwort bestätigen"
                 testID="reset-password-confirm-input"
@@ -332,11 +316,7 @@ export default function ResetPasswordScreen() {
                 onPress={() => setIsConfirmPasswordVisible((visible) => !visible)}
                 style={styles.visibilityToggle}
               >
-                <Feather
-                  name={isConfirmPasswordVisible ? 'eye-off' : 'eye'}
-                  size={20}
-                  color={colors.mutedForeground}
-                />
+                <Feather name={isConfirmPasswordVisible ? 'eye-off' : 'eye'} size={20} color={colors.mutedForeground} />
               </Pressable>
             </View>
           </>
@@ -345,8 +325,8 @@ export default function ResetPasswordScreen() {
         {errorMessage ? (
           <Text
             accessible
-            accessibilityRole="alert"
-            accessibilityLiveRegion="assertive"
+            accessibilityRole={Platform.OS === 'ios' ? 'alert' : 'text'}
+            accessibilityLiveRegion={Platform.OS === 'android' ? 'assertive' : undefined}
             style={[styles.notice, { color: colors.destructive }]}
           >
             {errorMessage}
@@ -380,8 +360,14 @@ export default function ResetPasswordScreen() {
         {!isCheckingLink && isRecoveryReady && !isSaved ? (
           <Pressable
             accessibilityRole="button"
-            accessibilityLiveRegion={isSaving || retryWaitSeconds > 0 ? 'polite' : undefined}
-            accessibilityState={{ disabled: isSaving || retryWaitSeconds > 0, busy: isSaving }}
+            accessibilityLabel={isSaving ? 'Passwort wird gespeichert' : 'Passwort speichern'}
+            accessibilityLiveRegion={
+              Platform.OS === 'android' && (isSaving || retryWaitSeconds > 0) ? 'polite' : undefined
+            }
+            accessibilityState={{
+              disabled: isSaving || retryWaitSeconds > 0,
+              busy: isSaving,
+            }}
             testID="reset-password-submit-button"
             disabled={isSaving || retryWaitSeconds > 0}
             onPress={() => void submitNewPassword()}
@@ -402,7 +388,7 @@ export default function ResetPasswordScreen() {
           </Pressable>
         ) : null}
 
-        {(!isCheckingLink && (!isRecoveryReady || isSaved)) ? (
+        {!isCheckingLink && (!isRecoveryReady || isSaved) ? (
           <Pressable
             accessibilityRole="button"
             testID="reset-password-return-button"
@@ -422,19 +408,58 @@ export default function ResetPasswordScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1 },
   content: { flexGrow: 1, justifyContent: 'center', paddingHorizontal: 24 },
-  icon: { width: 48, height: 48, borderRadius: 16, alignItems: 'center', justifyContent: 'center', marginBottom: 22 },
-  eyebrow: { fontSize: 10, fontWeight: '800', letterSpacing: 1.8, marginBottom: 8 },
+  icon: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 22,
+  },
+  eyebrow: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 1.8,
+    marginBottom: 8,
+  },
   heading: { fontSize: 28, fontWeight: '700', letterSpacing: -0.6 },
   description: { fontSize: 14, lineHeight: 21, marginTop: 8, marginBottom: 18 },
   passwordPolicy: { fontSize: 13, lineHeight: 18, marginBottom: 2 },
-  inputRow: { minHeight: 50, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: 12, paddingLeft: 14, paddingRight: 4, marginTop: 12 },
+  inputRow: {
+    minHeight: 50,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingLeft: 14,
+    paddingRight: 4,
+    marginTop: 12,
+  },
   input: { minHeight: 48, flex: 1, paddingVertical: 0, fontSize: 14 },
-  visibilityToggle: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  visibilityToggle: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   notice: { fontSize: 12, lineHeight: 18, marginTop: 13 },
   retryCountdown: { fontSize: 12, lineHeight: 18, marginTop: 8 },
-  primaryButton: { minHeight: 50, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginTop: 18 },
+  primaryButton: {
+    minHeight: 50,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 18,
+  },
   primaryButtonText: { fontSize: 14, fontWeight: '700' },
-  secondaryButton: { minHeight: 46, borderWidth: 1, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginTop: 18 },
+  secondaryButton: {
+    minHeight: 46,
+    borderWidth: 1,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 18,
+  },
   secondaryButtonText: { fontSize: 13, fontWeight: '700' },
   pressed: { opacity: 0.75 },
   disabled: { opacity: 0.6 },
