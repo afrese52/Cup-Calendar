@@ -643,6 +643,70 @@ test("RLS blockiert direkte fremde Änderungen bei gleicher Termin-ID", async ()
   });
 });
 
+test("RLS blockiert Upserts auf vorhandene Favoriten eines fremden Kontos", async () => {
+  await withTestAccounts(async (accountA, accountB) => {
+    const admin = createClient(supabaseUrl, serviceRoleKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+    const eventId = `shared-upsert-event-${randomUUID()}`;
+    const originalState = {
+      user_id: accountB.id,
+      event_id: eventId,
+      is_favorite: true,
+      revision: 0,
+    };
+
+    const seed = await accountB.client
+      .from("user_event_bookmarks")
+      .insert(originalState);
+    assert.ifError(seed.error);
+
+    const attemptedUpsert = await accountA.client
+      .from("user_event_bookmarks")
+      .upsert(
+        {
+          user_id: accountB.id,
+          event_id: eventId,
+          is_favorite: false,
+          revision: 99,
+        },
+        { onConflict: "user_id,event_id" },
+      )
+      .select("user_id, event_id, is_favorite, revision");
+    assert.ok(
+      attemptedUpsert.error,
+      "Konto A darf einen vorhandenen Favoriten von Konto B nicht per Upsert ändern.",
+    );
+
+    const [visibleToB, visibleToAdmin] = await Promise.all([
+      accountB.client
+        .from("user_event_bookmarks")
+        .select("user_id, event_id, is_favorite, revision")
+        .eq("user_id", accountB.id)
+        .eq("event_id", eventId)
+        .single(),
+      admin
+        .from("user_event_bookmarks")
+        .select("user_id, event_id, is_favorite, revision")
+        .eq("user_id", accountB.id)
+        .eq("event_id", eventId)
+        .single(),
+    ]);
+    assert.ifError(visibleToB.error);
+    assert.ifError(visibleToAdmin.error);
+    assert.deepEqual(
+      visibleToB.data,
+      originalState,
+      "Konto B muss seinen ursprünglichen Favoritenzustand behalten.",
+    );
+    assert.deepEqual(
+      visibleToAdmin.data,
+      originalState,
+      "Der privilegierte Prüfclient muss den ursprünglichen Zustand bestätigen.",
+    );
+  });
+});
+
 test("gleichzeitige RPC-Aufrufe erhöhen die Revision atomar und behalten den zuletzt angenommenen Status", async () => {
   await withTestAccounts(async (accountA) => {
     const secondDevice = createClient(supabaseUrl, anonKey, {
