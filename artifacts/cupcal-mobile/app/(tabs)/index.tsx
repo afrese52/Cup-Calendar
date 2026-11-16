@@ -9,17 +9,22 @@ import { useColors } from '@/hooks/useColors';
 import {
   matchesEventFilter,
   toLocalDateKey,
-  type CalendarEventFilter,
+  type CalendarCategoryFilter,
+  type CalendarGameFeatureFilter,
   type EventCategory,
 } from '@/data/events';
 import { useCupCal } from '@/state/AppContext';
 
-const categoryFilters: CalendarEventFilter[] = [
+const categoryFilters: CalendarCategoryFilter[] = [
   'Alle Termine',
   'Turnier',
   'Liga',
   'Qualifikation',
   'Trainingsrunde',
+];
+
+const gameFeatureFilters: CalendarGameFeatureFilter[] = [
+  'Alle Spielmerkmale',
   'Reload',
   'Zero Build',
 ];
@@ -72,15 +77,25 @@ export default function CalendarScreen() {
   const [currentMonth, setCurrentMonth] = useState(
     () => new Date(new Date().getFullYear(), new Date().getMonth(), 1),
   );
-  const [selectedCategory, setSelectedCategory] = useState<CalendarEventFilter>('Alle Termine');
+  const [selectedCategory, setSelectedCategory] = useState<CalendarCategoryFilter>('Alle Termine');
+  const [selectedGameFeature, setSelectedGameFeature] =
+    useState<CalendarGameFeatureFilter>('Alle Spielmerkmale');
   const [filterOpen, setFilterOpen] = useState(false);
+  const filtersActive =
+    selectedCategory !== 'Alle Termine' || selectedGameFeature !== 'Alle Spielmerkmale';
+  const filterSummary = filtersActive
+    ? [selectedCategory !== 'Alle Termine' ? selectedCategory : null,
+      selectedGameFeature !== 'Alle Spielmerkmale' ? selectedGameFeature : null]
+      .filter(Boolean)
+      .join(' · ')
+    : 'Alle Termine';
 
   const visibleEvents = useMemo(
     () =>
       [...events]
-        .filter((event) => matchesEventFilter(event, selectedCategory))
+        .filter((event) => matchesEventFilter(event, selectedCategory, selectedGameFeature))
         .sort((a, b) => a.startTime.localeCompare(b.startTime)),
-    [events, selectedCategory],
+    [events, selectedCategory, selectedGameFeature],
   );
   const monthEvents = useMemo(
     () =>
@@ -223,7 +238,7 @@ export default function CalendarScreen() {
           <Pressable
             accessibilityRole="button"
             accessibilityState={{ expanded: filterOpen }}
-            accessibilityLabel={`Filter, ${selectedCategory}`}
+            accessibilityLabel={`Filter, ${filterSummary}`}
             testID="calendar-filter"
             onPress={() => setFilterOpen((open) => !open)}
             style={({ pressed }) => [
@@ -235,30 +250,25 @@ export default function CalendarScreen() {
             <Feather name="sliders" size={18} color={colors.mutedForeground} />
             <Text style={[styles.filterTitle, { color: colors.foreground }]}>Filter</Text>
             <Text style={[styles.filterSelection, { color: colors.mutedForeground }]} numberOfLines={1}>
-              {selectedCategory}
+              {filterSummary}
             </Text>
             <Feather name={filterOpen ? 'chevron-up' : 'chevron-down'} size={18} color={colors.mutedForeground} />
           </Pressable>
           {filterOpen ? (
             <View style={[styles.filterMenu, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <Text style={[styles.filterGroupTitle, { color: colors.mutedForeground }]}>TERMINART</Text>
               {categoryFilters.map((category) => {
                 const active = selectedCategory === category;
-                const color =
-                  category === 'Alle Termine'
-                    ? colors.foreground
-                    : category in categoryColorKey
-                      ? colors[categoryColorKey[category as EventCategory]]
-                      : colors.primary;
+                const color = category === 'Alle Termine'
+                  ? colors.foreground
+                  : colors[categoryColorKey[category as EventCategory]];
                 return (
                   <Pressable
                     key={category}
                     accessibilityRole="button"
                     accessibilityState={{ selected: active }}
-                    testID={`calendar-filter-${category}`}
-                    onPress={() => {
-                      setSelectedCategory(category);
-                      setFilterOpen(false);
-                    }}
+                    testID={`calendar-filter-category-${category}`}
+                    onPress={() => setSelectedCategory(category)}
                     style={({ pressed }) => [styles.filterOption, pressed && styles.pressed]}
                   >
                     <View style={[styles.optionDot, { backgroundColor: color }]} />
@@ -267,6 +277,41 @@ export default function CalendarScreen() {
                   </Pressable>
                 );
               })}
+              <Text style={[styles.filterGroupTitle, { color: colors.mutedForeground }]}>SPIELMERKMAL</Text>
+              {gameFeatureFilters.map((feature) => {
+                const active = selectedGameFeature === feature;
+                return (
+                  <Pressable
+                    key={feature}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: active }}
+                    testID={`calendar-filter-feature-${feature}`}
+                    onPress={() => setSelectedGameFeature(feature)}
+                    style={({ pressed }) => [styles.filterOption, pressed && styles.pressed]}
+                  >
+                    <View style={[styles.optionDot, { backgroundColor: feature === 'Alle Spielmerkmale' ? colors.foreground : colors.primary }]} />
+                    <Text style={[styles.filterOptionText, { color: colors.foreground }]}>{feature}</Text>
+                    {active ? <Feather name="check" size={16} color={colors.primary} /> : null}
+                  </Pressable>
+                );
+              })}
+              {filtersActive ? (
+                <Pressable
+                  accessibilityRole="button"
+                  testID="calendar-filter-reset"
+                  onPress={() => {
+                    setSelectedCategory('Alle Termine');
+                    setSelectedGameFeature('Alle Spielmerkmale');
+                  }}
+                  style={({ pressed }) => [
+                    styles.filterReset,
+                    { borderTopColor: colors.border },
+                    pressed && styles.pressed,
+                  ]}
+                >
+                  <Text style={[styles.filterResetText, { color: colors.primary }]}>Filter zurücksetzen</Text>
+                </Pressable>
+              ) : null}
             </View>
           ) : null}
         </View>
@@ -340,7 +385,10 @@ const styles = StyleSheet.create({
   filterTitle: { fontSize: 14, fontWeight: '700' },
   filterSelection: { flex: 1, fontSize: 13 },
   filterMenu: { borderWidth: 1, borderRadius: 16, marginTop: 7, overflow: 'hidden' },
+  filterGroupTitle: { fontSize: 10, fontWeight: '800', letterSpacing: 1, paddingHorizontal: 15, paddingTop: 13, paddingBottom: 4 },
   filterOption: { minHeight: 45, paddingHorizontal: 15, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  filterReset: { minHeight: 45, borderTopWidth: StyleSheet.hairlineWidth, alignItems: 'center', justifyContent: 'center' },
+  filterResetText: { fontSize: 13, fontWeight: '700' },
   optionDot: { width: 7, height: 7, borderRadius: 4 },
   filterOptionText: { flex: 1, fontSize: 13, fontWeight: '600' },
   dayHeading: { marginHorizontal: 20, marginBottom: 12 },

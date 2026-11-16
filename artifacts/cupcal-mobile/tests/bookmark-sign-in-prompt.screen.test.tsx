@@ -45,7 +45,17 @@ jest.mock('@/hooks/useColors', () => ({
 jest.mock('@/state/AppContext', () => ({
   useCupCal: () => mockContext.current,
 }));
-jest.mock('@/components/MonthCalendar', () => ({ MonthCalendar: () => null }));
+jest.mock('@/components/MonthCalendar', () => {
+  const React = require('react');
+  const ReactNative = require('react-native');
+  return {
+    MonthCalendar: ({ events }: { events: { title: string }[] }) =>
+      React.createElement(ReactNative.View, {
+        testID: 'month-calendar-events',
+        accessibilityLabel: events.map(({ title }) => title).join(', '),
+      }),
+  };
+});
 
 const mockRouterPush = (jest.requireMock('expo-router') as {
   router: { push: jest.Mock };
@@ -196,15 +206,16 @@ test('zeigt Reload-Serie und Zero-Build-Regelwerk getrennt auf der Kalenderkarte
 });
 
 test.each([
-  ['Reload', ['Reload Zero Build', 'Reload Battle Royale'], ['Zero Build Duos']],
-  ['Zero Build', ['Reload Zero Build', 'Zero Build Duos'], ['Reload Battle Royale']],
+  ['Reload', 'Reload Liga', 'Reload Turnier', 'Zero-Build-Liga'],
+  ['Zero Build', 'Zero-Build-Liga', 'Reload Liga', 'Reload Turnier'],
 ] as const)(
-  'der Kalenderfilter %s findet Reload-Zero-Build-Termine über das richtige Merkmal',
-  async (filter, expectedTitles, excludedTitles) => {
+  'kombiniert die Terminart Liga mit %s in Monat und Tagesliste und setzt Filter zurück',
+  async (feature, expectedTitle, excludedTitle, otherFeatureTitle) => {
     const today = new Date();
     const makeEvent = (
       id: string,
       title: string,
+      category: 'Turnier' | 'Liga',
       gameMode: 'Battle Royale' | 'Zero Build' | 'Reload',
       gameRuleset: 'Battle Royale' | 'Zero Build',
       tournamentSeries: 'Reload' | null,
@@ -212,6 +223,7 @@ test.each([
       ...event,
       id,
       title,
+      category,
       gameMode,
       gameRuleset,
       tournamentSeries,
@@ -219,9 +231,10 @@ test.each([
       endTime: new Date(today.getFullYear(), today.getMonth(), today.getDate(), 14).toISOString(),
     });
     const matchingEvents = [
-      makeEvent('reload-zero-build', 'Reload Zero Build', 'Reload', 'Zero Build', 'Reload'),
-      makeEvent('reload-battle-royale', 'Reload Battle Royale', 'Reload', 'Battle Royale', 'Reload'),
-      makeEvent('zero-build-duos', 'Zero Build Duos', 'Battle Royale', 'Zero Build', null),
+      makeEvent('reload-league', 'Reload Liga', 'Liga', 'Reload', 'Battle Royale', 'Reload'),
+      makeEvent('reload-tournament', 'Reload Turnier', 'Turnier', 'Reload', 'Battle Royale', 'Reload'),
+      makeEvent('zero-build-league', 'Zero-Build-Liga', 'Liga', 'Battle Royale', 'Zero Build', null),
+      makeEvent('other-tournament', 'Battle-Royale-Turnier', 'Turnier', 'Battle Royale', 'Battle Royale', null),
     ];
     mockContext.current = {
       authReady: true,
@@ -233,14 +246,28 @@ test.each([
     const view = await render(<CalendarScreen />);
 
     await fireEvent.press(view.getByTestId('calendar-filter'));
-    await fireEvent.press(view.getByTestId(`calendar-filter-${filter}`));
+    await fireEvent.press(view.getByTestId('calendar-filter-category-Liga'));
+    await fireEvent.press(view.getByTestId(`calendar-filter-feature-${feature}`));
 
-    for (const title of expectedTitles) {
-      expect(view.getByText(title)).toBeTruthy();
-    }
-    for (const title of excludedTitles) {
-      expect(view.queryByText(title)).toBeNull();
-    }
+    expect(view.getByText(expectedTitle)).toBeTruthy();
+    expect(view.getByTestId('month-calendar-events').props.accessibilityLabel).toBe(expectedTitle);
+    expect(view.queryByText(excludedTitle)).toBeNull();
+    expect(view.queryByText(otherFeatureTitle)).toBeNull();
+    expect(view.queryByText('Battle-Royale-Turnier')).toBeNull();
+    expect(view.getByText(new RegExp(`· 1 Termin$`))).toBeTruthy();
+    expect(view.getByTestId('calendar-filter').props.accessibilityLabel).toBe(`Filter, Liga · ${feature}`);
+
+    await fireEvent.press(view.getByTestId('calendar-filter-reset'));
+
+    expect(view.getByTestId('month-calendar-events').props.accessibilityLabel).toBe(
+      'Reload Liga, Reload Turnier, Zero-Build-Liga, Battle-Royale-Turnier',
+    );
+    expect(view.getByText('Reload Liga')).toBeTruthy();
+    expect(view.getByText('Reload Turnier')).toBeTruthy();
+    expect(view.getByText('Zero-Build-Liga')).toBeTruthy();
+    expect(view.getByText('Battle-Royale-Turnier')).toBeTruthy();
+    expect(view.getByText(new RegExp(`· 4 Termine$`))).toBeTruthy();
+    expect(view.getByTestId('calendar-filter').props.accessibilityLabel).toBe('Filter, Alle Termine');
   },
 );
 

@@ -5,7 +5,8 @@ export type TournamentSeries = 'Reload';
 export type TournamentType = 'FNCS' | 'Cash Cup' | 'Ranked Cup' | 'Community';
 export type TeamFormat = 'Solo' | 'Duos' | 'Trios' | 'Squads';
 export type EventCategory = 'Turnier' | 'Liga' | 'Qualifikation' | 'Trainingsrunde';
-export type CalendarEventFilter = 'Alle Termine' | EventCategory | 'Reload' | 'Zero Build';
+export type CalendarCategoryFilter = 'Alle Termine' | EventCategory;
+export type CalendarGameFeatureFilter = 'Alle Spielmerkmale' | 'Reload' | 'Zero Build';
 
 export interface TournamentEvent {
   id: string;
@@ -23,18 +24,22 @@ export interface TournamentEvent {
   featured: boolean;
 }
 
-export function matchesEventFilter(event: TournamentEvent, filter: CalendarEventFilter): boolean {
-  switch (filter) {
-    case 'Alle Termine':
-      return true;
-    case 'Reload':
-      return event.tournamentSeries === 'Reload' || event.gameMode === 'Reload';
-    case 'Zero Build':
-      return event.gameRuleset === 'Zero Build' ||
-        (!event.gameRuleset && event.gameMode === 'Zero Build');
-    default:
-      return event.category === filter;
-  }
+export function matchesEventFilter(
+  event: TournamentEvent,
+  categoryFilter: CalendarCategoryFilter,
+  gameFeatureFilter: CalendarGameFeatureFilter = 'Alle Spielmerkmale',
+): boolean {
+  const matchesCategory =
+    categoryFilter === 'Alle Termine' || event.category === categoryFilter;
+  const matchesGameFeature =
+    gameFeatureFilter === 'Alle Spielmerkmale' ||
+    (gameFeatureFilter === 'Reload' &&
+      (event.tournamentSeries === 'Reload' || event.gameMode === 'Reload')) ||
+    (gameFeatureFilter === 'Zero Build' &&
+      (event.gameRuleset === 'Zero Build' ||
+        (!event.gameRuleset && event.gameMode === 'Zero Build')));
+
+  return matchesCategory && matchesGameFeature;
 }
 
 export function toLocalDateKey(value: Date | string): string {
