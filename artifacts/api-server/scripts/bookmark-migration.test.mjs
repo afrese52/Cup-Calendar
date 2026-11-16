@@ -24,6 +24,8 @@ const legacyMigrationPath = path.join(
 const legacyDatabase = "legacy_bookmark_migration";
 const legacyAccountId = "10000000-0000-0000-0000-000000000001";
 const otherAccountId = "20000000-0000-0000-0000-000000000002";
+const deletionAccountId = "30000000-0000-0000-0000-000000000003";
+const deletionOtherAccountId = "40000000-0000-0000-0000-000000000004";
 
 let clusterDir;
 let connection;
@@ -459,4 +461,153 @@ test("0002 übernimmt Favoriten aus Profil- und Event-gebundenen Tabellen", asyn
     `${otherAccountId}:legacy-event-two`,
     "Das Löschen eines Kontos muss alle zugehörigen Favoriten kaskadierend entfernen und die des anderen Kontos erhalten.",
   );
+});
+
+test("der Kontolösch-Endpunkt entfernt die Favoriten des gelöschten Kontos", async (context) => {
+  if (!postgresAvailable) {
+    context.skip("PostgreSQL ist für den lokalen Kontolöschtest erforderlich.");
+    return;
+  }
+
+  const apiPort = await findAvailablePort();
+  const supabaseUrl = "https://account-deletion-test.supabase.invalid";
+  const signingKey = "local-test-signing-key-for-account-deletion";
+  const savedEnvironment = [
+    ["PORT", process.env.PORT],
+    ["SUPABASE_URL", process.env.SUPABASE_URL],
+    ["SUPABASE_SERVICE_ROLE_KEY", process.env.SUPABASE_SERVICE_ROLE_KEY],
+    ["CUPCAL_ACCOUNT_DELETION_SIGNING_KEY", process.env.CUPCAL_ACCOUNT_DELETION_SIGNING_KEY],
+    ["CUPCAL_ACCOUNT_DELETION_PREVIOUS_SIGNING_KEY", process.env.CUPCAL_ACCOUNT_DELETION_PREVIOUS_SIGNING_KEY],
+  ];
+  const originalFetch = globalThis.fetch;
+  let failNextDelete = true;
+  let apiServer;
+
+  psql(`
+    INSERT INTO auth.users (id) VALUES
+      ('${deletionAccountId}'),
+      ('${deletionOtherAccountId}');
+    INSERT INTO public.user_event_bookmarks (user_id, event_id) VALUES
+      ('${deletionAccountId}', 'account-deletion-event-one'),
+      ('${deletionAccountId}', 'account-deletion-event-two'),
+      ('${deletionOtherAccountId}', 'account-deletion-other-event');
+  `, legacyDatabase);
+
+  process.env.PORT = String(apiPort);
+  process.env.SUPABASE_URL = supabaseUrl;
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "local-test-service-role-key";
+  process.env.CUPCAL_ACCOUNT_DELETION_SIGNING_KEY = signingKey;
+  delete process.env.CUPCAL_ACCOUNT_DELETION_PREVIOUS_SIGNING_KEY;
+
+  globalThis.fetch = async (input, init) => {
+    const requestUrl = input instanceof Request ? input.url : String(input);
+    if (!requestUrl.startsWith(supabaseUrl)) return originalFetch(input, init);
+
+    const url = new URL(requestUrl);
+    if (url.pathname.endsWith("/auth/v1/user")) {
+      return Response.json({
+        id: deletionAccountId,
+        aud: "authenticated",
+        role: "authenticated",
+        email: "account-deletion-test@example.invalid",
+        app_metadata: { provider: "email", providers: ["email"] },
+        user_metadata: {},
+        identities: [],
+        created_at: "2026-01-01T00:00:00.000Z",
+        updated_at: "2026-01-01T00:00:00.000Z",
+      });
+    }
+
+    const adminDeleteMatch = url.pathname.match(/^\/auth\/v1\/admin\/users\/([^/]+)$/);
+    if (adminDeleteMatch) {
+      const requestedAccountId = decodeURIComponent(adminDeleteMatch[1]);
+      assert.equal(requestedAccountId, deletionAccountId, "Der API-Endpunkt darf nur das angemeldete Konto löschen.");
+      const requestMethod = init?.method ?? (input instanceof Request ? input.method : "GET");
+      if (requestMethod === "GET") {
+        return Response.json({
+          id: deletionAccountId,
+          aud: "authenticated",
+          role: "authenticated",
+          email: "account-deletion-test@example.invalid",
+          app_metadata: { provider: "email", providers: ["email"] },
+          user_metadata: {},
+          identities: [],
+          created_at: "2026-01-01T00:00:00.000Z",
+          updated_at: "2026-01-01T00:00:00.000Z",
+        });
+      }
+      assert.equal(requestMethod, "DELETE", "Der Supabase-Admin-Client soll das Konto löschen.");
+      if (failNextDelete) {
+        failNextDelete = false;
+        return Response.json({ message: "Simulierter Löschfehler" }, { status: 500 });
+      }
+
+      assert.equal(
+        psql(`DELETE FROM auth.users WHERE id = '${deletionAccountId}' RETURNING id;`, legacyDatabase),
+        deletionAccountId,
+        "Der Supabase-Admin-Aufruf muss das Konto tatsächlich aus der lokalen Datenbank löschen.",
+      );
+      return Response.json({ id: deletionAccountId });
+    }
+
+    return Response.json({ message: "Unerwartete Supabase-Anfrage" }, { status: 500 });
+  };
+
+  try {
+    ({ server: apiServer } = await import("../dist/index.mjs"));
+    if (!apiServer.listening) {
+      await new Promise((resolve, reject) => {
+        apiServer.once("listening", resolve);
+        apiServer.once("error", reject);
+      });
+    }
+
+    const apiUrl = `http://127.0.0.1:${apiPort}/api/v1/account/deletion`;
+    const headers = { Authorization: "Bearer local-authenticated-account-token" };
+    const requestResponse = await originalFetch(`${apiUrl}/request`, { method: "POST", headers });
+    assert.equal(requestResponse.status, 200, "Ein angemeldetes Konto muss einen Bestätigungslink erhalten.");
+    const { confirmationToken } = await requestResponse.json();
+    assert.equal(typeof confirmationToken, "string");
+
+    const confirmOptions = {
+      method: "POST",
+      headers: { ...headers, "Content-Type": "application/json" },
+      body: JSON.stringify({ confirmationToken }),
+    };
+    const failedDeleteResponse = await originalFetch(`${apiUrl}/confirm`, confirmOptions);
+    assert.equal(failedDeleteResponse.status, 503, "Ein Fehler beim Löschen muss als nicht verfügbar gemeldet werden.");
+    assert.deepEqual(await failedDeleteResponse.json(), {
+      error: "Das Konto konnte gerade nicht gelöscht werden. Bitte versuche es erneut.",
+    });
+    assert.equal(
+      psql(`
+        SELECT string_agg(user_id::text || ':' || event_id, '|' ORDER BY user_id, event_id)
+        FROM public.user_event_bookmarks;
+      `, legacyDatabase),
+      `${otherAccountId}:legacy-event-two|${deletionAccountId}:account-deletion-event-one|${deletionAccountId}:account-deletion-event-two|${deletionOtherAccountId}:account-deletion-other-event`,
+      "Bei einem fehlgeschlagenen Kontolöschversuch müssen alle Favoriten erhalten bleiben.",
+    );
+
+    const successfulDeleteResponse = await originalFetch(`${apiUrl}/confirm`, confirmOptions);
+    assert.equal(successfulDeleteResponse.status, 204, "Eine erfolgreiche Löschung muss mit 204 bestätigt werden.");
+    assert.equal(
+      psql(`
+        SELECT string_agg(user_id::text || ':' || event_id, '|' ORDER BY user_id, event_id)
+        FROM public.user_event_bookmarks;
+      `, legacyDatabase),
+      `${otherAccountId}:legacy-event-two|${deletionOtherAccountId}:account-deletion-other-event`,
+      "Die Favoriten des gelöschten Kontos müssen verschwinden; das zweite Konto muss unverändert bleiben.",
+    );
+  } finally {
+    if (apiServer?.listening) {
+      await new Promise((resolve, reject) => {
+        apiServer.close((error) => error ? reject(error) : resolve());
+      });
+    }
+    globalThis.fetch = originalFetch;
+    for (const [name, value] of savedEnvironment) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+  }
 });

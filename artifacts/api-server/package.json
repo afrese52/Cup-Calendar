@@ -12,7 +12,7 @@
     "test:mht-import": "node --test ./scripts/dry-run-mht-import.test.mjs",
     "test:bookmark-isolation": "node --test ./scripts/bookmark-account-isolation.test.mjs",
     "test:bookmark-concurrency": "node --test --test-name-pattern='gleichzeitige RPC-Aufrufe' ./scripts/bookmark-account-isolation.test.mjs",
-    "test:bookmark-migration": "node --test ./scripts/bookmark-migration.test.mjs",
+    "test:bookmark-migration": "pnpm run build && node --test ./scripts/bookmark-migration.test.mjs",
     "test:supabase-migrations:fresh": "node --test ./scripts/supabase-migrations-fresh.test.mjs",
     "test:supabase-migrations:cli": "node --test ./scripts/supabase-migrations-cli.test.mjs",
     "test:account-deletion": "pnpm run build && node --experimental-strip-types --test ./src/services/accountDeletionToken.test.mjs ./scripts/account-deletion-routes.test.mjs",
