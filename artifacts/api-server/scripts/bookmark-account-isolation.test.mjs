@@ -342,7 +342,18 @@ test("RPC schützt Konten und synchronisiert eine zweite Gerätesitzung", async 
     const anonymousRealtimeChange = new Promise((resolve) => {
       resolveAnonymousChange = resolve;
     });
+    let resolveForeignAccountChange;
+    const foreignAccountRealtimeChange = new Promise((resolve) => {
+      resolveForeignAccountChange = resolve;
+    });
+    let resolveAccountASubscribed;
+    let rejectAccountASubscription;
+    const accountASubscribed = new Promise((resolve, reject) => {
+      resolveAccountASubscribed = resolve;
+      rejectAccountASubscription = reject;
+    });
     const realtimeEventId = `same-account-device-${randomUUID()}`;
+    const foreignAccountEventId = `other-account-realtime-${randomUUID()}`;
     const realtimeChannel = secondDevice
       .channel(`bookmark-sync-test-${randomUUID()}`)
       .on(
@@ -389,6 +400,30 @@ test("RPC schützt Konten und synchronisiert eine zweite Gerätesitzung", async 
           );
         }
       });
+    const accountARealtimeChannel = accountA.client
+      .channel(`account-a-bookmark-test-${randomUUID()}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "user_event_bookmarks",
+          filter: `user_id=eq.${accountA.id}`,
+        },
+        (payload) => {
+          if (payload.new?.event_id === foreignAccountEventId) {
+            resolveForeignAccountChange(payload);
+          }
+        },
+      )
+      .subscribe((status, error) => {
+        if (status === "SUBSCRIBED") resolveAccountASubscribed();
+        if (["CHANNEL_ERROR", "TIMED_OUT"].includes(status)) {
+          rejectAccountASubscription(
+            error ?? new Error(`Konto-A-Realtime-Status: ${status}`),
+          );
+        }
+      });
 
     try {
       await Promise.all([
@@ -399,6 +434,10 @@ test("RPC schützt Konten und synchronisiert eine zweite Gerätesitzung", async 
         waitForSignal(
           anonymousSubscribed,
           "Anonymer Client konnte Realtime nicht abonnieren.",
+        ),
+        waitForSignal(
+          accountASubscribed,
+          "Konto A konnte Realtime nicht abonnieren.",
         ),
       ]);
       const realtimeSync = await sync(accountA.client, realtimeEventId, true);
@@ -414,6 +453,13 @@ test("RPC schützt Konten und synchronisiert eine zweite Gerätesitzung", async 
         "Anonymer Client erhielt eine Favoritenänderung.",
       );
 
+      const foreignAccountSync = await sync(accountB.client, foreignAccountEventId, true);
+      assert.ifError(foreignAccountSync.error);
+      await assertNoSignal(
+        foreignAccountRealtimeChange,
+        "Konto A erhielt eine Favoritenänderung von Konto B.",
+      );
+
       const fromSecondDevice = await secondDevice
         .from("user_event_bookmarks")
         .select("is_favorite")
@@ -426,6 +472,7 @@ test("RPC schützt Konten und synchronisiert eine zweite Gerätesitzung", async 
       await Promise.all([
         secondDevice.removeChannel(realtimeChannel),
         anonymousClient.removeChannel(anonymousRealtimeChannel),
+        accountA.client.removeChannel(accountARealtimeChannel),
       ]);
     }
 
