@@ -48,6 +48,7 @@ INSERT INTO public.user_profiles (id, display_name) VALUES
     ('10000000-0000-0000-0000-000000000001', 'Erstes Konto'),
     ('20000000-0000-0000-0000-000000000002', 'Zweites Konto');
 
+-- legacy-event-one is deleted and re-imported by the migration regression test.
 INSERT INTO public.fortnite_events (id, title) VALUES
     ('legacy-event-one', 'Älteres Turnier'),
     ('legacy-event-two', 'Weiteres älteres Turnier');

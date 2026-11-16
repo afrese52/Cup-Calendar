@@ -394,6 +394,12 @@ test("0002 übernimmt Favoriten aus Profil- und Event-gebundenen Tabellen", asyn
     "RLS muss den eigenen Bestand erhalten, fremde Schreibzugriffe sperren und Offline-IDs zulassen.",
   );
 
+  const bookmarkStateBeforeEventRefresh = psql(`
+    SELECT is_favorite::text || ':' || updated_at::text || ':' || revision::text
+    FROM public.user_event_bookmarks
+    WHERE user_id = '${legacyAccountId}' AND event_id = 'legacy-event-one';
+  `, legacyDatabase);
+
   psql(`
     DELETE FROM public.fortnite_events
     WHERE id = 'legacy-event-one';
@@ -407,6 +413,30 @@ test("0002 übernimmt Favoriten aus Profil- und Event-gebundenen Tabellen", asyn
     `, legacyDatabase),
     "1",
     "Das Löschen eines früher referenzierten Turniers darf den migrierten Favoriten nicht entfernen.",
+  );
+
+  psql(`
+    INSERT INTO public.fortnite_events (id, title)
+    VALUES ('legacy-event-one', 'Neu importiertes Turnier');
+  `, legacyDatabase);
+
+  assert.equal(
+    psql(`
+      SELECT title
+      FROM public.fortnite_events
+      WHERE id = 'legacy-event-one';
+    `, legacyDatabase),
+    "Neu importiertes Turnier",
+    "Das zuvor entfernte Turnier muss erneut angelegt worden sein.",
+  );
+  assert.equal(
+    psql(`
+      SELECT is_favorite::text || ':' || updated_at::text || ':' || revision::text
+      FROM public.user_event_bookmarks
+      WHERE user_id = '${legacyAccountId}' AND event_id = 'legacy-event-one';
+    `, legacyDatabase),
+    bookmarkStateBeforeEventRefresh,
+    "Ein erneuter Turnierimport darf den gespeicherten Favoritenstatus nicht verändern.",
   );
 
   assert.equal(
