@@ -34,6 +34,8 @@ export default function ResetPasswordScreen() {
   const [isRecoveryReady, setIsRecoveryReady] = useState(isPasswordRecoveryPending());
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [isPasswordVisible, setIsPasswordVisible] = useState(false);
+  const [isConfirmPasswordVisible, setIsConfirmPasswordVisible] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const isSavingRef = useRef(false);
   const [isSaved, setIsSaved] = useState(false);
@@ -253,37 +255,79 @@ export default function ResetPasswordScreen() {
             >
               Mindestens {PASSWORD_MIN_LENGTH} Zeichen. Es sind keine weiteren Zeichenregeln erforderlich.
             </Text>
-            <TextInput
-              accessibilityLabel="Neues Passwort"
-              testID="reset-password-input"
-              autoCapitalize="none"
-              autoComplete="new-password"
-              placeholder="Neues Passwort"
-              placeholderTextColor={colors.mutedForeground}
-              returnKeyType="next"
-              secureTextEntry
-              selectionColor={colors.primary}
-              textContentType="newPassword"
-              value={password}
-              onChangeText={setPassword}
-              style={[styles.input, { backgroundColor: colors.input, borderColor: colors.border, color: colors.foreground }]}
-            />
-            <TextInput
-              accessibilityLabel="Neues Passwort bestätigen"
-              testID="reset-password-confirm-input"
-              autoCapitalize="none"
-              autoComplete="new-password"
-              placeholder="Passwort wiederholen"
-              placeholderTextColor={colors.mutedForeground}
-              returnKeyType="done"
-              secureTextEntry
-              selectionColor={colors.primary}
-              textContentType="newPassword"
-              value={confirmPassword}
-              onChangeText={setConfirmPassword}
-              onSubmitEditing={() => void submitNewPassword()}
-              style={[styles.input, { backgroundColor: colors.input, borderColor: colors.border, color: colors.foreground }]}
-            />
+            <View
+              style={[
+                styles.inputRow,
+                { backgroundColor: colors.input, borderColor: colors.border },
+              ]}
+            >
+              <TextInput
+                accessibilityLabel="Neues Passwort"
+                testID="reset-password-input"
+                autoCapitalize="none"
+                autoComplete="new-password"
+                placeholder="Neues Passwort"
+                placeholderTextColor={colors.mutedForeground}
+                returnKeyType="next"
+                secureTextEntry={!isPasswordVisible}
+                selectionColor={colors.primary}
+                textContentType="newPassword"
+                value={password}
+                onChangeText={setPassword}
+                style={[styles.input, { color: colors.foreground }]}
+              />
+              <Pressable
+                accessibilityRole="switch"
+                accessibilityLabel={isPasswordVisible ? 'Neues Passwort verbergen' : 'Neues Passwort anzeigen'}
+                accessibilityState={{ checked: isPasswordVisible }}
+                testID="reset-password-visibility-toggle"
+                onPress={() => setIsPasswordVisible((visible) => !visible)}
+                style={styles.visibilityToggle}
+              >
+                <Feather
+                  name={isPasswordVisible ? 'eye-off' : 'eye'}
+                  size={20}
+                  color={colors.mutedForeground}
+                />
+              </Pressable>
+            </View>
+            <View
+              style={[
+                styles.inputRow,
+                { backgroundColor: colors.input, borderColor: colors.border },
+              ]}
+            >
+              <TextInput
+                accessibilityLabel="Neues Passwort bestätigen"
+                testID="reset-password-confirm-input"
+                autoCapitalize="none"
+                autoComplete="new-password"
+                placeholder="Passwort wiederholen"
+                placeholderTextColor={colors.mutedForeground}
+                returnKeyType="done"
+                secureTextEntry={!isConfirmPasswordVisible}
+                selectionColor={colors.primary}
+                textContentType="newPassword"
+                value={confirmPassword}
+                onChangeText={setConfirmPassword}
+                onSubmitEditing={() => void submitNewPassword()}
+                style={[styles.input, { color: colors.foreground }]}
+              />
+              <Pressable
+                accessibilityRole="switch"
+                accessibilityLabel={isConfirmPasswordVisible ? 'Bestätigung verbergen' : 'Bestätigung anzeigen'}
+                accessibilityState={{ checked: isConfirmPasswordVisible }}
+                testID="reset-password-confirm-visibility-toggle"
+                onPress={() => setIsConfirmPasswordVisible((visible) => !visible)}
+                style={styles.visibilityToggle}
+              >
+                <Feather
+                  name={isConfirmPasswordVisible ? 'eye-off' : 'eye'}
+                  size={20}
+                  color={colors.mutedForeground}
+                />
+              </Pressable>
+            </View>
           </>
         ) : null}
 
@@ -372,7 +416,9 @@ const styles = StyleSheet.create({
   heading: { fontSize: 28, fontWeight: '700', letterSpacing: -0.6 },
   description: { fontSize: 14, lineHeight: 21, marginTop: 8, marginBottom: 18 },
   passwordPolicy: { fontSize: 13, lineHeight: 18, marginBottom: 2 },
-  input: { minHeight: 50, borderWidth: 1, borderRadius: 12, paddingHorizontal: 14, fontSize: 14, marginTop: 12 },
+  inputRow: { minHeight: 50, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: 12, paddingLeft: 14, paddingRight: 4, marginTop: 12 },
+  input: { minHeight: 48, flex: 1, paddingVertical: 0, fontSize: 14 },
+  visibilityToggle: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   notice: { fontSize: 12, lineHeight: 18, marginTop: 13 },
   retryCountdown: { fontSize: 12, lineHeight: 18, marginTop: 8 },
   primaryButton: { minHeight: 50, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginTop: 18 },

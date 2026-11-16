@@ -136,6 +136,72 @@ test('zeigt die geltende Passwortlänge vor dem Speichern', async () => {
   expect(view.getByTestId('reset-password-submit-button')).toBeTruthy();
 });
 
+test('schaltet jedes Passwortfeld einzeln sichtbar und behält die Eingaben', async () => {
+  const view = await render(<ResetPasswordScreen />);
+
+  await waitFor(() => expect(view.getByTestId('reset-password-submit-button')).toBeTruthy());
+  const passwordInput = view.getByTestId('reset-password-input');
+  const confirmInput = view.getByTestId('reset-password-confirm-input');
+  const passwordToggle = view.getByTestId('reset-password-visibility-toggle');
+  const confirmToggle = view.getByTestId('reset-password-confirm-visibility-toggle');
+
+  await fireEvent.changeText(passwordInput, 'Mein-neues-Passwort-123');
+  await fireEvent.changeText(confirmInput, 'Mein-neues-Passwort-123');
+
+  expect(passwordInput.props.secureTextEntry).toBe(true);
+  expect(confirmInput.props.secureTextEntry).toBe(true);
+  expect(passwordToggle.props.accessibilityRole).toBe('switch');
+  expect(passwordToggle.props.accessibilityLabel).toBe('Neues Passwort anzeigen');
+  expect(passwordToggle.props.accessibilityState).toEqual({ checked: false });
+  expect(confirmToggle.props.accessibilityRole).toBe('switch');
+  expect(confirmToggle.props.accessibilityLabel).toBe('Bestätigung anzeigen');
+  expect(confirmToggle.props.accessibilityState).toEqual({ checked: false });
+
+  await fireEvent.press(passwordToggle);
+
+  expect(view.getByTestId('reset-password-input').props.secureTextEntry).toBe(false);
+  expect(view.getByTestId('reset-password-visibility-toggle').props.accessibilityLabel)
+    .toBe('Neues Passwort verbergen');
+  expect(view.getByTestId('reset-password-visibility-toggle').props.accessibilityState)
+    .toEqual({ checked: true });
+  expect(view.getByTestId('reset-password-confirm-input').props.secureTextEntry).toBe(true);
+  expect(view.getByTestId('reset-password-confirm-visibility-toggle').props.accessibilityState)
+    .toEqual({ checked: false });
+
+  await fireEvent.press(view.getByTestId('reset-password-confirm-visibility-toggle'));
+
+  expect(view.getByTestId('reset-password-input').props.secureTextEntry).toBe(false);
+  expect(view.getByTestId('reset-password-confirm-input').props.secureTextEntry).toBe(false);
+  expect(view.getByTestId('reset-password-confirm-visibility-toggle').props.accessibilityLabel)
+    .toBe('Bestätigung verbergen');
+  expect(view.getByTestId('reset-password-confirm-visibility-toggle').props.accessibilityState)
+    .toEqual({ checked: true });
+  expect(view.getByTestId('reset-password-input').props.value).toBe('Mein-neues-Passwort-123');
+  expect(view.getByTestId('reset-password-confirm-input').props.value).toBe('Mein-neues-Passwort-123');
+});
+
+test('vergleicht Passwörter nach dem Sichtbar-Schalten weiterhin vor dem Speichern', async () => {
+  mockSaveNewPassword.mockResolvedValue(undefined);
+  const view = await render(<ResetPasswordScreen />);
+
+  await waitFor(() => expect(view.getByTestId('reset-password-submit-button')).toBeTruthy());
+  await fireEvent.changeText(view.getByTestId('reset-password-input'), 'Mein-neues-Passwort-123');
+  await fireEvent.changeText(view.getByTestId('reset-password-confirm-input'), 'Anderes-Passwort-456');
+  await fireEvent.press(view.getByTestId('reset-password-visibility-toggle'));
+  await fireEvent.press(view.getByTestId('reset-password-confirm-visibility-toggle'));
+  await fireEvent.press(view.getByTestId('reset-password-submit-button'));
+
+  expect(await view.findByText('Die Passwörter stimmen nicht überein.')).toBeTruthy();
+  expect(mockSaveNewPassword).not.toHaveBeenCalled();
+
+  await fireEvent.changeText(view.getByTestId('reset-password-confirm-input'), 'Mein-neues-Passwort-123');
+  await fireEvent.press(view.getByTestId('reset-password-submit-button'));
+
+  expect(await view.findByText('Passwort geändert')).toBeTruthy();
+  expect(mockSaveNewPassword).toHaveBeenCalledTimes(1);
+  expect(mockSaveNewPassword).toHaveBeenCalledWith('Mein-neues-Passwort-123');
+});
+
 test.each([
   { name: 'leeren Eingaben', password: '', confirmPassword: '' },
   { name: 'fehlendem neuen Passwort', password: '', confirmPassword: 'Mein-neues-Passwort-123' },
