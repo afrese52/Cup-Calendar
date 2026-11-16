@@ -2161,3 +2161,64 @@ test("lists recent imports without returning unselected database fields", async 
   assert.deepEqual(ordered, { column: "imported_at", options: { ascending: false } });
   assert.equal(limited, 20);
 });
+
+test("lists only the 20 newest imports in descending import-time order", async () => {
+  const importedRows = Array.from({ length: 25 }, (_, index) => {
+    const importedAt = new Date(Date.UTC(2026, 10, 1) + index * 60 * 60 * 1000).toISOString();
+    return {
+      id: `import-${index}`,
+      imported_at: importedAt,
+      admin_user_id: "2d81b842-8d9c-4de3-8411-6787a91e68e9",
+      admin_email: "admin@example.org",
+      source_hint: null,
+      start_date: null,
+      end_date: null,
+      inserted_count: index,
+      updated_count: 0,
+      skipped_count: 0,
+    };
+  });
+  const unorderedRows = Array.from({ length: importedRows.length }, (_, index) =>
+    importedRows[(index * 7) % importedRows.length],
+  );
+  let orderOptions;
+  let requestedLimit;
+  const admin = {
+    from(table) {
+      assert.equal(table, "admin_import_history");
+      return {
+        select() {
+          return {
+            order(column, options) {
+              assert.equal(column, "imported_at");
+              orderOptions = options;
+              return {
+                async limit(value) {
+                  requestedLimit = value;
+                  const rows = [...unorderedRows].sort((left, right) =>
+                    left.imported_at.localeCompare(right.imported_at)
+                    * (options.ascending ? 1 : -1),
+                  );
+                  return { data: rows.slice(0, value), error: null };
+                },
+              };
+            },
+          };
+        },
+      };
+    },
+  };
+
+  const entries = await listRecentMhtImports(20, admin);
+  const expectedRows = [...importedRows]
+    .sort((left, right) => right.imported_at.localeCompare(left.imported_at))
+    .slice(0, 20);
+
+  assert.equal(requestedLimit, 20);
+  assert.deepEqual(orderOptions, { ascending: false });
+  assert.equal(entries.length, 20);
+  assert.deepEqual(
+    entries.map(({ id, importedAt }) => ({ id, importedAt })),
+    expectedRows.map(({ id, imported_at }) => ({ id, importedAt: imported_at })),
+  );
+});
