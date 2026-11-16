@@ -253,50 +253,99 @@ test('vergleicht Passwörter nach dem Sichtbar-Schalten weiterhin vor dem Speich
 });
 
 test.each([
-  { name: 'leeren Eingaben', password: '', confirmPassword: '' },
+  {
+    name: 'beiden leeren Feldern',
+    password: '',
+    confirmPassword: '',
+    message: 'Bitte gib dein neues Passwort ein und bestätige es.',
+    platform: 'ios' as const,
+  },
+  {
+    name: 'beiden leeren Feldern',
+    password: '',
+    confirmPassword: '',
+    message: 'Bitte gib dein neues Passwort ein und bestätige es.',
+    platform: 'android' as const,
+  },
   {
     name: 'fehlendem neuen Passwort',
     password: '',
     confirmPassword: 'Mein-neues-Passwort-123',
+    message: 'Bitte gib dein neues Passwort ein.',
+    platform: 'ios' as const,
+  },
+  {
+    name: 'fehlendem neuen Passwort',
+    password: '',
+    confirmPassword: 'Mein-neues-Passwort-123',
+    message: 'Bitte gib dein neues Passwort ein.',
+    platform: 'android' as const,
   },
   {
     name: 'fehlender Passwortbestätigung',
     password: 'Mein-neues-Passwort-123',
     confirmPassword: '',
+    message: 'Bitte bestätige dein neues Passwort.',
+    platform: 'ios' as const,
   },
-])('verhindert das Speichern bei $name', async ({ password, confirmPassword }) => {
-  const view = await render(<ResetPasswordScreen />);
+  {
+    name: 'fehlender Passwortbestätigung',
+    password: 'Mein-neues-Passwort-123',
+    confirmPassword: '',
+    message: 'Bitte bestätige dein neues Passwort.',
+    platform: 'android' as const,
+  },
+])(
+  'zeigt bei $name auf $platform eine zugängliche Aufforderung und speichert nicht',
+  async ({ password, confirmPassword, message, platform }) => {
+    const originalPlatformOS = Platform.OS;
+    Object.defineProperty(Platform, 'OS', { configurable: true, value: platform });
+    try {
+      const view = await render(<ResetPasswordScreen />);
 
-  await waitFor(() => expect(view.getByTestId('reset-password-submit-button')).toBeTruthy());
-  if (password) {
-    await fireEvent.changeText(view.getByTestId('reset-password-input'), password);
-  }
-  if (confirmPassword) {
-    await fireEvent.changeText(view.getByTestId('reset-password-confirm-input'), confirmPassword);
-  }
-  await fireEvent.press(view.getByTestId('reset-password-submit-button'));
+      await waitFor(() => expect(view.getByTestId('reset-password-submit-button')).toBeTruthy());
+      if (password) {
+        await fireEvent.changeText(view.getByTestId('reset-password-input'), password);
+      }
+      if (confirmPassword) {
+        await fireEvent.changeText(view.getByTestId('reset-password-confirm-input'), confirmPassword);
+      }
+      await fireEvent.press(view.getByTestId('reset-password-submit-button'));
 
-  const errorMessage = await view.findByText('Bitte gib dein neues Passwort zweimal ein.');
-  expect(errorMessage.props.accessible).toBe(true);
-  expect(errorMessage.props.accessibilityRole).toBe(Platform.OS === 'ios' ? 'alert' : 'text');
-  expect(errorMessage.props.accessibilityLiveRegion).toBe(Platform.OS === 'android' ? 'assertive' : undefined);
-  expect(mockSaveNewPassword).not.toHaveBeenCalled();
-});
+      const errorMessage = await view.findByText(message);
+      expect(errorMessage.props.accessible).toBe(true);
+      expect(errorMessage.props.accessibilityRole).toBe(platform === 'ios' ? 'alert' : 'text');
+      expect(errorMessage.props.accessibilityLiveRegion).toBe(platform === 'android' ? 'assertive' : undefined);
+      expect(mockSaveNewPassword).not.toHaveBeenCalled();
+    } finally {
+      Object.defineProperty(Platform, 'OS', { configurable: true, value: originalPlatformOS });
+    }
+  },
+);
 
-test('verhindert das Speichern unterschiedlicher Passwörter mit zugänglicher Fehlermeldung', async () => {
-  const view = await render(<ResetPasswordScreen />);
+test.each(['ios', 'android'] as const)(
+  'verhindert das Speichern unterschiedlicher Passwörter mit zugänglicher Fehlermeldung auf %s',
+  async (platform) => {
+    const originalPlatformOS = Platform.OS;
+    Object.defineProperty(Platform, 'OS', { configurable: true, value: platform });
+    try {
+      const view = await render(<ResetPasswordScreen />);
 
-  await waitFor(() => expect(view.getByTestId('reset-password-submit-button')).toBeTruthy());
-  await fireEvent.changeText(view.getByTestId('reset-password-input'), 'Mein-neues-Passwort-123');
-  await fireEvent.changeText(view.getByTestId('reset-password-confirm-input'), 'Ein-anderes-Passwort-456');
-  await fireEvent.press(view.getByTestId('reset-password-submit-button'));
+      await waitFor(() => expect(view.getByTestId('reset-password-submit-button')).toBeTruthy());
+      await fireEvent.changeText(view.getByTestId('reset-password-input'), 'Mein-neues-Passwort-123');
+      await fireEvent.changeText(view.getByTestId('reset-password-confirm-input'), 'Ein-anderes-Passwort-456');
+      await fireEvent.press(view.getByTestId('reset-password-submit-button'));
 
-  const errorMessage = await view.findByText('Die Passwörter stimmen nicht überein.');
-  expect(errorMessage.props.accessible).toBe(true);
-  expect(errorMessage.props.accessibilityRole).toBe(Platform.OS === 'ios' ? 'alert' : 'text');
-  expect(errorMessage.props.accessibilityLiveRegion).toBe(Platform.OS === 'android' ? 'assertive' : undefined);
-  expect(mockSaveNewPassword).not.toHaveBeenCalled();
-});
+      const errorMessage = await view.findByText('Die Passwörter stimmen nicht überein.');
+      expect(errorMessage.props.accessible).toBe(true);
+      expect(errorMessage.props.accessibilityRole).toBe(platform === 'ios' ? 'alert' : 'text');
+      expect(errorMessage.props.accessibilityLiveRegion).toBe(platform === 'android' ? 'assertive' : undefined);
+      expect(mockSaveNewPassword).not.toHaveBeenCalled();
+    } finally {
+      Object.defineProperty(Platform, 'OS', { configurable: true, value: originalPlatformOS });
+    }
+  },
+);
 
 test.each(['ios', 'android'] as const)(
   'meldet die erfolgreiche Passwortänderung unter %s als Screenreader-Status und lässt die Rückkehr zu',

@@ -177,7 +177,13 @@ export default function ResetPasswordScreen() {
     if (isSavingRef.current) return;
 
     if (!password || !confirmPassword) {
-      setErrorMessage('Bitte gib dein neues Passwort zweimal ein.');
+      const missingPasswordMessage =
+        !password && !confirmPassword
+          ? 'Bitte gib dein neues Passwort ein und bestätige es.'
+          : !password
+            ? 'Bitte gib dein neues Passwort ein.'
+            : 'Bitte bestätige dein neues Passwort.';
+      setErrorMessage(missingPasswordMessage);
       return;
     }
     if (password !== confirmPassword) {
