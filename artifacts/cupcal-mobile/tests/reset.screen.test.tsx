@@ -365,6 +365,52 @@ test('speichert nach einer Passwort-Ablehnung beide korrigierten Eingaben erfolg
   expect(mockSaveNewPassword).toHaveBeenNthCalledWith(2, 'Mein-neues-Passwort-123');
 });
 
+test('behält korrigierte Eingaben nach einer zweiten Passwort-Ablehnung für einen dritten Versuch', async () => {
+  mockSaveNewPassword
+    .mockReset()
+    .mockRejectedValueOnce(
+      Object.assign(new Error('Password is too weak'), { code: 'weak_password' }),
+    )
+    .mockRejectedValueOnce(new Error('Unexpected server error'))
+    .mockResolvedValueOnce(undefined);
+  const view = await render(<ResetPasswordScreen />);
+
+  await waitFor(() => expect(view.getByTestId('reset-password-submit-button')).toBeTruthy());
+  await fireEvent.changeText(view.getByTestId('reset-password-input'), 'kurz');
+  await fireEvent.changeText(view.getByTestId('reset-password-confirm-input'), 'kurz');
+  await fireEvent.press(view.getByTestId('reset-password-submit-button'));
+
+  expect(await view.findByText(
+    'Das Passwort ist zu kurz oder zu unsicher. Bitte wähle ein stärkeres Passwort.',
+  )).toBeTruthy();
+
+  await fireEvent.changeText(view.getByTestId('reset-password-input'), 'Mein-neues-Passwort-123');
+  await fireEvent.changeText(view.getByTestId('reset-password-confirm-input'), 'Mein-neues-Passwort-123');
+  await fireEvent.press(view.getByTestId('reset-password-submit-button'));
+
+  const secondErrorMessage = await view.findByText(
+    'Das Passwort konnte nicht gespeichert werden. Bitte versuche es erneut.',
+  );
+  expect(secondErrorMessage.props.accessible).toBe(true);
+  expect(secondErrorMessage.props.accessibilityRole).toBe('alert');
+  expect(secondErrorMessage.props.accessibilityLiveRegion).toBe('assertive');
+  expect(view.getByTestId('reset-password-input').props.value).toBe('Mein-neues-Passwort-123');
+  expect(view.getByTestId('reset-password-confirm-input').props.value).toBe('Mein-neues-Passwort-123');
+  expect(view.getByTestId('reset-password-submit-button').props.accessibilityState).toEqual({
+    disabled: false,
+    busy: false,
+  });
+  expect(mockSaveNewPassword).toHaveBeenCalledTimes(2);
+  expect(mockSaveNewPassword).toHaveBeenNthCalledWith(1, 'kurz');
+  expect(mockSaveNewPassword).toHaveBeenNthCalledWith(2, 'Mein-neues-Passwort-123');
+
+  await fireEvent.press(view.getByTestId('reset-password-submit-button'));
+
+  expect(await view.findByText('Passwort geändert')).toBeTruthy();
+  expect(mockSaveNewPassword).toHaveBeenCalledTimes(3);
+  expect(mockSaveNewPassword).toHaveBeenNthCalledWith(3, 'Mein-neues-Passwort-123');
+});
+
 test('prüft nach einer Passwort-Ablehnung weiterhin beide Eingaben vor jedem Speichern', async () => {
   mockSaveNewPassword
     .mockReset()
