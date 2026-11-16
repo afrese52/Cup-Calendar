@@ -1286,6 +1286,159 @@ Content-Type: text/html; charset=utf-8
   }
 });
 
+test("ordnet Mitternacht und inklusive Datumsgrenzen an Berliner Zeitumstellungen richtig zu", async () => {
+  const originalEnv = new Map(
+    ["NODE_ENV", "SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "CUPCAL_IMPORT_ADMIN_EMAILS"]
+      .map((key) => [key, process.env[key]]),
+  );
+  const sourceText = `From: <Saved tournament schedule>
+Snapshot-Content-Location: https://www.fortnite.com/competitive/schedule?region=EU
+Date: Sat, 27 Mar 2027 00:00:00 GMT
+Content-Type: multipart/related; boundary="CupCalDateBoundaryTest"
+
+--CupCalDateBoundaryTest
+Content-Type: text/html; charset=utf-8
+
+<!doctype html>
+<html><body>
+  <h2>27. März 2027</h2>
+  <a id="schedule-event-link-before-midnight"
+    href="https://www.fortnite.com/competitive/events/BeforeMidnight?round=Round"
+    aria-label="23:30–00:15 Uhr - Battle Royale Solo Cash Cup">Battle Royale Solo Cash Cup</a>
+  <h2>28. März 2027</h2>
+  <a id="schedule-event-link-after-midnight"
+    href="https://www.fortnite.com/competitive/events/AfterMidnight?round=Round"
+    aria-label="00:30–00:45 Uhr - Battle Royale Solo Cash Cup">Battle Royale Solo Cash Cup</a>
+  <a id="schedule-event-link-before-spring-jump"
+    href="https://www.fortnite.com/competitive/events/BeforeSpringJump?round=Round"
+    aria-label="01:30–01:45 Uhr - Battle Royale Solo Cash Cup">Battle Royale Solo Cash Cup</a>
+  <a id="schedule-event-link-after-spring-jump"
+    href="https://www.fortnite.com/competitive/events/AfterSpringJump?round=Round"
+    aria-label="03:30–03:45 Uhr - Battle Royale Solo Cash Cup">Battle Royale Solo Cash Cup</a>
+  <h2>29. März 2027</h2>
+  <a id="schedule-event-link-after-spring-day"
+    href="https://www.fortnite.com/competitive/events/AfterSpringDay?round=Round"
+    aria-label="00:30–00:45 Uhr - Battle Royale Solo Cash Cup">Battle Royale Solo Cash Cup</a>
+  <h2>30. Oktober 2027</h2>
+  <a id="schedule-event-link-before-fall-day"
+    href="https://www.fortnite.com/competitive/events/BeforeFallDay?round=Round"
+    aria-label="23:30–23:45 Uhr - Battle Royale Solo Cash Cup">Battle Royale Solo Cash Cup</a>
+  <h2>31. Oktober 2027</h2>
+  <a id="schedule-event-link-fall-midnight"
+    href="https://www.fortnite.com/competitive/events/FallMidnight?round=Round"
+    aria-label="00:30–00:45 Uhr - Battle Royale Solo Cash Cup">Battle Royale Solo Cash Cup</a>
+  <a id="schedule-event-link-fall-repeated-hour"
+    href="https://www.fortnite.com/competitive/events/FallRepeatedHour?round=Round"
+    aria-label="02:30–02:45 Uhr - Battle Royale Solo Cash Cup">Battle Royale Solo Cash Cup</a>
+  <a id="schedule-event-link-after-fall-jump"
+    href="https://www.fortnite.com/competitive/events/AfterFallJump?round=Round"
+    aria-label="03:30–03:45 Uhr - Battle Royale Solo Cash Cup">Battle Royale Solo Cash Cup</a>
+  <h2>1. November 2027</h2>
+  <a id="schedule-event-link-after-fall-day"
+    href="https://www.fortnite.com/competitive/events/AfterFallDay?round=Round"
+    aria-label="00:30–00:45 Uhr - Battle Royale Solo Cash Cup">Battle Royale Solo Cash Cup</a>
+</body></html>
+--CupCalDateBoundaryTest--
+`;
+  const fakeSupabase = createServer((request, response) => {
+    response.setHeader("Content-Type", "application/json");
+    if (request.url === "/auth/v1/user") {
+      if (request.headers.authorization !== "Bearer date-boundary-test-token") {
+        response.statusCode = 401;
+        response.end(JSON.stringify({ message: "Invalid test session" }));
+        return;
+      }
+      response.end(JSON.stringify({
+        id: "date-boundary-test-user",
+        email: "admin@cupcal.test",
+      }));
+      return;
+    }
+    if (request.url?.startsWith("/rest/v1/fortnite_events") && request.method === "GET") {
+      response.end("[]");
+      return;
+    }
+    response.statusCode = 404;
+    response.end(JSON.stringify({ message: "Unexpected test request" }));
+  });
+  let apiServer;
+  let tempDir;
+
+  try {
+    const fakeSupabaseUrl = await listen(fakeSupabase);
+    process.env["NODE_ENV"] = "production";
+    process.env["SUPABASE_URL"] = fakeSupabaseUrl;
+    process.env["SUPABASE_SERVICE_ROLE_KEY"] = "test-service-role-key";
+    process.env["CUPCAL_IMPORT_ADMIN_EMAILS"] = "admin@cupcal.test";
+
+    const loaded = await loadAdminImportApiApp();
+    tempDir = loaded.tempDir;
+    apiServer = loaded.app.listen(0, "127.0.0.1");
+    await new Promise((resolve, reject) => {
+      apiServer.once("error", reject);
+      apiServer.once("listening", resolve);
+    });
+
+    const previewFor = async (startDate, endDate) => {
+      const query = new URLSearchParams({ startDate, endDate });
+      const response = await fetch(
+        `http://127.0.0.1:${apiServer.address().port}/api/v1/admin/events/import/preview?${query}`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: "Bearer date-boundary-test-token",
+            "Content-Type": "text/plain; charset=utf-8",
+          },
+          body: sourceText,
+        },
+      );
+      const result = await response.json();
+      assert.equal(response.status, 200, JSON.stringify(result));
+      assert.equal(result.timeZone, "Europe/Berlin");
+      return result;
+    };
+    const eventIds = (preview) => preview.events.map(({ id }) => id);
+
+    const march27 = await previewFor("2027-03-27", "2027-03-27");
+    assert.deepEqual(eventIds(march27), ["epic:BeforeMidnight:Round"]);
+
+    const march28 = await previewFor("2027-03-28", "2027-03-28");
+    assert.deepEqual(eventIds(march28), [
+      "epic:AfterMidnight:Round",
+      "epic:BeforeSpringJump:Round",
+      "epic:AfterSpringJump:Round",
+    ]);
+
+    const springRange = await previewFor("2027-03-28", "2027-03-29");
+    assert.deepEqual(eventIds(springRange), [
+      "epic:AfterMidnight:Round",
+      "epic:BeforeSpringJump:Round",
+      "epic:AfterSpringJump:Round",
+      "epic:AfterSpringDay:Round",
+    ]);
+    assert.equal(springRange.startDate, "2027-03-28");
+    assert.equal(springRange.endDate, "2027-03-29");
+
+    const fallRange = await previewFor("2027-10-31", "2027-11-01");
+    assert.deepEqual(eventIds(fallRange), [
+      "epic:FallMidnight:Round",
+      "epic:FallRepeatedHour:Round",
+      "epic:AfterFallJump:Round",
+      "epic:AfterFallDay:Round",
+    ]);
+    assert.equal(fallRange.startDate, "2027-10-31");
+    assert.equal(fallRange.endDate, "2027-11-01");
+  } finally {
+    if (apiServer?.listening) await closeServer(apiServer);
+    if (fakeSupabase.listening) await closeServer(fakeSupabase);
+    if (tempDir) await rm(tempDir, { recursive: true, force: true });
+    for (const [key, value] of originalEnv) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+});
+
 test("weist Dateien ohne importierbare Termine zurück und speichert weder Termine noch Historie", async () => {
   const originalEnv = new Map(
     ["NODE_ENV", "SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "CUPCAL_IMPORT_ADMIN_EMAILS"]
