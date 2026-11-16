@@ -864,19 +864,27 @@ export default function AdminImportScreen() {
                       accessibilityLabel={importHistoryAccessibilityLabel(entry)}
                       testID={`import-history-counts-${entry.id}`}
                     >
-                      <Text style={[styles.historyCounts, { color: colors.foreground }]}>
+                      <Text allowFontScaling style={[styles.historyCounts, { color: colors.foreground }]}>
                         {entry.insertedCount} neu · {entry.updatedCount} aktualisiert · {entry.skippedCount} übersprungen
                       </Text>
                       {entry.skippedWarningCount == null
                         || entry.skippedPastCount == null
                         || entry.skippedInvalidCount == null ? (
-                        <Text style={[styles.detailCopy, { color: colors.mutedForeground }]}>
+                        <Text allowFontScaling style={[styles.historyReason, { color: colors.mutedForeground }]}>
                           Für diesen älteren Eintrag ist keine Aufschlüsselung gespeichert.
                         </Text>
                       ) : (
-                        <Text style={[styles.detailCopy, { color: colors.mutedForeground }]}>
-                          Davon {entry.skippedWarningCount} mit unklarer Zuordnung, {entry.skippedPastCount} vergangene Termine und {entry.skippedInvalidCount} fehlerhafte Karten.
-                        </Text>
+                        <View style={styles.historyReasons}>
+                          <Text allowFontScaling style={[styles.historyReason, { color: colors.mutedForeground }]}>
+                            Unklare Zuordnung: {entry.skippedWarningCount}
+                          </Text>
+                          <Text allowFontScaling style={[styles.historyReason, { color: colors.mutedForeground }]}>
+                            Vergangene Termine: {entry.skippedPastCount}
+                          </Text>
+                          <Text allowFontScaling style={[styles.historyReason, { color: colors.mutedForeground }]}>
+                            Fehlerhafte Karten: {entry.skippedInvalidCount}
+                          </Text>
+                        </View>
                       )}
                     </View>
                   </View>
@@ -945,7 +953,9 @@ const styles = StyleSheet.create({
   historyDate: { fontSize: 12, fontWeight: '700', flexShrink: 0 },
   historySource: { fontSize: 10, flex: 1, textAlign: 'right' },
   historyAdmin: { fontSize: 10 },
-  historyCounts: { fontSize: 11, lineHeight: 16, fontWeight: '600' },
+  historyCounts: { fontSize: 11, fontWeight: '600' },
+  historyReasons: { gap: 2, marginTop: 4 },
+  historyReason: { fontSize: 12 },
   stats: { flexDirection: 'row', gap: 8, marginTop: 18, marginBottom: 10 },
   stat: { flex: 1, minWidth: 0, paddingVertical: 10, paddingHorizontal: 7, borderRadius: 12, alignItems: 'center' },
   statValue: { fontSize: 19, fontWeight: '800' },

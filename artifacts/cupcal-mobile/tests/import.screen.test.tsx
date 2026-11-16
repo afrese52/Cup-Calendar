@@ -796,41 +796,52 @@ test('meldet eine leere Dateiauswahl, ohne den Bildschirm zu blockieren', async 
   expect(screen.getByTestId('choose-import-file-button').props.accessibilityState.disabled).not.toBe(true);
 });
 
-test('zeigt Admins die gespeicherte Importhistorie mit Konto, Quelle und Zählern', async () => {
-  mockImportHistory.mockReturnValue({
-    data: {
-      entries: [{
-        id: 19,
-        importedAt: '2026-11-11T12:00:00.000Z',
-        adminUserId: '2d81b842-8d9c-4de3-8411-6787a91e68e9',
-        adminEmail: 'admin@example.org',
-        sourceHint: 'fortnite.com',
-        insertedCount: 2,
-        updatedCount: 1,
-        skippedCount: 4,
-        skippedWarningCount: 2,
-        skippedPastCount: 1,
-        skippedInvalidCount: 1,
-      }],
-    },
-    isLoading: false,
-    isError: false,
-  });
-  const screen = await openImportScreen();
+test.each(['android', 'ios'])(
+  'zeigt Importanzahl und alle Gründe auf %s getrennt und mitskalierbar',
+  async (platform) => {
+    setPlatformOS(platform);
+    mockImportHistory.mockReturnValue({
+      data: {
+        entries: [{
+          id: 19,
+          importedAt: '2026-11-11T12:00:00.000Z',
+          adminUserId: '2d81b842-8d9c-4de3-8411-6787a91e68e9',
+          adminEmail: 'admin@example.org',
+          sourceHint: 'fortnite.com',
+          insertedCount: 2,
+          updatedCount: 1,
+          skippedCount: 4,
+          skippedWarningCount: 2,
+          skippedPastCount: 1,
+          skippedInvalidCount: 1,
+        }],
+      },
+      isLoading: false,
+      isError: false,
+    });
+    const screen = await openImportScreen();
 
-  expect(screen.getByTestId('admin-import-history')).toBeTruthy();
-  expect(screen.getByText('Admin: admin@example.org')).toBeTruthy();
-  expect(screen.getByText('fortnite.com')).toBeTruthy();
-  expect(screen.getByText('2 neu · 1 aktualisiert · 4 übersprungen')).toBeTruthy();
-  expect(screen.getByText(
-    'Davon 2 mit unklarer Zuordnung, 1 vergangene Termine und 1 fehlerhafte Karten.',
-  )).toBeTruthy();
-  expect(screen.getByTestId('import-history-counts-19').props).toMatchObject({
-    accessible: true,
-    accessibilityRole: 'text',
-    accessibilityLabel: 'Neu: 2. Aktualisiert: 1. Übersprungen insgesamt: 4. Unklare Zuordnung: 2. Vergangene Termine: 1. Fehlerhafte Karten: 1.',
-  });
-});
+    expect(screen.getByTestId('admin-import-history')).toBeTruthy();
+    expect(screen.getByText('Admin: admin@example.org')).toBeTruthy();
+    expect(screen.getByText('fortnite.com')).toBeTruthy();
+    const totalCounts = screen.getByText('2 neu · 1 aktualisiert · 4 übersprungen');
+    expect(totalCounts.props.allowFontScaling).toBe(true);
+    for (const reason of [
+      'Unklare Zuordnung: 2',
+      'Vergangene Termine: 1',
+      'Fehlerhafte Karten: 1',
+    ]) {
+      const reasonText = screen.getByText(reason);
+      expect(reasonText.props.allowFontScaling).toBe(true);
+      expect(reasonText.props.numberOfLines).toBeUndefined();
+    }
+    expect(screen.getByTestId('import-history-counts-19').props).toMatchObject({
+      accessible: true,
+      accessibilityRole: 'text',
+      accessibilityLabel: 'Neu: 2. Aktualisiert: 1. Übersprungen insgesamt: 4. Unklare Zuordnung: 2. Vergangene Termine: 1. Fehlerhafte Karten: 1.',
+    });
+  },
+);
 
 test('zeigt bei älteren Historieneinträgen weiterhin die Gesamtzahl ohne erfundene Aufschlüsselung', async () => {
   mockImportHistory.mockReturnValue({
@@ -855,9 +866,11 @@ test('zeigt bei älteren Historieneinträgen weiterhin die Gesamtzahl ohne erfun
   const screen = await openImportScreen();
 
   expect(screen.getByText('1 neu · 0 aktualisiert · 3 übersprungen')).toBeTruthy();
-  expect(screen.getByText(
+  const historicalDetail = screen.getByText(
     'Für diesen älteren Eintrag ist keine Aufschlüsselung gespeichert.',
-  )).toBeTruthy();
+  );
+  expect(historicalDetail.props.allowFontScaling).toBe(true);
+  expect(historicalDetail.props.numberOfLines).toBeUndefined();
   expect(screen.getByTestId('import-history-counts-20').props).toMatchObject({
     accessible: true,
     accessibilityRole: 'text',
