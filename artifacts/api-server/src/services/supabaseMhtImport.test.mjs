@@ -78,6 +78,7 @@ async function loadAdminImportApiApp({ markAllEventsAsWarnings = false } = {}) {
           import { parseMhtSchedule } from "../scripts/dry-run-mht-import.mjs";
 
           const app = express();
+          app.use(express.json());
           app.use("/api", createAdminImportRouter({
             scheduleParser(sourceText) {
               const schedule = parseMhtSchedule(Buffer.from(sourceText, "utf8"), {
@@ -413,6 +414,187 @@ test("liefert nur die bisherigen Werte geänderter Turnierdetails", () => {
     previousStartTime: null,
     previousEndTime: null,
   });
+});
+
+test("zeigt Turnierartkorrekturen vorab und speichert nur den geprüften Feldwechsel", async () => {
+  const originalEnv = new Map(
+    ["NODE_ENV", "SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "CUPCAL_IMPORT_ADMIN_EMAILS"]
+      .map((key) => [key, process.env[key]]),
+  );
+  const storedEvent = {
+    id: "epic:correction-test:round-1",
+    title: "Community Solo Cup",
+    description: "Terminbeschreibung bleibt erhalten",
+    region: "EU",
+    game_mode: "Community",
+    team_format: "Solo",
+    tournament_type: "FNCS",
+    category: "Turnier",
+    start_time: "2026-12-01T18:00:00.000Z",
+    end_time: "2026-12-01T20:00:00.000Z",
+    updated_at: "2026-11-15T12:00:00.000Z",
+  };
+  const originalFields = { ...storedEvent };
+  const updates = [];
+  const fakeSupabase = createServer(async (request, response) => {
+    const chunks = [];
+    for await (const chunk of request) chunks.push(chunk);
+    const body = Buffer.concat(chunks).toString("utf8");
+    response.setHeader("Content-Type", "application/json");
+
+    if (request.url === "/auth/v1/user") {
+      const token = request.headers.authorization;
+      if (token !== "Bearer valid-type-correction-token") {
+        response.statusCode = 401;
+        response.end(JSON.stringify({ message: "Invalid test session" }));
+        return;
+      }
+      response.end(JSON.stringify({
+        id: "admin-type-correction-user",
+        email: "admin@cupcal.test",
+      }));
+      return;
+    }
+
+    if (request.url?.startsWith("/rest/v1/fortnite_events")) {
+      const url = new URL(request.url, "http://supabase.test");
+      if (request.method === "GET") {
+        response.end(JSON.stringify(
+          url.searchParams.get("id") === `eq.${storedEvent.id}`
+            ? [{
+                id: storedEvent.id,
+                title: storedEvent.title,
+                tournament_type: storedEvent.tournament_type,
+              }]
+            : [],
+        ));
+        return;
+      }
+      if (request.method === "PATCH") {
+        const update = JSON.parse(body);
+        updates.push({ update, filters: Object.fromEntries(url.searchParams) });
+        const matchesExpectedType =
+          url.searchParams.get("id") === `eq.${storedEvent.id}`
+          && url.searchParams.get("tournament_type") === `eq.${storedEvent.tournament_type}`;
+        if (matchesExpectedType) {
+          Object.assign(storedEvent, update);
+          response.end(JSON.stringify([{ id: storedEvent.id }]));
+        } else {
+          response.end("[]");
+        }
+        return;
+      }
+    }
+
+    response.statusCode = 404;
+    response.end(JSON.stringify({ message: "Unexpected test request" }));
+  });
+  let apiServer;
+  let tempDir;
+
+  try {
+    const fakeSupabaseUrl = await listen(fakeSupabase);
+    process.env["NODE_ENV"] = "production";
+    process.env["SUPABASE_URL"] = fakeSupabaseUrl;
+    process.env["SUPABASE_SERVICE_ROLE_KEY"] = "test-service-role-key";
+    process.env["CUPCAL_IMPORT_ADMIN_EMAILS"] = "admin@cupcal.test";
+
+    const loaded = await loadAdminImportApiApp();
+    tempDir = loaded.tempDir;
+    apiServer = loaded.app.listen(0, "127.0.0.1");
+    await new Promise((resolve, reject) => {
+      apiServer.once("error", reject);
+      apiServer.once("listening", resolve);
+    });
+
+    const baseUrl = `http://127.0.0.1:${apiServer.address().port}/api/v1/admin/events/tournament-type`;
+    const headers = {
+      Authorization: "Bearer valid-type-correction-token",
+      "Content-Type": "application/json",
+    };
+    const previewResponse = await fetch(`${baseUrl}/preview`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        eventId: storedEvent.id,
+        tournamentType: "Community",
+      }),
+    });
+    const preview = await previewResponse.json();
+    assert.equal(previewResponse.status, 200, JSON.stringify(preview));
+    assert.deepEqual(preview, {
+      eventId: storedEvent.id,
+      title: "Community Solo Cup",
+      previousTournamentType: "FNCS",
+      tournamentType: "Community",
+    });
+    assert.deepEqual(storedEvent, originalFields, "Die Vorschau ändert keine gespeicherten Felder.");
+
+    const invalidPreviewResponse = await fetch(`${baseUrl}/preview`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        eventId: storedEvent.id,
+        tournamentType: "Unsupported Cup",
+      }),
+    });
+    assert.equal(invalidPreviewResponse.status, 400);
+
+    const saveResponse = await fetch(baseUrl, {
+      method: "PATCH",
+      headers,
+      body: JSON.stringify({
+        eventId: preview.eventId,
+        expectedTournamentType: preview.previousTournamentType,
+        tournamentType: preview.tournamentType,
+      }),
+    });
+    assert.equal(saveResponse.status, 200, JSON.stringify(await saveResponse.clone().json()));
+    assert.deepEqual(await saveResponse.json(), {
+      eventId: storedEvent.id,
+      previousTournamentType: "FNCS",
+      tournamentType: "Community",
+    });
+    assert.deepEqual(updates[0]?.update, { tournament_type: "Community" });
+    assert.deepEqual(storedEvent, {
+      ...originalFields,
+      tournament_type: "Community",
+    }, "Titel, Beschreibung, Zeit, Spielmodus und weitere Terminangaben bleiben unverändert.");
+
+    const staleSaveResponse = await fetch(baseUrl, {
+      method: "PATCH",
+      headers,
+      body: JSON.stringify({
+        eventId: storedEvent.id,
+        expectedTournamentType: "FNCS",
+        tournamentType: "Cash Cup",
+      }),
+    });
+    assert.equal(staleSaveResponse.status, 409);
+    assert.equal(updates.length, 2);
+    assert.deepEqual(storedEvent, {
+      ...originalFields,
+      tournament_type: "Community",
+    }, "Ein veralteter Vorschauwert überschreibt keine spätere Änderung.");
+
+    const unauthenticatedResponse = await fetch(`${baseUrl}/preview`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        eventId: storedEvent.id,
+        tournamentType: "Cash Cup",
+      }),
+    });
+    assert.equal(unauthenticatedResponse.status, 401);
+  } finally {
+    if (apiServer?.listening) await closeServer(apiServer);
+    if (fakeSupabase.listening) await closeServer(fakeSupabase);
+    if (tempDir) await rm(tempDir, { recursive: true, force: true });
+    for (const [key, value] of originalEnv) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
 });
 
 test("gibt Zeitänderungen im authentifizierten Import-Vorschau-Endpunkt zurück", async () => {

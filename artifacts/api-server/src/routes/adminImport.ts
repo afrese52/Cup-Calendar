@@ -10,6 +10,10 @@ import {
   listRecentMhtImports,
   commitMhtImport,
   MhtImportTransactionError,
+  ALLOWED_TOURNAMENT_TYPES,
+  getEventTournamentType,
+  TournamentTypeCorrectionError,
+  updateEventTournamentType,
   type ExistingMhtEvent,
 } from "../services/supabase";
 import { MAX_MHT_UPLOAD_BYTES } from "../lib/uploadLimits";
@@ -26,6 +30,15 @@ const importDateSchema = z.string()
       && parsed.getUTCMonth() === month! - 1
       && parsed.getUTCDate() === day;
   }, "Das Datum ist ungültig.");
+const tournamentTypePreviewSchema = z.object({
+  eventId: z.string().trim().min(1).max(255),
+  tournamentType: z.enum(ALLOWED_TOURNAMENT_TYPES),
+}).strict();
+const tournamentTypeUpdateSchema = z.object({
+  eventId: z.string().trim().min(1).max(255),
+  expectedTournamentType: z.enum(ALLOWED_TOURNAMENT_TYPES),
+  tournamentType: z.enum(ALLOWED_TOURNAMENT_TYPES),
+}).strict();
 const IMPORT_HISTORY_LIMIT = 20;
 
 type ImportDateRange = { startDate: string; endDate: string };
@@ -305,6 +318,90 @@ router.get("/v1/admin/import-access", async (req, res): Promise<void> => {
     ),
   );
 });
+
+router.post(
+  "/v1/admin/events/tournament-type/preview",
+  requireImportAdmin,
+  async (req, res): Promise<void> => {
+    const parsed = tournamentTypePreviewSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({
+        error: "Bitte gib eine Termin-ID und eine erlaubte neue Turnierart an.",
+      });
+      return;
+    }
+
+    try {
+      const event = await getEventTournamentType(parsed.data.eventId);
+      if (!event) {
+        res.status(404).json({ error: "Der gespeicherte Termin wurde nicht gefunden." });
+        return;
+      }
+      if (event.tournament_type === parsed.data.tournamentType) {
+        res.status(400).json({ error: "Der Termin hat bereits diese Turnierart." });
+        return;
+      }
+
+      res.setHeader("Cache-Control", "no-store");
+      res.json({
+        eventId: event.id,
+        title: event.title,
+        previousTournamentType: event.tournament_type,
+        tournamentType: parsed.data.tournamentType,
+      });
+    } catch (error) {
+      req.log.error({ err: error }, "Could not preview tournament type correction");
+      res.status(503).json({ error: "Die Turnierart kann gerade nicht geprüft werden." });
+    }
+  },
+);
+
+router.patch(
+  "/v1/admin/events/tournament-type",
+  requireImportAdmin,
+  async (req, res): Promise<void> => {
+    const parsed = tournamentTypeUpdateSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({
+        error: "Bitte gib eine Termin-ID, den angezeigten bisherigen Wert und eine erlaubte neue Turnierart an.",
+      });
+      return;
+    }
+    const { eventId, expectedTournamentType, tournamentType } = parsed.data;
+    if (expectedTournamentType === tournamentType) {
+      res.status(400).json({ error: "Die neue Turnierart muss sich vom bisherigen Wert unterscheiden." });
+      return;
+    }
+
+    try {
+      const updated = await updateEventTournamentType({
+        eventId,
+        expectedTournamentType,
+        tournamentType,
+      });
+      if (!updated) {
+        res.status(409).json({
+          error: "Der Termin wurde inzwischen geändert oder gelöscht. Bitte lade die Vorschau erneut.",
+        });
+        return;
+      }
+
+      res.setHeader("Cache-Control", "no-store");
+      res.json({
+        eventId,
+        previousTournamentType: expectedTournamentType,
+        tournamentType,
+      });
+    } catch (error) {
+      if (error instanceof TournamentTypeCorrectionError) {
+        req.log.error({ err: error }, "Could not save tournament type correction");
+      } else {
+        req.log.error({ err: error }, "Unexpected tournament type correction failure");
+      }
+      res.status(503).json({ error: "Die Turnierart konnte gerade nicht gespeichert werden." });
+    }
+  },
+);
 
 router.post(
   "/v1/admin/events/import/preview",

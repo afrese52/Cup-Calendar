@@ -32,6 +32,28 @@ export interface ExistingMhtEvent {
   end_time: string;
 }
 
+export const ALLOWED_TOURNAMENT_TYPES = [
+  "FNCS",
+  "Cash Cup",
+  "Ranked Cup",
+  "Community",
+] as const;
+
+export type TournamentType = (typeof ALLOWED_TOURNAMENT_TYPES)[number];
+
+export interface EventTournamentTypeRecord {
+  id: string;
+  title: string;
+  tournament_type: TournamentType;
+}
+
+export class TournamentTypeCorrectionError extends Error {
+  constructor() {
+    super("Die Turnierart konnte nicht geändert werden.");
+    this.name = "TournamentTypeCorrectionError";
+  }
+}
+
 export function isMissingEventMetadataColumns(error: unknown): boolean {
   if (!error || typeof error !== "object") return false;
   const candidate = error as { code?: unknown; message?: unknown; details?: unknown };
@@ -170,6 +192,39 @@ export function getSupabaseAdmin(): SupabaseClient {
     auth: { persistSession: false, autoRefreshToken: false },
   });
   return client;
+}
+
+export async function getEventTournamentType(
+  eventId: string,
+  admin: SupabaseClient = getSupabaseAdmin(),
+): Promise<EventTournamentTypeRecord | null> {
+  const { data, error } = await admin
+    .from("fortnite_events")
+    .select("id, title, tournament_type")
+    .eq("id", eventId)
+    .maybeSingle();
+
+  if (error) throw new TournamentTypeCorrectionError();
+  return data as EventTournamentTypeRecord | null;
+}
+
+export async function updateEventTournamentType(
+  input: {
+    eventId: string;
+    expectedTournamentType: TournamentType;
+    tournamentType: TournamentType;
+  },
+  admin: SupabaseClient = getSupabaseAdmin(),
+): Promise<boolean> {
+  const { data, error } = await admin
+    .from("fortnite_events")
+    .update({ tournament_type: input.tournamentType })
+    .eq("id", input.eventId)
+    .eq("tournament_type", input.expectedTournamentType)
+    .select("id");
+
+  if (error) throw new TournamentTypeCorrectionError();
+  return data !== null && data.length > 0;
 }
 
 export function buildMhtEventUpsertRows(events: MhtImportEvent[]) {
