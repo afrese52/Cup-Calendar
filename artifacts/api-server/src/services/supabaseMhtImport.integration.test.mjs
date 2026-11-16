@@ -342,6 +342,65 @@ test("wiederholter Import aktualisiert denselben Termin und erhält Admin-Felder
       skipped_cards: [],
     }], "Der Datenbankaufruf muss Termin und Historie gemeinsam schreiben.");
 
+    const warnedExistingEvent = {
+      ...repeatedEvent,
+      title: "Nicht bestätigter neuer Titel",
+      start_time: "2026-11-15T18:00:00.000Z",
+      end_time: "2026-11-15T20:00:00.000Z",
+      review_warnings: ["Die Turnierzuordnung ist nicht eindeutig."],
+    };
+    const checkedEventInSameImport = {
+      ...importedEvent,
+      id: "epic:cup:warning-filter-valid",
+      title: "Geprüfter Termin neben Warnung",
+      start_time: "2026-11-16T18:00:00.000Z",
+      end_time: "2026-11-16T20:00:00.000Z",
+    };
+    await commitMhtImport(
+      [warnedExistingEvent, checkedEventInSameImport],
+      {
+        ...history,
+        sourceHint: "warning-filter",
+        insertedCount: 1,
+        skippedCount: 1,
+        skippedWarningCount: 1,
+        skippedCards: [{
+          id: warnedExistingEvent.id,
+          title: warnedExistingEvent.title,
+          reason: warnedExistingEvent.review_warnings[0],
+        }],
+      },
+      atomicAdmin,
+    );
+
+    const warnedEventAfterImport = await pool.query(
+      `SELECT id, title, start_time, end_time, is_featured, custom_admin_note
+       FROM public.fortnite_events
+       WHERE id = $1`,
+      [warnedExistingEvent.id],
+    );
+    assert.deepEqual(warnedEventAfterImport.rows, [{
+      id: repeatedEvent.id,
+      title: repeatedEvent.title,
+      start_time: new Date(repeatedEvent.start_time),
+      end_time: new Date(repeatedEvent.end_time),
+      is_featured: true,
+      custom_admin_note: "Von der Administration gepflegte Notiz",
+    }], "Ein Termin mit Zuordnungswarnung muss einschließlich Admin-Feldern unverändert bleiben.");
+
+    const checkedEventAfterImport = await pool.query(
+      `SELECT id, title, start_time, end_time
+       FROM public.fortnite_events
+       WHERE id = $1`,
+      [checkedEventInSameImport.id],
+    );
+    assert.deepEqual(checkedEventAfterImport.rows, [{
+      id: checkedEventInSameImport.id,
+      title: checkedEventInSameImport.title,
+      start_time: new Date(checkedEventInSameImport.start_time),
+      end_time: new Date(checkedEventInSameImport.end_time),
+    }], "Der geprüfte Termin desselben Imports muss weiterhin gespeichert werden.");
+
     const concurrentBaseEvent = {
       ...importedEvent,
       id: "epic:cup:concurrent-import",
