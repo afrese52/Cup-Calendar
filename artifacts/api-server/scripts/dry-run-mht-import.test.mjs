@@ -170,6 +170,16 @@ test("liefert Snapshot-Alter und Warnstatus über den authentifizierten Admin-Vo
           aria-label="21:00–22:00 Uhr - Battle Royale Trios Cash Cup">
           <span>Battle Royale Trios Cash Cup</span>
         </a>
+        <a id="schedule-event-link-preview-multiple-rounds"
+          href="https://www.fortnite.com/competitive/events/PreviewMultipleRoundsCup?round=FirstRound&round=SecondRound"
+          aria-label="22:00–23:00 Uhr - Battle Royale Squads Cash Cup">
+          <span>Battle Royale Squads Cash Cup</span>
+        </a>
+        <a id="schedule-event-link-preview-empty-round"
+          href="https://www.fortnite.com/competitive/events/PreviewEmptyRoundCup?round="
+          aria-label="23:00–23:59 Uhr - Battle Royale Solo Cash Cup">
+          <span>Battle Royale Solo Cash Cup</span>
+        </a>
       </body></html>`;
 
     async function preview(date) {
@@ -196,7 +206,7 @@ test("liefert Snapshot-Alter und Warnstatus über den authentifizierten Admin-Vo
     const fresh = await preview(freshDate);
     const freshSnapshot = Date.parse(fresh.result.snapshotAt);
     assert.equal(fresh.result.isSnapshotStale, false);
-    assert.equal(fresh.result.invalidCount, 2);
+    assert.equal(fresh.result.invalidCount, 4);
     assert.deepEqual(fresh.result.issues, [{
       id: "epic:ForeignPreviewCup:ForeignPreviewRound",
       title: "Battle Royale Duos Cash Cup",
@@ -205,6 +215,14 @@ test("liefert Snapshot-Alter und Warnstatus über den authentifizierten Admin-Vo
       id: null,
       title: "Battle Royale Trios Cash Cup",
       errors: ["Event- oder Rundenkennung fehlt im Link."],
+    }, {
+      id: null,
+      title: "Battle Royale Squads Cash Cup",
+      errors: ["Der Link enthält mehrere Rundenkennungen und ist dadurch mehrdeutig."],
+    }, {
+      id: null,
+      title: "Battle Royale Solo Cash Cup",
+      errors: ["Die Rundenkennung im Link ist leer."],
     }]);
     assert.ok(fresh.result.snapshotAgeMs >= fresh.startedAt - freshSnapshot);
     assert.ok(fresh.result.snapshotAgeMs <= fresh.completedAt - freshSnapshot);
@@ -287,6 +305,41 @@ test("liest Eventkarten und wandelt die Berliner Ortszeit nach UTC um", () => {
   assert.equal(result.events[0].end_time, "2026-11-10T21:00:00.000Z");
   assert.equal(result.events[0].team_format, "Solo");
   assert.equal(result.events[0].tournament_type, "Cash Cup");
+});
+
+test("lehnt mehrfache oder leere Rundenkennungen mit Kennung, Titel und Grund ab", () => {
+  const html = `
+    <html><body>
+      <h2>10. November 2026</h2>
+      <a id="schedule-event-link-multiple-rounds"
+        href="/competitive/events/MultipleRoundsCup?round=FirstRound&round=SecondRound"
+        aria-label="19:00–20:00 Uhr - Battle Royale Solo Cash Cup">
+        <span>Battle Royale Solo Cash Cup mit mehreren Runden</span>
+      </a>
+      <a id="schedule-event-link-empty-round"
+        href="/competitive/events/EmptyRoundCup?round="
+        aria-label="20:00–21:00 Uhr - Battle Royale Duos Cash Cup">
+        <span>Battle Royale Duos Cash Cup ohne Runde</span>
+      </a>
+    </body></html>`;
+  const result = parseMhtSchedule(makeMht(html));
+
+  assert.equal(result.cardCount, 2);
+  assert.equal(result.validCount, 0);
+  assert.equal(result.invalidCount, 2);
+  assert.deepEqual(result.events, []);
+  assert.deepEqual(
+    result.issues.map(({ id, title, errors }) => ({ id, title, errors })),
+    [{
+      id: null,
+      title: "Battle Royale Solo Cash Cup mit mehreren Runden",
+      errors: ["Der Link enthält mehrere Rundenkennungen und ist dadurch mehrdeutig."],
+    }, {
+      id: null,
+      title: "Battle Royale Duos Cash Cup ohne Runde",
+      errors: ["Die Rundenkennung im Link ist leer."],
+    }],
+  );
 });
 
 test("ordnet nur ausdrücklich erkennbare Turnierarten zu", () => {

@@ -460,8 +460,11 @@ function extractEventAnchors(html, sourceUrl, timeZone, region) {
     const isOfficialFortniteEventUrl = eventUrl?.protocol === "https:"
       && (eventUrl.hostname === "fortnite.com" || eventUrl.hostname.endsWith(".fortnite.com"));
     const officialEventSlug = isOfficialFortniteEventUrl ? eventSlug ?? "" : "";
-    const roundId = eventUrl?.searchParams.get("round") ?? null;
-    const id = eventSlug && roundId ? `epic:${eventSlug}:${roundId}` : null;
+    const roundIds = eventUrl?.searchParams.getAll("round") ?? [];
+    const roundId = roundIds.length === 1 ? roundIds[0] : null;
+    const hasMultipleRoundIds = roundIds.length > 1;
+    const hasEmptyRoundId = roundIds.length === 1 && roundId.trim().length === 0;
+    const id = eventSlug && roundId && !hasEmptyRoundId ? `epic:${eventSlug}:${roundId}` : null;
     const errors = [];
     const timeRange = (attributes["aria-label"] ?? "").match(
       /(\d{1,2}:\d{2})\s*[–—-]\s*(\d{1,2}:\d{2})\s*(?:Uhr)?/i,
@@ -470,7 +473,13 @@ function extractEventAnchors(html, sourceUrl, timeZone, region) {
     if (!currentDate) errors.push("Kein Tagesdatum vor der Turnierkarte gefunden.");
     if (!title) errors.push("Der Turniername fehlt.");
     if (!timeRange) errors.push("Die Start- und Endzeit fehlt oder ist nicht lesbar.");
-    if (!id) errors.push("Event- oder Rundenkennung fehlt im Link.");
+    if (hasMultipleRoundIds) {
+      errors.push("Der Link enthält mehrere Rundenkennungen und ist dadurch mehrdeutig.");
+    } else if (hasEmptyRoundId) {
+      errors.push("Die Rundenkennung im Link ist leer.");
+    } else if (!id) {
+      errors.push("Event- oder Rundenkennung fehlt im Link.");
+    }
     if (!isOfficialFortniteEventUrl) {
       errors.push("Der Eventlink verweist nicht auf eine offizielle Fortnite-Domain.");
     }
