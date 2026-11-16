@@ -365,6 +365,44 @@ test('speichert nach einer Passwort-Ablehnung beide korrigierten Eingaben erfolg
   expect(mockSaveNewPassword).toHaveBeenNthCalledWith(2, 'Mein-neues-Passwort-123');
 });
 
+test('prüft nach einer Passwort-Ablehnung weiterhin beide Eingaben vor jedem Speichern', async () => {
+  mockSaveNewPassword
+    .mockReset()
+    .mockRejectedValueOnce(
+      Object.assign(new Error('Password is too weak'), { code: 'weak_password' }),
+    )
+    .mockResolvedValueOnce(undefined);
+  const view = await render(<ResetPasswordScreen />);
+
+  await waitFor(() => expect(view.getByTestId('reset-password-submit-button')).toBeTruthy());
+  await fireEvent.changeText(view.getByTestId('reset-password-input'), 'kurz');
+  await fireEvent.changeText(view.getByTestId('reset-password-confirm-input'), 'kurz');
+  await fireEvent.press(view.getByTestId('reset-password-submit-button'));
+
+  expect(await view.findByText(
+    'Das Passwort ist zu kurz oder zu unsicher. Bitte wähle ein stärkeres Passwort.',
+  )).toBeTruthy();
+  expect(mockSaveNewPassword).toHaveBeenCalledTimes(1);
+
+  await fireEvent.changeText(view.getByTestId('reset-password-input'), 'Mein-neues-Passwort-123');
+  await fireEvent.changeText(view.getByTestId('reset-password-confirm-input'), 'Anderes-neues-Passwort-456');
+  await fireEvent.press(view.getByTestId('reset-password-submit-button'));
+
+  const mismatchMessage = await view.findByText('Die Passwörter stimmen nicht überein.');
+  expect(mismatchMessage.props.accessible).toBe(true);
+  expect(mismatchMessage.props.accessibilityRole).toBe('alert');
+  expect(mismatchMessage.props.accessibilityLiveRegion).toBe('assertive');
+  expect(mockSaveNewPassword).toHaveBeenCalledTimes(1);
+
+  await fireEvent.changeText(view.getByTestId('reset-password-confirm-input'), 'Mein-neues-Passwort-123');
+  await fireEvent.press(view.getByTestId('reset-password-submit-button'));
+
+  expect(await view.findByText('Passwort geändert')).toBeTruthy();
+  expect(mockSaveNewPassword).toHaveBeenCalledTimes(2);
+  expect(mockSaveNewPassword).toHaveBeenNthCalledWith(1, 'kurz');
+  expect(mockSaveNewPassword).toHaveBeenNthCalledWith(2, 'Mein-neues-Passwort-123');
+});
+
 test('sperrt schnelle wiederholte Speicherversuche bis die Passwortänderung abgeschlossen ist', async () => {
   const originalPlatformOS = Platform.OS;
   Object.defineProperty(Platform, 'OS', { configurable: true, value: 'ios' });
