@@ -762,7 +762,7 @@ export default function AdminImportScreen() {
                   <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.warning }]}>
                     <Text style={[styles.sectionTitle, { color: colors.warning }]}>Nicht importierte Karten</Text>
                     <Text style={[styles.cardCopy, { color: colors.mutedForeground }]}>
-                      Diese Karten haben kein sicher erkennbares Termindatum und bleiben unabhängig von der ausgewählten Spanne ausgelassen.
+                      Diese Karten werden wegen fehlender oder widersprüchlicher Angaben nicht importiert. Gültige Termine bleiben davon unberührt.
                     </Text>
                     {preview.issues.map((issue, index) => (
                       <View

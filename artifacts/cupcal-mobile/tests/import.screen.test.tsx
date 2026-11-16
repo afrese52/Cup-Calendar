@@ -284,6 +284,61 @@ test('zeigt Titel, Eventkennung und Prüfgrund für nicht importierte Karten', a
   expect(screen.getByText('Prüfgrund: Turnierart fehlt oder ist nicht eindeutig angegeben.')).toBeTruthy();
 });
 
+test('zeigt unbekannte und widersprüchliche Turnierarten getrennt von gültigen Terminen', async () => {
+  mockGetDocumentAsync.mockResolvedValue(selectedFile('plan.mht'));
+  mockPreviewImport.mockResolvedValue({
+    ...preview,
+    importableCount: 1,
+    invalidCount: 2,
+    events: [{
+      id: 'valid-cash-cup',
+      title: 'Gültiger Solo Cash Cup',
+      startTime: '2026-11-12T18:00:00.000Z',
+      endTime: '2026-11-12T20:00:00.000Z',
+      previousTitle: null,
+      previousGameMode: null,
+      previousTeamFormat: null,
+      previousTournamentType: null,
+      previousCategory: null,
+      previousStartTime: null,
+      previousEndTime: null,
+      gameMode: 'Battle Royale',
+      teamFormat: 'Solo',
+      tournamentType: 'Cash Cup',
+      category: 'Turnier',
+      warnings: [],
+      willUpdate: false,
+    }],
+    issues: [
+      {
+        id: 'epic:unknown-invitational:round-1',
+        title: 'Battle Royale Solo Invitational',
+        errors: ['Turnierart fehlt oder ist nicht eindeutig angegeben.'],
+      },
+      {
+        id: 'epic:conflicting-fncs-cash-cup:round-1',
+        title: 'Battle Royale Solo FNCS Cash Cup',
+        errors: ['Turnierart fehlt oder ist nicht eindeutig angegeben.'],
+      },
+    ],
+  });
+  const screen = await openImportScreen();
+
+  await fireEvent.press(screen.getByTestId('choose-import-file-button'));
+  await fireEvent.press(screen.getByTestId('preview-import-file-button'));
+
+  expect(await screen.findByText('Nicht importierte Karten')).toBeTruthy();
+  expect(screen.getByText('Diese Karten werden wegen fehlender oder widersprüchlicher Angaben nicht importiert. Gültige Termine bleiben davon unberührt.')).toBeTruthy();
+  expect(screen.getByText('Battle Royale Solo Invitational')).toBeTruthy();
+  expect(screen.getByText('Battle Royale Solo FNCS Cash Cup')).toBeTruthy();
+  expect(screen.getAllByText('Prüfgrund: Turnierart fehlt oder ist nicht eindeutig angegeben.', { exact: false })).toHaveLength(2);
+  expect(screen.getByTestId('import-issue-id-0').props.children).toContain('epic:unknown-invitational:round-1');
+  expect(screen.getByTestId('import-issue-id-1').props.children).toContain('epic:conflicting-fncs-cash-cup:round-1');
+  expect(screen.getByText('Gültiger Solo Cash Cup')).toBeTruthy();
+  expect(screen.getByTestId('import-event-count-summary').props.children.join('')).toBe('1 Termin · 0 geändert');
+  expect(screen.getByText('1 Termine importieren')).toBeTruthy();
+});
+
 test('zeigt das Alter und warnt vor einem mehr als 24 Stunden alten Snapshot', async () => {
   mockGetDocumentAsync.mockResolvedValue(selectedFile('plan.mht'));
   mockPreviewImport.mockResolvedValue({
