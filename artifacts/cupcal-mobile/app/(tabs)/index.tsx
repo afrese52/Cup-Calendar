@@ -155,24 +155,20 @@ export default function CalendarScreen() {
             <View style={[styles.brandMark, { backgroundColor: colors.primary }]} />
             <Text style={[styles.brandName, { color: colors.mutedForeground }]}>CAP-CALENDAR</Text>
           </View>
-          <View
-            style={[
-              styles.previewBadge,
-              {
-                borderColor: eventError ? colors.warning : colors.primary,
-                backgroundColor: (eventError ? colors.warning : colors.primary) + '16',
-              },
-            ]}
-          >
-            <Feather
-              name={eventError ? 'alert-triangle' : 'calendar'}
-              size={11}
-              color={eventError ? colors.warning : colors.primary}
-            />
-            <Text style={[styles.previewBadgeText, { color: eventError ? colors.warning : colors.primary }]}>
-              {eventError ? 'TERMINE OFFLINE' : 'MANUELLER IMPORT'}
-            </Text>
-          </View>
+          {eventError ? (
+            <View
+              style={[
+                styles.previewBadge,
+                {
+                  borderColor: colors.warning,
+                  backgroundColor: colors.warning + '16',
+                },
+              ]}
+            >
+              <Feather name="alert-triangle" size={11} color={colors.warning} />
+              <Text style={[styles.previewBadgeText, { color: colors.warning }]}>TERMINE OFFLINE</Text>
+            </View>
+          ) : null}
         </View>
 
         <View style={styles.monthHeading}>

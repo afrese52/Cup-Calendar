@@ -118,6 +118,13 @@ afterEach(() => {
   }
 });
 
+test('zeigt im Kalender keinen Hinweis auf manuellen Import', async () => {
+  const view = await render(<CalendarScreen />);
+
+  expect(view.queryByText('MANUELLER IMPORT')).toBeNull();
+  expect(view.getByText('CAP-CALENDAR')).toBeTruthy();
+});
+
 test.each(['android', 'ios'] as const)(
   'Kalenderkarte zeigt Gästen den Dialog und erhält den Zustand auf %s',
   async (platform) => {
