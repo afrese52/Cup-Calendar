@@ -136,6 +136,49 @@ test('zeigt die geltende Passwortlänge vor dem Speichern', async () => {
   expect(view.getByTestId('reset-password-submit-button')).toBeTruthy();
 });
 
+test.each([
+  { field: 'Neues Passwort', testID: 'reset-password-input' },
+  { field: 'Passwortbestätigung', testID: 'reset-password-confirm-input' },
+])('fängt Aktualisieren und Schließen bei Eingaben im Feld „$field“ ab', async ({ testID }) => {
+  const originalPlatformOS = Platform.OS;
+  const originalWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
+  const addEventListener = jest.fn<(type: string, listener: EventListenerOrEventListenerObject) => void>();
+  const removeEventListener = jest.fn<(type: string, listener: EventListenerOrEventListenerObject) => void>();
+  Object.defineProperty(globalThis, 'window', {
+    configurable: true,
+    value: { addEventListener, removeEventListener },
+  });
+  Object.defineProperty(Platform, 'OS', { configurable: true, value: 'web' });
+
+  try {
+    const view = await render(<ResetPasswordScreen />);
+    await waitFor(() => expect(view.getByTestId('reset-password-submit-button')).toBeTruthy());
+    expect(addEventListener).not.toHaveBeenCalled();
+
+    await fireEvent.changeText(view.getByTestId(testID), 'Mein-neues-Passwort');
+    expect(addEventListener).toHaveBeenCalledWith('beforeunload', expect.any(Function));
+
+    const listener = addEventListener.mock.calls.find(([eventName]) => eventName === 'beforeunload')?.[1];
+    if (typeof listener !== 'function') throw new Error('beforeunload-Listener wurde nicht registriert.');
+    const preventDefault = jest.fn();
+    const event = { preventDefault, returnValue: undefined } as unknown as BeforeUnloadEvent;
+    (listener as (event: BeforeUnloadEvent) => void)(event);
+
+    expect(preventDefault).toHaveBeenCalledTimes(1);
+    expect(event.returnValue).toBe('');
+
+    await fireEvent.changeText(view.getByTestId(testID), '');
+    expect(removeEventListener).toHaveBeenCalledWith('beforeunload', listener);
+  } finally {
+    Object.defineProperty(Platform, 'OS', { configurable: true, value: originalPlatformOS });
+    if (originalWindow) {
+      Object.defineProperty(globalThis, 'window', originalWindow);
+    } else {
+      Reflect.deleteProperty(globalThis, 'window');
+    }
+  }
+});
+
 test('schaltet jedes Passwortfeld einzeln sichtbar und behält die Eingaben', async () => {
   const view = await render(<ResetPasswordScreen />);
 

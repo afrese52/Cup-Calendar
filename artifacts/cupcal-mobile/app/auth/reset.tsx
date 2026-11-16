@@ -48,6 +48,17 @@ export default function ResetPasswordScreen() {
   const hasUnsavedPassword = !isSaved && Boolean(password || confirmPassword);
 
   useEffect(() => {
+    if (Platform.OS !== 'web' || (!isSaving && !hasUnsavedPassword)) return;
+
+    const warnBeforeLeaving = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', warnBeforeLeaving);
+    return () => window.removeEventListener('beforeunload', warnBeforeLeaving);
+  }, [hasUnsavedPassword, isSaving]);
+
+  useEffect(() => {
     if (!isSaved || Platform.OS === 'web') return;
 
     const reactTag = ReactNative.findNodeHandle(successMessageRef.current);
