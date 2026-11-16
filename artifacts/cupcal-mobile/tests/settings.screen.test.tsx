@@ -1018,6 +1018,31 @@ test('zeigt nach Wiederherstellung einer gespeicherten Sitzung das angemeldete K
   expect(view.getByTestId('sign-out-button')).toBeTruthy();
 });
 
+test('behält beim Start den Kontostatus nach einem Refresh-Ausfall und zeigt die spätere Erneuerung', async () => {
+  // Supabase liefert nach einem fehlgeschlagenen vorzeitigen Refresh weiterhin
+  // die lokal gespeicherte Sitzung, solange deren Zugriffstoken noch gültig ist.
+  auth.getSession.mockResolvedValue({ data: { session: testSession }, error: null });
+  const view = await render(<SettingsScreen />);
+
+  expect(await view.findByTestId('account-session-status')).toMatchObject({
+    props: { children: 'Angemeldet' },
+  });
+  expect(view.getByText('test@example.invalid')).toBeTruthy();
+  expect(view.queryByTestId('auth-error-message')).toBeNull();
+
+  const renewedSession = {
+    ...testSession,
+    access_token: 'recovered-access-token',
+    refresh_token: 'recovered-refresh-token',
+  };
+  await act(async () => mockSupabase.__emitAuthStateChange('TOKEN_REFRESHED', renewedSession));
+
+  expect(view.getByTestId('account-session-status').props.children).toBe('Angemeldet');
+  expect(view.getByText('test@example.invalid')).toBeTruthy();
+  expect(view.getByTestId('sign-out-button')).toBeTruthy();
+  expect(view.queryByTestId('auth-error-message')).toBeNull();
+});
+
 test('zeigt bei einer beschädigten gespeicherten Sitzung sicher den Anmeldezustand', async () => {
   auth.getSession.mockResolvedValue({
     data: { session: null },

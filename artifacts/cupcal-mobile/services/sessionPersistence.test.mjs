@@ -140,6 +140,119 @@ test('verwirft beschädigte und unvollständige gespeicherte Sitzungen sicher', 
   }
 });
 
+test('behält eine noch gültige Sitzung bei einem vorübergehenden Refresh-Netzwerkausfall und erholt sich danach', async () => {
+  const storage = createPersistentStorage();
+  const projectRef = 'startup-network-outage';
+  const storageKey = `sb-${projectRef}-auth-token`;
+  const initialExpiresAt = Math.floor(Date.now() / 1000) + 85;
+  const initialAccessToken = [
+    Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url'),
+    encodeJwtPayload({
+      sub: testUserId,
+      email: testEmail,
+      role: 'authenticated',
+      aud: 'authenticated',
+      exp: initialExpiresAt,
+    }),
+    'initial-test-signature',
+  ].join('.');
+  const initialSession = {
+    access_token: initialAccessToken,
+    refresh_token: 'recoverable-refresh-token',
+    token_type: 'bearer',
+    expires_in: 85,
+    expires_at: initialExpiresAt,
+    user: {
+      id: testUserId,
+      email: testEmail,
+      aud: 'authenticated',
+      role: 'authenticated',
+      app_metadata: {},
+      user_metadata: {},
+      created_at: new Date(0).toISOString(),
+    },
+  };
+  await storage.setItem(storageKey, JSON.stringify(initialSession));
+
+  let refreshAttempts = 0;
+  let networkAvailable = false;
+  const recoveredAccessToken = [
+    Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url'),
+    encodeJwtPayload({
+      sub: testUserId,
+      email: testEmail,
+      role: 'authenticated',
+      aud: 'authenticated',
+      exp: Math.floor(Date.now() / 1000) + 3600,
+    }),
+    'recovered-test-signature',
+  ].join('.');
+  const fetchDuringOutage = async (input) => {
+    const url = new URL(String(input));
+    if (url.pathname.endsWith('/token')) {
+      refreshAttempts += 1;
+      if (!networkAvailable) throw new TypeError('Network request failed');
+      return new Response(JSON.stringify({
+        access_token: recoveredAccessToken,
+        refresh_token: 'rotated-refresh-token',
+        token_type: 'bearer',
+        expires_in: 3600,
+        user: initialSession.user,
+      }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    return fakeUserFetch(input);
+  };
+  const client = createCupCalSupabaseClient(
+    `https://${projectRef}.supabase.co`,
+    'test-publishable-key',
+    storage,
+    fetchDuringOutage,
+  );
+  let recoveredClient;
+
+  try {
+    const duringOutage = await client.auth.getSession();
+
+    assert.equal(duringOutage.error, null);
+    assert.equal(duringOutage.data.session?.access_token, initialAccessToken);
+    assert.equal(duringOutage.data.session?.user.id, testUserId);
+    assert.ok(refreshAttempts >= 1, 'der App-Start muss den Refresh-Endpunkt versuchen');
+    assert.equal(
+      JSON.parse(await storage.getItem(storageKey)).access_token,
+      initialAccessToken,
+      'ein fehlgeschlagener Refresh darf keine Sitzung als erneuert speichern',
+    );
+
+    // Ein neuer Client bildet einen späteren Wiederanlauf nach, ohne die interne
+    // Schutzfrist für fehlgeschlagene Wiederholungen künstlich zu überspringen.
+    await client.auth.dispose();
+    networkAvailable = true;
+    recoveredClient = createCupCalSupabaseClient(
+      `https://${projectRef}.supabase.co`,
+      'test-publishable-key',
+      storage,
+      fetchDuringOutage,
+    );
+    const afterRecovery = await recoveredClient.auth.getSession();
+
+    assert.equal(afterRecovery.error, null);
+    assert.equal(afterRecovery.data.session?.access_token, recoveredAccessToken);
+    assert.equal(afterRecovery.data.session?.refresh_token, 'rotated-refresh-token');
+    assert.ok(refreshAttempts > 1);
+    assert.equal(
+      JSON.parse(await storage.getItem(storageKey)).access_token,
+      recoveredAccessToken,
+      'nach Wiederherstellung der Verbindung muss die erneuerte Sitzung gespeichert sein',
+    );
+  } finally {
+    await client.auth.dispose();
+    await recoveredClient?.auth.dispose();
+  }
+});
+
 for (const platform of ['Android', 'iOS']) {
   test(`stellt die bestätigte E-Mail-Sitzung nach einem Neustart auf ${platform} wieder her`, async () => {
     const storage = createPersistentStorage();
