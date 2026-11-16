@@ -197,12 +197,13 @@ test("alle Supabase-Migrationen laufen auf einer frischen Datenbank durch", asyn
       WHERE schemaname = 'public'
         AND tablename = ANY (ARRAY[
           'admin_import_history',
+          'admin_tournament_type_correction_history',
           'fortnite_events',
           'user_event_bookmarks',
           'user_profiles'
         ]);
     `),
-    "admin_import_history,fortnite_events,user_event_bookmarks,user_profiles",
+    "admin_import_history,admin_tournament_type_correction_history,fortnite_events,user_event_bookmarks,user_profiles",
     "Alle erwarteten Tabellen müssen angelegt sein.",
   );
 
@@ -231,12 +232,13 @@ test("alle Supabase-Migrationen laufen auf einer frischen Datenbank durch", asyn
         AND c.relkind = 'r'
         AND c.relname = ANY (ARRAY[
           'admin_import_history',
+          'admin_tournament_type_correction_history',
           'fortnite_events',
           'user_event_bookmarks',
           'user_profiles'
         ]);
     `),
-    "admin_import_history:true,fortnite_events:true,user_event_bookmarks:true,user_profiles:true",
+    "admin_import_history:true,admin_tournament_type_correction_history:true,fortnite_events:true,user_event_bookmarks:true,user_profiles:true",
     "RLS muss auf allen erwarteten Tabellen aktiviert sein.",
   );
 
@@ -249,6 +251,7 @@ test("alle Supabase-Migrationen laufen auf einer frischen Datenbank durch", asyn
         WHERE schemaname = 'public'
           AND tablename = ANY (ARRAY[
             'admin_import_history',
+            'admin_tournament_type_correction_history',
             'fortnite_events',
             'user_event_bookmarks',
             'user_profiles'
@@ -269,10 +272,32 @@ test("alle Supabase-Migrationen laufen auf einer frischen Datenbank durch", asyn
       SELECT has_table_privilege('service_role', 'public.admin_import_history', 'SELECT')
         AND has_table_privilege('service_role', 'public.admin_import_history', 'INSERT')
         AND NOT has_table_privilege('authenticated', 'public.admin_import_history', 'SELECT')
-        AND NOT has_table_privilege('anon', 'public.admin_import_history', 'SELECT');
+        AND NOT has_table_privilege('anon', 'public.admin_import_history', 'SELECT')
+        AND has_table_privilege('service_role', 'public.admin_tournament_type_correction_history', 'SELECT')
+        AND NOT has_table_privilege('authenticated', 'public.admin_tournament_type_correction_history', 'SELECT')
+        AND NOT has_table_privilege('anon', 'public.admin_tournament_type_correction_history', 'SELECT');
     `),
     "t",
-    "Die Importhistorie muss nur dem vertrauenswürdigen Servicerollen-Zugriff gewähren.",
+    "Adminhistorien müssen nur dem vertrauenswürdigen Servicerollen-Zugriff gewähren.",
+  );
+  assert.equal(
+    psql(`
+      SELECT has_function_privilege(
+        'service_role',
+        'public.correct_event_tournament_type(text,text,text,uuid,text)',
+        'EXECUTE'
+      ) AND NOT has_function_privilege(
+        'authenticated',
+        'public.correct_event_tournament_type(text,text,text,uuid,text)',
+        'EXECUTE'
+      ) AND NOT has_function_privilege(
+        'anon',
+        'public.correct_event_tournament_type(text,text,text,uuid,text)',
+        'EXECUTE'
+      );
+    `),
+    "t",
+    "Die Änderungs-RPC darf ausschließlich vom vertrauenswürdigen Server aufgerufen werden.",
   );
 
   assert.equal(
@@ -326,6 +351,62 @@ test("alle Supabase-Migrationen laufen auf einer frischen Datenbank durch", asyn
       '1900-01-01 00:00:00+00'::timestamptz
     );
     RESET ROLE;
+  `);
+
+  psql(`
+    INSERT INTO public.fortnite_events (
+      id, title, region, game_mode, team_format, tournament_type,
+      category, start_time, end_time
+    ) VALUES (
+      'fresh-correction-event', 'Korrekturtest', 'EU', 'Battle Royale', 'Solo',
+      'FNCS', 'Turnier', '2026-12-01 18:00:00+00', '2026-12-01 20:00:00+00'
+    );
+    SELECT * FROM public.correct_event_tournament_type(
+      'fresh-correction-event', 'FNCS', 'Community',
+      '${accountId}', 'admin@cupcal.test'
+    );
+  `);
+
+  assert.equal(
+    psql(`
+      SELECT event_id || ':' || event_title || ':' || previous_tournament_type || ':'
+        || tournament_type || ':' || admin_user_id::text || ':' || admin_email || ':'
+        || (corrected_at IS NOT NULL)::text
+      FROM public.admin_tournament_type_correction_history;
+    `),
+    `fresh-correction-event:Korrekturtest:FNCS:Community:${accountId}:admin@cupcal.test:true`,
+    "Die Turnierart-RPC muss die Korrektur samt Admin und Datenbankzeit speichern.",
+  );
+
+  psql(`
+    DO $$
+    BEGIN
+      BEGIN
+        PERFORM * FROM public.correct_event_tournament_type(
+          'fresh-correction-event', 'Community', 'Cash Cup',
+          '${accountId}', NULL
+        );
+        RAISE EXCEPTION 'A missing audit email should have rejected the correction';
+      EXCEPTION
+        WHEN not_null_violation THEN NULL;
+      END;
+
+      IF (
+        SELECT tournament_type
+        FROM public.fortnite_events
+        WHERE id = 'fresh-correction-event'
+      ) <> 'Community' THEN
+        RAISE EXCEPTION 'A failed audit write must roll back the event correction';
+      END IF;
+
+      IF (
+        SELECT count(*)
+        FROM public.admin_tournament_type_correction_history
+      ) <> 1 THEN
+        RAISE EXCEPTION 'A failed correction must not add an audit entry';
+      END IF;
+    END
+    $$;
   `);
 
   assert.equal(

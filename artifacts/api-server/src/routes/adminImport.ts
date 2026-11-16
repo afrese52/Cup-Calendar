@@ -13,7 +13,9 @@ import {
   ALLOWED_TOURNAMENT_TYPES,
   getEventTournamentType,
   TournamentTypeCorrectionError,
+  TournamentTypeCorrectionLogError,
   updateEventTournamentType,
+  listRecentTournamentTypeCorrections,
   type ExistingMhtEvent,
 } from "../services/supabase";
 import { MAX_MHT_UPLOAD_BYTES } from "../lib/uploadLimits";
@@ -40,6 +42,7 @@ const tournamentTypeUpdateSchema = z.object({
   tournamentType: z.enum(ALLOWED_TOURNAMENT_TYPES),
 }).strict();
 const IMPORT_HISTORY_LIMIT = 20;
+const TOURNAMENT_TYPE_CORRECTION_HISTORY_LIMIT = 50;
 
 type ImportDateRange = { startDate: string; endDate: string };
 
@@ -378,6 +381,8 @@ router.patch(
         eventId,
         expectedTournamentType,
         tournamentType,
+        adminUserId: (req as ImportAdminRequest).importAdminUser!.id,
+        adminEmail: (req as ImportAdminRequest).importAdminUser!.email!,
       });
       if (!updated) {
         res.status(409).json({
@@ -393,12 +398,38 @@ router.patch(
         tournamentType,
       });
     } catch (error) {
+      if (error instanceof TournamentTypeCorrectionLogError) {
+        req.log.error({ err: error }, "Could not save tournament type correction and its audit log");
+        res.status(503).json({
+          error: "Die Turnierart wurde nicht geändert, weil das Änderungsprotokoll nicht gespeichert werden konnte. Bitte versuche es später erneut.",
+        });
+        return;
+      }
       if (error instanceof TournamentTypeCorrectionError) {
         req.log.error({ err: error }, "Could not save tournament type correction");
       } else {
         req.log.error({ err: error }, "Unexpected tournament type correction failure");
       }
       res.status(503).json({ error: "Die Turnierart konnte gerade nicht gespeichert werden." });
+    }
+  },
+);
+
+router.get(
+  "/v1/admin/events/tournament-type/history",
+  requireImportAdmin,
+  async (req, res): Promise<void> => {
+    try {
+      const entries = await listRecentTournamentTypeCorrections(
+        TOURNAMENT_TYPE_CORRECTION_HISTORY_LIMIT,
+      );
+      res.setHeader("Cache-Control", "no-store");
+      res.json({ entries });
+    } catch (error) {
+      req.log.error({ err: error }, "Could not load tournament type correction history");
+      res.status(503).json({
+        error: "Das Änderungsprotokoll für Turnierarten kann gerade nicht geladen werden.",
+      });
     }
   },
 );

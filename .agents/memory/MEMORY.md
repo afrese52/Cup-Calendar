@@ -22,3 +22,4 @@
 - [Countdown-Screen-Tests](confirmation-cooldown-screen-tests.md) — Nach aktiven Countdowns unmounten und den Neustartfall ans Ende der Bildschirmtests setzen.
 - [Screenreader-Ansagen im Passwortspeicher](password-save-screenreader.md) — iOS-Ansagen und Android-Live-Regionen getrennt halten, damit Speicherfehler nicht doppelt vorgelesen werden.
 - [Stabile Daten in Hook-Tests](stable-hook-test-data.md) — Mock-Antwortobjekte für useEffect-Abhängigkeiten müssen über Renderings hinweg referenziell stabil bleiben.
+- [Turnierart-Korrekturprotokoll](tournament-type-audit-history.md) — Audit-Snapshots ohne Fremdschlüssel behalten Einträge auch nach Löschung von Termin oder Konto.

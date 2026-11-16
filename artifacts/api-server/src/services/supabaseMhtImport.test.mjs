@@ -79,6 +79,10 @@ async function loadAdminImportApiApp({ markAllEventsAsWarnings = false } = {}) {
 
           const app = express();
           app.use(express.json());
+          app.use((req, _res, next) => {
+            req.log = { error() {}, warn() {} };
+            next();
+          });
           app.use("/api", createAdminImportRouter({
             scheduleParser(sourceText) {
               const schedule = parseMhtSchedule(Buffer.from(sourceText, "utf8"), {
@@ -436,6 +440,8 @@ test("zeigt Turnierartkorrekturen vorab und speichert nur den geprüften Feldwec
   };
   const originalFields = { ...storedEvent };
   const updates = [];
+  const correctionHistory = [];
+  let failCorrectionLog = false;
   const fakeSupabase = createServer(async (request, response) => {
     const chunks = [];
     for await (const chunk of request) chunks.push(chunk);
@@ -444,15 +450,60 @@ test("zeigt Turnierartkorrekturen vorab und speichert nur den geprüften Feldwec
 
     if (request.url === "/auth/v1/user") {
       const token = request.headers.authorization;
-      if (token !== "Bearer valid-type-correction-token") {
+      if (
+        token !== "Bearer valid-type-correction-token"
+        && token !== "Bearer valid-ordinary-type-correction-token"
+      ) {
         response.statusCode = 401;
         response.end(JSON.stringify({ message: "Invalid test session" }));
         return;
       }
+      const isAdmin = token === "Bearer valid-type-correction-token";
       response.end(JSON.stringify({
-        id: "admin-type-correction-user",
-        email: "admin@cupcal.test",
+        id: isAdmin ? "admin-type-correction-user" : "ordinary-type-correction-user",
+        email: isAdmin ? "admin@cupcal.test" : "user@cupcal.test",
       }));
+      return;
+    }
+
+    if (request.url === "/rest/v1/rpc/correct_event_tournament_type" && request.method === "POST") {
+      const input = JSON.parse(body);
+      updates.push({ update: { tournament_type: input.p_tournament_type }, filters: input });
+      if (failCorrectionLog) {
+        response.statusCode = 400;
+        response.end(JSON.stringify({
+          code: "P0001",
+          details: null,
+          hint: null,
+          message: "Audit table unavailable",
+        }));
+        return;
+      }
+      if (
+        input.p_event_id === storedEvent.id
+        && input.p_expected_tournament_type === storedEvent.tournament_type
+      ) {
+        const previousTournamentType = storedEvent.tournament_type;
+        Object.assign(storedEvent, { tournament_type: input.p_tournament_type });
+        correctionHistory.unshift({
+          id: correctionHistory.length + 1,
+          event_id: storedEvent.id,
+          event_title: storedEvent.title,
+          previous_tournament_type: previousTournamentType,
+          tournament_type: input.p_tournament_type,
+          admin_user_id: input.p_admin_user_id,
+          admin_email: input.p_admin_email,
+          corrected_at: "2026-11-16T12:00:00.000Z",
+        });
+        response.end(JSON.stringify([{ history_id: correctionHistory[0].id, corrected_at: correctionHistory[0].corrected_at }]));
+      } else {
+        response.end("[]");
+      }
+      return;
+    }
+
+    if (request.url?.startsWith("/rest/v1/admin_tournament_type_correction_history")) {
+      response.end(JSON.stringify(correctionHistory));
       return;
     }
 
@@ -468,20 +519,6 @@ test("zeigt Turnierartkorrekturen vorab und speichert nur den geprüften Feldwec
               }]
             : [],
         ));
-        return;
-      }
-      if (request.method === "PATCH") {
-        const update = JSON.parse(body);
-        updates.push({ update, filters: Object.fromEntries(url.searchParams) });
-        const matchesExpectedType =
-          url.searchParams.get("id") === `eq.${storedEvent.id}`
-          && url.searchParams.get("tournament_type") === `eq.${storedEvent.tournament_type}`;
-        if (matchesExpectedType) {
-          Object.assign(storedEvent, update);
-          response.end(JSON.stringify([{ id: storedEvent.id }]));
-        } else {
-          response.end("[]");
-        }
         return;
       }
     }
@@ -556,6 +593,18 @@ test("zeigt Turnierartkorrekturen vorab und speichert nur den geprüften Feldwec
       tournamentType: "Community",
     });
     assert.deepEqual(updates[0]?.update, { tournament_type: "Community" });
+    assert.equal(updates[0]?.filters.p_admin_user_id, "admin-type-correction-user");
+    assert.equal(updates[0]?.filters.p_admin_email, "admin@cupcal.test");
+    assert.deepEqual(correctionHistory[0], {
+      id: 1,
+      event_id: storedEvent.id,
+      event_title: "Community Solo Cup",
+      previous_tournament_type: "FNCS",
+      tournament_type: "Community",
+      admin_user_id: "admin-type-correction-user",
+      admin_email: "admin@cupcal.test",
+      corrected_at: "2026-11-16T12:00:00.000Z",
+    });
     assert.deepEqual(storedEvent, {
       ...originalFields,
       tournament_type: "Community",
@@ -572,10 +621,48 @@ test("zeigt Turnierartkorrekturen vorab und speichert nur den geprüften Feldwec
     });
     assert.equal(staleSaveResponse.status, 409);
     assert.equal(updates.length, 2);
+    assert.equal(correctionHistory.length, 1);
     assert.deepEqual(storedEvent, {
       ...originalFields,
       tournament_type: "Community",
     }, "Ein veralteter Vorschauwert überschreibt keine spätere Änderung.");
+
+    const historyUrl = `${baseUrl}/history`;
+    const unauthorizedHistoryResponse = await fetch(historyUrl, {
+      headers: { Authorization: "Bearer valid-ordinary-type-correction-token" },
+    });
+    assert.equal(unauthorizedHistoryResponse.status, 403);
+
+    const historyResponse = await fetch(historyUrl, { headers });
+    assert.equal(historyResponse.status, 200);
+    assert.equal(historyResponse.headers.get("cache-control"), "no-store");
+    assert.deepEqual(await historyResponse.json(), {
+      entries: [{
+        id: 1,
+        eventId: storedEvent.id,
+        eventTitle: "Community Solo Cup",
+        previousTournamentType: "FNCS",
+        tournamentType: "Community",
+        adminUserId: "admin-type-correction-user",
+        adminEmail: "admin@cupcal.test",
+        correctedAt: "2026-11-16T12:00:00.000Z",
+      }],
+    });
+
+    failCorrectionLog = true;
+    const failedLogResponse = await fetch(baseUrl, {
+      method: "PATCH",
+      headers,
+      body: JSON.stringify({
+        eventId: storedEvent.id,
+        expectedTournamentType: "Community",
+        tournamentType: "Cash Cup",
+      }),
+    });
+    assert.equal(failedLogResponse.status, 503, await failedLogResponse.clone().text());
+    assert.match((await failedLogResponse.json()).error, /nicht geändert.*Änderungsprotokoll/);
+    assert.equal(storedEvent.tournament_type, "Community", "Bei fehlgeschlagenem Protokoll bleibt die Terminart unverändert.");
+    assert.equal(correctionHistory.length, 1, "Ein fehlgeschlagener Protokolleintrag wird nicht als Erfolg angezeigt.");
 
     const unauthenticatedResponse = await fetch(`${baseUrl}/preview`, {
       method: "POST",

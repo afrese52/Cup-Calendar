@@ -54,6 +54,24 @@ export class TournamentTypeCorrectionError extends Error {
   }
 }
 
+export class TournamentTypeCorrectionLogError extends Error {
+  constructor() {
+    super("Die Turnierart konnte nicht gemeinsam mit dem Änderungsprotokoll gespeichert werden.");
+    this.name = "TournamentTypeCorrectionLogError";
+  }
+}
+
+export interface TournamentTypeCorrectionHistoryEntry {
+  id: number;
+  eventId: string;
+  eventTitle: string;
+  previousTournamentType: TournamentType;
+  tournamentType: TournamentType;
+  adminUserId: string;
+  adminEmail: string;
+  correctedAt: string;
+}
+
 export function isMissingEventMetadataColumns(error: unknown): boolean {
   if (!error || typeof error !== "object") return false;
   const candidate = error as { code?: unknown; message?: unknown; details?: unknown };
@@ -213,18 +231,45 @@ export async function updateEventTournamentType(
     eventId: string;
     expectedTournamentType: TournamentType;
     tournamentType: TournamentType;
+    adminUserId: string;
+    adminEmail: string;
   },
   admin: SupabaseClient = getSupabaseAdmin(),
 ): Promise<boolean> {
-  const { data, error } = await admin
-    .from("fortnite_events")
-    .update({ tournament_type: input.tournamentType })
-    .eq("id", input.eventId)
-    .eq("tournament_type", input.expectedTournamentType)
-    .select("id");
+  const { data, error } = await admin.rpc("correct_event_tournament_type", {
+    p_event_id: input.eventId,
+    p_expected_tournament_type: input.expectedTournamentType,
+    p_tournament_type: input.tournamentType,
+    p_admin_user_id: input.adminUserId,
+    p_admin_email: input.adminEmail,
+  });
 
-  if (error) throw new TournamentTypeCorrectionError();
+  if (error) throw new TournamentTypeCorrectionLogError();
   return data !== null && data.length > 0;
+}
+
+export async function listRecentTournamentTypeCorrections(
+  limit = 50,
+  admin: SupabaseClient = getSupabaseAdmin(),
+): Promise<TournamentTypeCorrectionHistoryEntry[]> {
+  const { data, error } = await admin
+    .from("admin_tournament_type_correction_history")
+    .select("id, event_id, event_title, previous_tournament_type, tournament_type, admin_user_id, admin_email, corrected_at")
+    .order("corrected_at", { ascending: false })
+    .limit(limit);
+  if (error) {
+    throw new Error("Das Änderungsprotokoll für Turnierarten konnte nicht geladen werden.");
+  }
+  return (data ?? []).map((row) => ({
+    id: row.id,
+    eventId: row.event_id,
+    eventTitle: row.event_title,
+    previousTournamentType: row.previous_tournament_type,
+    tournamentType: row.tournament_type,
+    adminUserId: row.admin_user_id,
+    adminEmail: row.admin_email,
+    correctedAt: row.corrected_at,
+  }));
 }
 
 export function buildMhtEventUpsertRows(events: MhtImportEvent[]) {
