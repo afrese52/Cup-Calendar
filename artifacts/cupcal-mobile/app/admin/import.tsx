@@ -28,6 +28,28 @@ type PickedImportSource = {
   readText: () => Promise<string | undefined>;
 };
 
+type ImportHistoryCounts = {
+  insertedCount: number;
+  updatedCount: number;
+  skippedCount: number;
+  skippedWarningCount?: number | null;
+  skippedPastCount?: number | null;
+  skippedInvalidCount?: number | null;
+};
+
+function importHistoryAccessibilityLabel(entry: ImportHistoryCounts) {
+  const totals = `Neu: ${entry.insertedCount}. Aktualisiert: ${entry.updatedCount}. Übersprungen insgesamt: ${entry.skippedCount}.`;
+  if (
+    entry.skippedWarningCount == null
+    || entry.skippedPastCount == null
+    || entry.skippedInvalidCount == null
+  ) {
+    return `${totals} Für diesen älteren Eintrag ist keine Aufschlüsselung gespeichert.`;
+  }
+
+  return `${totals} Unklare Zuordnung: ${entry.skippedWarningCount}. Vergangene Termine: ${entry.skippedPastCount}. Fehlerhafte Karten: ${entry.skippedInvalidCount}.`;
+}
+
 function getUtf8ByteLength(value: string) {
   let byteLength = 0;
   for (const character of value) {
@@ -836,20 +858,27 @@ export default function AdminImportScreen() {
                     <Text style={[styles.historyAdmin, { color: colors.mutedForeground }]}>
                       Admin: {entry.adminEmail}
                     </Text>
-                    <Text style={[styles.historyCounts, { color: colors.foreground }]}>
-                      {entry.insertedCount} neu · {entry.updatedCount} aktualisiert · {entry.skippedCount} übersprungen
-                    </Text>
-                    {entry.skippedWarningCount == null
-                      || entry.skippedPastCount == null
-                      || entry.skippedInvalidCount == null ? (
-                      <Text style={[styles.detailCopy, { color: colors.mutedForeground }]}>
-                        Für diesen älteren Eintrag ist keine Aufschlüsselung gespeichert.
+                    <View
+                      accessible
+                      accessibilityRole="text"
+                      accessibilityLabel={importHistoryAccessibilityLabel(entry)}
+                      testID={`import-history-counts-${entry.id}`}
+                    >
+                      <Text style={[styles.historyCounts, { color: colors.foreground }]}>
+                        {entry.insertedCount} neu · {entry.updatedCount} aktualisiert · {entry.skippedCount} übersprungen
                       </Text>
-                    ) : (
-                      <Text style={[styles.detailCopy, { color: colors.mutedForeground }]}>
-                        Davon {entry.skippedWarningCount} mit unklarer Zuordnung, {entry.skippedPastCount} vergangene Termine und {entry.skippedInvalidCount} fehlerhafte Karten.
-                      </Text>
-                    )}
+                      {entry.skippedWarningCount == null
+                        || entry.skippedPastCount == null
+                        || entry.skippedInvalidCount == null ? (
+                        <Text style={[styles.detailCopy, { color: colors.mutedForeground }]}>
+                          Für diesen älteren Eintrag ist keine Aufschlüsselung gespeichert.
+                        </Text>
+                      ) : (
+                        <Text style={[styles.detailCopy, { color: colors.mutedForeground }]}>
+                          Davon {entry.skippedWarningCount} mit unklarer Zuordnung, {entry.skippedPastCount} vergangene Termine und {entry.skippedInvalidCount} fehlerhafte Karten.
+                        </Text>
+                      )}
+                    </View>
                   </View>
                 ))
               ) : (

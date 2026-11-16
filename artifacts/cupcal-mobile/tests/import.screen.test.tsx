@@ -825,6 +825,11 @@ test('zeigt Admins die gespeicherte Importhistorie mit Konto, Quelle und Zähler
   expect(screen.getByText(
     'Davon 2 mit unklarer Zuordnung, 1 vergangene Termine und 1 fehlerhafte Karten.',
   )).toBeTruthy();
+  expect(screen.getByTestId('import-history-counts-19').props).toMatchObject({
+    accessible: true,
+    accessibilityRole: 'text',
+    accessibilityLabel: 'Neu: 2. Aktualisiert: 1. Übersprungen insgesamt: 4. Unklare Zuordnung: 2. Vergangene Termine: 1. Fehlerhafte Karten: 1.',
+  });
 });
 
 test('zeigt bei älteren Historieneinträgen weiterhin die Gesamtzahl ohne erfundene Aufschlüsselung', async () => {
@@ -853,6 +858,11 @@ test('zeigt bei älteren Historieneinträgen weiterhin die Gesamtzahl ohne erfun
   expect(screen.getByText(
     'Für diesen älteren Eintrag ist keine Aufschlüsselung gespeichert.',
   )).toBeTruthy();
+  expect(screen.getByTestId('import-history-counts-20').props).toMatchObject({
+    accessible: true,
+    accessibilityRole: 'text',
+    accessibilityLabel: 'Neu: 1. Aktualisiert: 0. Übersprungen insgesamt: 3. Für diesen älteren Eintrag ist keine Aufschlüsselung gespeichert.',
+  });
 });
 
 test('zeigt fehlerhafte Karten getrennt im Importergebnis an', async () => {
