@@ -447,6 +447,51 @@ test('zeigt nach einem Kontowechsel während des lokalen Ladens nur die Favorite
   expect(view.getByTestId('bookmark-ids').props.children).toBe('favorit-b');
 });
 
+test('zeigt nach Abmeldung während Kontoladen und Sync nur Gastfavoriten', async () => {
+  AppState.currentState = 'active';
+  const accountALoad = deferred<string[]>();
+  const accountARemote = deferred<RemoteBookmark[]>();
+  bookmarkStore.loadBookmarksForUser.mockImplementation((userId: string | null) => {
+    if (userId === 'konto-a') return accountALoad.promise;
+    return Promise.resolve(['gast-favorit']);
+  });
+  mockedSupabase.fetchRemoteBookmarks.mockImplementation((userId: string) =>
+    userId === 'konto-a' ? accountARemote.promise : Promise.resolve([]),
+  );
+  const view = await renderProvider();
+  await waitFor(() => expect(view.getByTestId('bookmark-ids').props.children).toBe('gast-favorit'));
+
+  await emitUser('konto-a');
+  await waitFor(() => expect(bookmarkStore.loadBookmarksForUser).toHaveBeenCalledWith('konto-a'));
+  await act(async () => {
+    mockedSupabase.__emitRealtimeStatus('SUBSCRIBED');
+  });
+  await waitFor(() => expect(mockedSupabase.fetchRemoteBookmarks).toHaveBeenCalledWith('konto-a'));
+
+  await act(async () => {
+    mockedSupabase.__emitAuthStateChange('SIGNED_OUT', null);
+  });
+  await waitFor(() => expect(view.getByTestId('bookmark-ids').props.children).toBe('gast-favorit'));
+
+  await act(async () => {
+    accountALoad.resolve(['konto-favorit']);
+    accountARemote.resolve([{
+      event_id: 'konto-favorit',
+      is_favorite: true,
+      updated_at: '2026-01-01T00:00:00.000Z',
+      revision: 1,
+    }]);
+    await Promise.all([accountALoad.promise, accountARemote.promise]);
+  });
+  await waitFor(() => expect(bookmarkStore.reconcileBookmarks).toHaveBeenCalledWith(
+    'konto-a',
+    expect.arrayContaining([expect.objectContaining({ event_id: 'konto-favorit' })]),
+  ));
+
+  expect(view.getByTestId('bookmark-ids').props.children).toBe('gast-favorit');
+  expect(bookmarkStore.loadBookmarksForUser).toHaveBeenCalledWith(null);
+});
+
 test('überschreibt neue Favoriten nicht mit einer verspäteten Sync-Antwort des vorherigen Kontos', async () => {
   const accountARemote = deferred<RemoteBookmark[]>();
   let accountAFetches = 0;
