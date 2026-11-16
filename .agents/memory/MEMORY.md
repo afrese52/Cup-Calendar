@@ -13,6 +13,7 @@
 - [Supabase-Migrationen für Live-Tests](supabase-live-migrations.md) — Vor Konto-Isolationstests muss das Live-Schema die lokalen Favoritenmigrationen enthalten.
 - [Supabase-CLI-Migrationstests](supabase-cli-migrations.md) — `supabase start` wendet lokale Migrationen an; `db reset` kann beim Neustart von Kong in dieser Umgebung scheitern.
 - [Supabase-Passwortregel](supabase-password-policy.md) — Beim CupCal-Passwort-Reset gelten mindestens sechs Zeichen, ohne zusätzliche Zeichenklassen.
+- [Supabase-Retry-After](supabase-retry-after.md) — Die Auth-SDK-Fehler enthalten die HTTP-Header nicht; die Client-Fetch-Schicht muss die Wartezeit in den Fehlertext übernehmen.
 - [Bookmark-Zeitordnung](bookmark-clock-ordering.md) — Favoritenänderungen anhand serverseitiger Revisionen statt Gerätezeitstempeln ordnen.
 - [Favoriten über Geräte hinweg](cross-device-bookmarks.md) — Favoriten gehören zum angemeldeten Konto und sollen auf all seinen Geräten erscheinen.
 - [Zod-Schemas in Node-Tests](zod-schemas-node-tests.md) — Generierte Zod-Schemas direkt aus der TS-Ausgabe importieren, wenn Node den Paketindex mit extensionlosen TS-Exports nicht auflöst.

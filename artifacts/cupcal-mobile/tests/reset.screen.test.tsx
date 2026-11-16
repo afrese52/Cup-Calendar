@@ -85,6 +85,12 @@ jest.mock('@/services/supabase', () => ({
         && (error as { status?: unknown }).status === 429
       )
     ) {
+      const retryAfter = typeof error === 'object' && error !== null && 'retryAfter' in error
+        ? Number((error as { retryAfter?: unknown }).retryAfter)
+        : 0;
+      if (retryAfter > 0) {
+        return `Zu viele Versuche in kurzer Zeit. Bitte warte noch ${retryAfter} ${retryAfter === 1 ? 'Sekunde' : 'Sekunden'} und versuche es dann erneut.`;
+      }
       return 'Zu viele Versuche in kurzer Zeit. Warte bitte einige Minuten und versuche es dann erneut.';
     }
     if (
@@ -101,6 +107,11 @@ jest.mock('@/services/supabase', () => ({
       return 'Das Passwort ist zu kurz oder zu unsicher. Bitte wähle ein stärkeres Passwort.';
     }
     return fallback;
+  },
+  getRateLimitRetryAfterSeconds: (error: unknown) => {
+    if (!error || typeof error !== 'object' || !('retryAfter' in error)) return null;
+    const seconds = Number((error as { retryAfter?: unknown }).retryAfter);
+    return Number.isFinite(seconds) && seconds > 0 ? Math.ceil(seconds) : null;
   },
 }));
 
@@ -263,6 +274,52 @@ test('behält Eingaben und ermöglicht nach vorübergehender Passwort-Drosselung
   expect(mockSaveNewPassword).toHaveBeenCalledTimes(2);
   expect(mockSaveNewPassword).toHaveBeenNthCalledWith(1, 'Mein-neues-Passwort-123');
   expect(mockSaveNewPassword).toHaveBeenNthCalledWith(2, 'Mein-neues-Passwort-123');
+});
+
+test('zeigt eine verlässliche Wartezeit und lässt nach Ablauf erneut absenden', async () => {
+  mockSaveNewPassword
+    .mockReset()
+    .mockRejectedValueOnce(Object.assign(new Error('Too many requests'), {
+      code: 'over_request_rate_limit',
+      status: 429,
+      retryAfter: 1,
+    }))
+    .mockResolvedValueOnce(undefined);
+  const view = await render(<ResetPasswordScreen />);
+
+  await waitFor(() => expect(view.getByTestId('reset-password-submit-button')).toBeTruthy());
+  await fireEvent.changeText(view.getByTestId('reset-password-input'), 'Mein-neues-Passwort-123');
+  await fireEvent.changeText(view.getByTestId('reset-password-confirm-input'), 'Mein-neues-Passwort-123');
+  jest.useFakeTimers({ now: Date.now() });
+  try {
+    await fireEvent.press(view.getByTestId('reset-password-submit-button'));
+
+    expect(view.getByText(
+      'Zu viele Versuche in kurzer Zeit. Bitte warte noch 1 Sekunde und versuche es dann erneut.',
+    )).toBeTruthy();
+    expect(view.getByTestId('reset-password-retry-countdown').props.children.join('')).toBe(
+      'Du kannst es in 1 Sekunde erneut versuchen.',
+    );
+    expect(view.getByTestId('reset-password-submit-button').props.accessibilityState).toMatchObject({
+      disabled: true, busy: false,
+    });
+    expect(view.getByTestId('reset-password-input').props.value).toBe('Mein-neues-Passwort-123');
+    expect(view.getByTestId('reset-password-confirm-input').props.value).toBe('Mein-neues-Passwort-123');
+
+    await act(async () => {
+      jest.advanceTimersByTime(1_000);
+    });
+    expect(view.getByTestId('reset-password-submit-button').props.accessibilityState).toMatchObject({
+      disabled: false, busy: false,
+    });
+    expect(view.getByTestId('reset-password-retry-ready')).toBeTruthy();
+
+    await fireEvent.press(view.getByTestId('reset-password-submit-button'));
+    expect(view.getByText('Passwort geändert')).toBeTruthy();
+    expect(mockSaveNewPassword).toHaveBeenCalledTimes(2);
+  } finally {
+    jest.useRealTimers();
+  }
 });
 
 test('gibt bei einem unerwarteten Speicherfehler eine zugängliche nächste Aktion aus', async () => {

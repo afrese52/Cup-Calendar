@@ -19,6 +19,7 @@ import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollV
 import { useColors } from '@/hooks/useColors';
 import {
   friendlyAuthError,
+  getRateLimitRetryAfterSeconds,
   handlePasswordResetUrl,
   isPasswordRecoveryPending,
   markPasswordRecoverySession,
@@ -37,6 +38,9 @@ export default function ResetPasswordScreen() {
   const isSavingRef = useRef(false);
   const [isSaved, setIsSaved] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [retryAvailableAt, setRetryAvailableAt] = useState<number | null>(null);
+  const [retryWaitSeconds, setRetryWaitSeconds] = useState(0);
+  const [retryWaitFinished, setRetryWaitFinished] = useState(false);
   const successMessageRef = useRef<TextInstance>(null);
 
   const hasUnsavedPassword = !isSaved && Boolean(password || confirmPassword);
@@ -47,6 +51,23 @@ export default function ResetPasswordScreen() {
     const reactTag = ReactNative.findNodeHandle(successMessageRef.current);
     if (typeof reactTag === 'number') AccessibilityInfo.setAccessibilityFocus(reactTag);
   }, [isSaved]);
+
+  useEffect(() => {
+    if (retryAvailableAt === null) return;
+
+    const updateWait = () => {
+      const secondsRemaining = Math.max(0, Math.ceil((retryAvailableAt - Date.now()) / 1_000));
+      setRetryWaitSeconds(secondsRemaining);
+      if (secondsRemaining === 0) {
+        setRetryAvailableAt(null);
+        setErrorMessage(null);
+        setRetryWaitFinished(true);
+      }
+    };
+    updateWait();
+    const interval = setInterval(updateWait, 1_000);
+    return () => clearInterval(interval);
+  }, [retryAvailableAt]);
 
   usePreventRemove(isSaving || hasUnsavedPassword, ({ repeat }) => {
     if (isSaving) return;
@@ -148,6 +169,9 @@ export default function ResetPasswordScreen() {
     isSavingRef.current = true;
     setIsSaving(true);
     setErrorMessage(null);
+    setRetryAvailableAt(null);
+    setRetryWaitSeconds(0);
+    setRetryWaitFinished(false);
     if (Platform.OS === 'ios') {
       AccessibilityInfo.announceForAccessibility('Passwort wird gespeichert …');
     }
@@ -169,6 +193,14 @@ export default function ResetPasswordScreen() {
           'Das Passwort konnte nicht gespeichert werden. Bitte versuche es erneut.',
         )
         : 'Die Wiederherstellungssitzung ist abgelaufen oder ungültig. Bitte fordere in den Einstellungen einen neuen Wiederherstellungslink an.';
+      const retryAfterSeconds = hasRecoverySession
+        ? getRateLimitRetryAfterSeconds(error)
+        : null;
+      if (retryAfterSeconds !== null) {
+        setRetryAvailableAt(Date.now() + retryAfterSeconds * 1_000);
+        setRetryWaitSeconds(retryAfterSeconds);
+        setRetryWaitFinished(false);
+      }
       setErrorMessage(message);
       if (Platform.OS === 'ios') {
         AccessibilityInfo.announceForAccessibility(message);
@@ -266,23 +298,51 @@ export default function ResetPasswordScreen() {
           </Text>
         ) : null}
 
+        {retryWaitSeconds > 0 ? (
+          <Text
+            accessible
+            accessibilityRole="status"
+            accessibilityLiveRegion="polite"
+            testID="reset-password-retry-countdown"
+            style={[styles.retryCountdown, { color: colors.mutedForeground }]}
+          >
+            Du kannst es in {retryWaitSeconds} {retryWaitSeconds === 1 ? 'Sekunde' : 'Sekunden'} erneut versuchen.
+          </Text>
+        ) : null}
+
+        {retryWaitFinished ? (
+          <Text
+            accessible
+            accessibilityRole="status"
+            accessibilityLiveRegion="polite"
+            testID="reset-password-retry-ready"
+            style={[styles.retryCountdown, { color: colors.mutedForeground }]}
+          >
+            Die Wartezeit ist abgelaufen. Du kannst es jetzt erneut versuchen.
+          </Text>
+        ) : null}
+
         {!isCheckingLink && isRecoveryReady && !isSaved ? (
           <Pressable
             accessibilityRole="button"
-            accessibilityLiveRegion={isSaving ? 'polite' : undefined}
-            accessibilityState={{ disabled: isSaving, busy: isSaving }}
+            accessibilityLiveRegion={isSaving || retryWaitSeconds > 0 ? 'polite' : undefined}
+            accessibilityState={{ disabled: isSaving || retryWaitSeconds > 0, busy: isSaving }}
             testID="reset-password-submit-button"
-            disabled={isSaving}
+            disabled={isSaving || retryWaitSeconds > 0}
             onPress={() => void submitNewPassword()}
             style={({ pressed }) => [
               styles.primaryButton,
               { backgroundColor: colors.primary },
-              pressed && !isSaving ? styles.pressed : null,
-              isSaving ? styles.disabled : null,
+              pressed && !isSaving && retryWaitSeconds === 0 ? styles.pressed : null,
+              isSaving || retryWaitSeconds > 0 ? styles.disabled : null,
             ]}
           >
             <Text style={[styles.primaryButtonText, { color: colors.primaryForeground }]}>
-              {isSaving ? 'Wird gespeichert …' : 'Passwort speichern'}
+              {isSaving
+                ? 'Wird gespeichert …'
+                : retryWaitSeconds > 0
+                  ? `Bitte warten (${retryWaitSeconds} s)`
+                  : 'Passwort speichern'}
             </Text>
           </Pressable>
         ) : null}
@@ -314,6 +374,7 @@ const styles = StyleSheet.create({
   passwordPolicy: { fontSize: 13, lineHeight: 18, marginBottom: 2 },
   input: { minHeight: 50, borderWidth: 1, borderRadius: 12, paddingHorizontal: 14, fontSize: 14, marginTop: 12 },
   notice: { fontSize: 12, lineHeight: 18, marginTop: 13 },
+  retryCountdown: { fontSize: 12, lineHeight: 18, marginTop: 8 },
   primaryButton: { minHeight: 50, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginTop: 18 },
   primaryButtonText: { fontSize: 14, fontWeight: '700' },
   secondaryButton: { minHeight: 46, borderWidth: 1, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginTop: 18 },

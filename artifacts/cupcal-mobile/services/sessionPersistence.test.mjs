@@ -1,11 +1,44 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createCupCalSupabaseClient } from './createSupabaseClient.ts';
-import { confirmEmailCode } from './accountAuth.ts';
+import { confirmEmailCode, friendlyAuthError } from './accountAuth.ts';
 
 const testUserId = '00000000-0000-4000-8000-000000000015';
 const testEmail = 'restart-test@example.invalid';
 const expiresAt = Math.floor(Date.now() / 1000) + 60 * 60;
+
+test('übernimmt Retry-After aus einer echten Supabase-HTTP-Antwort', async () => {
+  const client = createCupCalSupabaseClient(
+    'https://retry-after.supabase.co',
+    'test-publishable-key',
+    {
+      getItem: async () => null,
+      setItem: async () => {},
+      removeItem: async () => {},
+    },
+    async () => new Response(JSON.stringify({
+      message: 'Too many requests',
+      code: 'over_request_rate_limit',
+    }), {
+      status: 429,
+      headers: {
+        'Content-Type': 'application/json',
+        'Retry-After': '30',
+      },
+    }),
+  );
+
+  const { error } = await client.auth.signUp({
+    email: 'retry@example.invalid',
+    password: 'test-password',
+  });
+
+  assert.ok(error);
+  assert.equal(
+    friendlyAuthError(error),
+    'Zu viele Versuche in kurzer Zeit. Bitte warte noch 30 Sekunden und versuche es dann erneut.',
+  );
+});
 
 function encodeJwtPayload(payload) {
   return Buffer.from(JSON.stringify(payload)).toString('base64url');

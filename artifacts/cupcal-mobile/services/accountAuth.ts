@@ -13,6 +13,85 @@ export const PENDING_ACCOUNT_CONFIRMATION_EMAIL_KEY =
 
 export type AccountAuthMode = 'sign-in' | 'sign-up' | 'forgot-password';
 
+function parseRetryAfter(value: unknown, now: number): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value > 0 && value <= 86_400 ? Math.ceil(value) : null;
+  }
+  if (typeof value !== 'string') return null;
+
+  const normalized = value.trim();
+  if (!normalized) return null;
+  if (/^\d+(?:\.\d+)?$/.test(normalized)) {
+    const seconds = Number(normalized);
+    return seconds > 0 && seconds <= 86_400 ? Math.ceil(seconds) : null;
+  }
+
+  const retryAt = Date.parse(normalized);
+  if (!Number.isFinite(retryAt)) return null;
+  const seconds = Math.ceil((retryAt - now) / 1_000);
+  return seconds > 0 && seconds <= 86_400 ? seconds : null;
+}
+
+function getRetryAfterHeader(headers: unknown): unknown {
+  if (!headers || typeof headers !== 'object') return undefined;
+  const headerBag = headers as {
+    get?: (name: string) => unknown;
+    [key: string]: unknown;
+  };
+  if (typeof headerBag.get === 'function') {
+    try {
+      const value = headerBag.get('retry-after');
+      if (value !== null && value !== undefined) return value;
+    } catch {
+      // Some response-like objects expose a throwing headers getter.
+    }
+  }
+  return headerBag['retry-after'] ?? headerBag['Retry-After'];
+}
+
+export function getRateLimitRetryAfterSeconds(
+  error: unknown,
+  now = Date.now(),
+): number | null {
+  if (!error || typeof error !== 'object') return null;
+  const details = error as {
+    retryAfter?: unknown;
+    retry_after?: unknown;
+    headers?: unknown;
+    response?: { headers?: unknown } | null;
+    message?: unknown;
+  };
+
+  const candidates = [
+    details.retryAfter,
+    details.retry_after,
+    getRetryAfterHeader(details.headers),
+    getRetryAfterHeader(details.response?.headers),
+  ];
+  for (const candidate of candidates) {
+    const seconds = parseRetryAfter(candidate, now);
+    if (seconds !== null) return seconds;
+  }
+
+  if (typeof details.message === 'string') {
+    const match = details.message.match(
+      /\b(?:retry|try again|wait)\s+(?:after|in|for)?\s*(\d+(?:\.\d+)?)\s*(seconds?|secs?|minutes?|mins?)\b/i,
+    );
+    if (match) {
+      const amount = Number(match[1]);
+      const multiplier = /^(?:minutes?|mins?)$/i.test(match[2]) ? 60 : 1;
+      return parseRetryAfter(amount * multiplier, now);
+    }
+  }
+  return null;
+}
+
+function formatRetryWait(seconds: number): string {
+  if (seconds < 60) return `${seconds} ${seconds === 1 ? 'Sekunde' : 'Sekunden'}`;
+  const minutes = Math.ceil(seconds / 60);
+  return `${minutes} ${minutes === 1 ? 'Minute' : 'Minuten'}`;
+}
+
 export function friendlyAuthError(
   error: unknown,
   fallback = 'Das hat nicht geklappt. Bitte versuche es erneut.',
@@ -90,6 +169,10 @@ export function friendlyAuthError(
     || message.includes('rate limit')
     || message.includes('too many requests')
   ) {
+    const retryAfterSeconds = getRateLimitRetryAfterSeconds(error);
+    if (retryAfterSeconds !== null) {
+      return `Zu viele Versuche in kurzer Zeit. Bitte warte noch ${formatRetryWait(retryAfterSeconds)} und versuche es dann erneut.`;
+    }
     return 'Zu viele Versuche in kurzer Zeit. Warte bitte einige Minuten und versuche es dann erneut.';
   }
   if (

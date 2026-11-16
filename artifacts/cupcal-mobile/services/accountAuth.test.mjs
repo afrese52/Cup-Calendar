@@ -5,6 +5,7 @@ import {
   confirmEmailCode,
   emailConfirmationLinkError,
   friendlyAuthError,
+  getRateLimitRetryAfterSeconds,
   resendAccountConfirmation,
   signOutAccount,
   submitAccountAuth,
@@ -357,6 +358,35 @@ test('erklärt vorübergehende Supabase-Drosselungen unabhängig von der Netzwer
       );
     });
   }
+});
+
+test('liest eine verlässliche Wartezeit aus Supabase-Fehlerdetails', async (t) => {
+  const now = Date.UTC(2026, 10, 16, 12);
+  const cases = [
+    ['Retry-After als Sekunden', { headers: { 'retry-after': '45' } }, 45],
+    ['Retry-After als HTTP-Datum', {
+      response: { headers: new Headers({ 'Retry-After': new Date(now + 90_000).toUTCString() }) },
+    }, 90],
+    ['Supabase-Angabe im Fehlertext', { message: 'Please retry after 2 minutes' }, 120],
+  ];
+  for (const [name, error, expected] of cases) {
+    await t.test(name, () => {
+      assert.equal(getRateLimitRetryAfterSeconds(error, now), expected);
+    });
+  }
+  await t.test('verwirft fehlende oder ungültige Wartezeiten', () => {
+    assert.equal(getRateLimitRetryAfterSeconds({ headers: { 'retry-after': 'soon' } }, now), null);
+    assert.equal(getRateLimitRetryAfterSeconds({ retryAfter: 90_000 }, now), null);
+  });
+  await t.test('zeigt konkrete Sekunden im verständlichen Hinweis an', () => {
+    assert.equal(
+      friendlyAuthError(Object.assign(new Error('Too many requests'), {
+        code: 'over_request_rate_limit',
+        headers: { 'retry-after': '45' },
+      })),
+      'Zu viele Versuche in kurzer Zeit. Bitte warte noch 45 Sekunden und versuche es dann erneut.',
+    );
+  });
 });
 
 test('erklärt vorübergehende Supabase-Serverfehler ohne Netzwerkfehler zu melden', () => {
