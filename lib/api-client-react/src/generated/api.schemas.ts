@@ -333,6 +333,14 @@ export interface MhtImportResult {
   skippedCount: number;
 }
 
+export type MhtImportHistoryEntrySkippedCardsItem = {
+  /** @nullable */
+  id: string | null;
+  /** @nullable */
+  title: string | null;
+  reason: string;
+};
+
 export interface MhtImportHistoryEntry {
   id: number;
   importedAt: string;
@@ -349,6 +357,7 @@ export interface MhtImportHistoryEntry {
   skippedPastCount: number | null;
   /** @nullable */
   skippedInvalidCount: number | null;
+  skippedCards: MhtImportHistoryEntrySkippedCardsItem[];
 }
 
 export interface MhtImportHistoryResponse {

@@ -887,6 +887,33 @@ export default function AdminImportScreen() {
                         </View>
                       )}
                     </View>
+                    {(entry.skippedCards ?? []).length > 0 ? (
+                      <View
+                        accessibilityLabel={`${entry.skippedCards?.length ?? 0} übersprungene Karten mit Titel, Kennung und Prüfgrund`}
+                        testID={`import-history-skipped-cards-${entry.id}`}
+                        style={styles.skippedCards}
+                      >
+                        <Text style={[styles.historySkippedHeading, { color: colors.foreground }]}>
+                          Übersprungene Karten
+                        </Text>
+                        {(entry.skippedCards ?? []).map((card, index) => (
+                          <View
+                            key={`${card.id ?? 'ohne-kennung'}-${index}`}
+                            style={[styles.skippedCard, { borderLeftColor: colors.border }]}
+                          >
+                            <Text allowFontScaling style={[styles.historyReason, { color: colors.foreground }]}>
+                              {card.title ?? 'Titel nicht erkannt'}
+                            </Text>
+                            <Text allowFontScaling style={[styles.historyReason, { color: colors.mutedForeground }]}>
+                              Kennung: {card.id ?? 'nicht erkannt'}
+                            </Text>
+                            <Text allowFontScaling style={[styles.historyReason, { color: colors.mutedForeground }]}>
+                              Prüfgrund: {card.reason}
+                            </Text>
+                          </View>
+                        ))}
+                      </View>
+                    ) : null}
                   </View>
                 ))
               ) : (
@@ -956,6 +983,9 @@ const styles = StyleSheet.create({
   historyCounts: { fontSize: 11, fontWeight: '600' },
   historyReasons: { gap: 2, marginTop: 4 },
   historyReason: { fontSize: 12 },
+  skippedCards: { gap: 8, marginTop: 6 },
+  historySkippedHeading: { fontSize: 12, fontWeight: '700' },
+  skippedCard: { gap: 2, paddingLeft: 10, borderLeftWidth: 2 },
   stats: { flexDirection: 'row', gap: 8, marginTop: 18, marginBottom: 10 },
   stat: { flex: 1, minWidth: 0, paddingVertical: 10, paddingHorizontal: 7, borderRadius: 12, alignItems: 'center' },
   statValue: { fontSize: 19, fontWeight: '800' },

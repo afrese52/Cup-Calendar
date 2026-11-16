@@ -454,7 +454,16 @@ components:
         skippedWarningCount: { type: ["integer", "null"] }
         skippedPastCount: { type: ["integer", "null"] }
         skippedInvalidCount: { type: ["integer", "null"] }
-      required: [id, importedAt, adminUserId, adminEmail, sourceHint, insertedCount, updatedCount, skippedCount, skippedWarningCount, skippedPastCount, skippedInvalidCount]
+        skippedCards:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: ["string", "null"] }
+              title: { type: ["string", "null"] }
+              reason: { type: string }
+            required: [id, title, reason]
+      required: [id, importedAt, adminUserId, adminEmail, sourceHint, insertedCount, updatedCount, skippedCount, skippedWarningCount, skippedPastCount, skippedInvalidCount, skippedCards]
     MhtImportHistoryResponse:
       type: object
       properties:

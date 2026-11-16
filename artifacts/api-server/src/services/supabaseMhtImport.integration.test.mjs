@@ -288,12 +288,13 @@ test("wiederholter Import aktualisiert denselben Termin und erhält Admin-Felder
       skippedWarningCount: 0,
       skippedPastCount: 0,
       skippedInvalidCount: 0,
+      skippedCards: [],
     };
     const atomicAdmin = createPostgresAtomicImportAdmin(pool);
     await commitMhtImport([atomicEvent], history, atomicAdmin);
 
     const committed = await pool.query(
-      `SELECT event.id, event.title, history.admin_email, history.inserted_count
+      `SELECT event.id, event.title, history.admin_email, history.inserted_count, history.skipped_cards
        FROM public.fortnite_events AS event
        CROSS JOIN public.admin_import_history AS history
        WHERE event.id = $1`,
@@ -304,6 +305,7 @@ test("wiederholter Import aktualisiert denselben Termin und erhält Admin-Felder
       title: atomicEvent.title,
       admin_email: "admin@cupcal.test",
       inserted_count: 1,
+      skipped_cards: [],
     }], "Der Datenbankaufruf muss Termin und Historie gemeinsam schreiben.");
 
     const failedNewEvent = {

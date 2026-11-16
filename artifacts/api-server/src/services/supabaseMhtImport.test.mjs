@@ -1146,6 +1146,7 @@ Content-Type: text/html; charset=utf-8
           skipped_warning_count: historyRow.skipped_warning_count,
           skipped_past_count: historyRow.skipped_past_count,
           skipped_invalid_count: historyRow.skipped_invalid_count,
+          skipped_cards: historyRow.skipped_cards,
         }]));
         return;
       }
@@ -1233,6 +1234,13 @@ Content-Type: text/html; charset=utf-8
       skippedInvalidCount: 1,
       skippedCount: 3,
     });
+    assert.deepEqual(historyRow.skipped_cards.map(({ id, reason }) => ({ id, reason })), [
+      { id: "epic:WarningDuos:WarningRound", reason: "Zuordnung manuell prüfen" },
+      { id: "epic:PastSolo:PastRound", reason: "Der Termin lag bereits vor dem Snapshot-Zeitpunkt." },
+      { id: "epic:InvalidSolo:InvalidRound", reason: "Die Start- und Endzeit fehlt oder ist nicht lesbar." },
+    ]);
+    assert.ok(historyRow.skipped_cards.every((card) => typeof card.title === "string"));
+    assert.ok(!historyRow.skipped_cards.some((card) => card.id === "epic:OutsideRange:OutsideRangeRound"));
     assert.deepEqual(importCall.p_events.map((row) => row.id), ["epic:CleanSolo:CleanRound"]);
     assert.ok(!importCall.p_events.some((row) => row.id === "epic:OutsideRange:OutsideRangeRound"));
     assert.equal(historyRow.inserted_count, 1);
@@ -1264,6 +1272,7 @@ Content-Type: text/html; charset=utf-8
         skippedWarningCount: 1,
         skippedPastCount: 1,
         skippedInvalidCount: 1,
+        skippedCards: historyRow.skipped_cards,
       }],
     });
   } finally {
@@ -1400,6 +1409,7 @@ test("schützt die Importhistorie vor nicht angemeldeten und nicht freigegebenen
     skipped_warning_count: 1,
     skipped_past_count: 1,
     skipped_invalid_count: 1,
+    skipped_cards: [{ id: "epic:history", title: "Historischer Cup", reason: "Prüfung erforderlich" }],
   };
   const fakeSupabase = createServer((request, response) => {
     response.setHeader("Content-Type", "application/json");
@@ -1487,6 +1497,7 @@ test("schützt die Importhistorie vor nicht angemeldeten und nicht freigegebenen
         skippedWarningCount: 1,
         skippedPastCount: 1,
         skippedInvalidCount: 1,
+        skippedCards: [{ id: "epic:history", title: "Historischer Cup", reason: "Prüfung erforderlich" }],
       }],
     });
     assert.equal(historyRequestCount, 1);
@@ -1643,6 +1654,7 @@ test("speichert Termine und Verlauf über einen gemeinsamen Datenbankaufruf", as
     skippedWarningCount: 1,
     skippedPastCount: 1,
     skippedInvalidCount: 0,
+    skippedCards: [{ id: "epic:ignored", title: "Ignorierter Termin", reason: "Zuordnung prüfen" }],
   };
 
   await commitMhtImport([event()], history, admin);
@@ -1659,6 +1671,7 @@ test("speichert Termine und Verlauf über einen gemeinsamen Datenbankaufruf", as
     skipped_warning_count: 1,
     skipped_past_count: 1,
     skipped_invalid_count: 0,
+    skipped_cards: [{ id: "epic:ignored", title: "Ignorierter Termin", reason: "Zuordnung prüfen" }],
   });
 });
 
@@ -1679,6 +1692,7 @@ test("meldet einen fehlgeschlagenen gemeinsamen Import ohne Datenbankdetails", a
     skippedWarningCount: 0,
     skippedPastCount: 0,
     skippedInvalidCount: 0,
+    skippedCards: [],
   }, admin), MhtImportTransactionError);
 });
 
@@ -1706,6 +1720,7 @@ test("records only approved import metadata and never stores uploaded content", 
     skippedWarningCount: 2,
     skippedPastCount: 1,
     skippedInvalidCount: 1,
+    skippedCards: [{ id: "epic:ignored", title: "Ignorierter Termin", reason: "Zuordnung prüfen" }],
   }, admin);
 
   assert.deepEqual(inserted, {
@@ -1718,6 +1733,7 @@ test("records only approved import metadata and never stores uploaded content", 
     skipped_warning_count: 2,
     skipped_past_count: 1,
     skipped_invalid_count: 1,
+    skipped_cards: [{ id: "epic:ignored", title: "Ignorierter Termin", reason: "Zuordnung prüfen" }],
   });
   assert.equal("file_content" in inserted, false);
   assert.equal("service_role_key" in inserted, false);
@@ -1745,6 +1761,7 @@ test("marks an import-history write failure without exposing database details", 
       skippedWarningCount: 2,
       skippedPastCount: 1,
       skippedInvalidCount: 1,
+      skippedCards: [],
     }, admin),
     (error) => {
       assert.equal(error.name, "ImportHistoryWriteError");
@@ -1768,6 +1785,7 @@ test("lists recent imports without returning unselected database fields", async 
     skipped_warning_count: 2,
     skipped_past_count: 1,
     skipped_invalid_count: 1,
+    skipped_cards: [{ id: "epic:ignored", title: "Ignorierter Termin", reason: "Zuordnung prüfen" }],
   }, {
     id: 2,
     imported_at: "2026-11-10T12:00:00.000Z",
@@ -1817,6 +1835,7 @@ test("lists recent imports without returning unselected database fields", async 
     skippedWarningCount: 2,
     skippedPastCount: 1,
     skippedInvalidCount: 1,
+    skippedCards: [{ id: "epic:ignored", title: "Ignorierter Termin", reason: "Zuordnung prüfen" }],
   }, {
     id: 2,
     importedAt: "2026-11-10T12:00:00.000Z",
@@ -1829,10 +1848,12 @@ test("lists recent imports without returning unselected database fields", async 
     skippedWarningCount: null,
     skippedPastCount: null,
     skippedInvalidCount: null,
+    skippedCards: [],
   }]);
   assert.equal(selected.includes("file_content"), false);
   assert.equal(selected.includes("service_role_key"), false);
   assert.ok(selected.includes("skipped_warning_count"));
+  assert.ok(selected.includes("skipped_cards"));
   assert.deepEqual(ordered, { column: "imported_at", options: { ascending: false } });
   assert.equal(limited, 20);
 });

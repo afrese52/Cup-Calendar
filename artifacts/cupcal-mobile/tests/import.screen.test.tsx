@@ -869,6 +869,11 @@ test.each(['android', 'ios'])(
           skippedWarningCount: 2,
           skippedPastCount: 1,
           skippedInvalidCount: 1,
+          skippedCards: [{
+            id: 'epic:warning-cup:round-2',
+            title: 'Battle Royale Duos Cash Cup',
+            reason: 'Zuordnung manuell prüfen',
+          }],
         }],
       },
       isLoading: false,
@@ -895,6 +900,11 @@ test.each(['android', 'ios'])(
       accessibilityRole: 'text',
       accessibilityLabel: 'Neu: 2. Aktualisiert: 1. Übersprungen insgesamt: 4. Unklare Zuordnung: 2. Vergangene Termine: 1. Fehlerhafte Karten: 1.',
     });
+    const skippedCards = screen.getByTestId('import-history-skipped-cards-19');
+    expect(skippedCards).toBeTruthy();
+    expect(screen.getByText('Battle Royale Duos Cash Cup')).toBeTruthy();
+    expect(screen.getByText('Kennung: epic:warning-cup:round-2')).toBeTruthy();
+    expect(screen.getByText('Prüfgrund: Zuordnung manuell prüfen')).toBeTruthy();
   },
 );
 

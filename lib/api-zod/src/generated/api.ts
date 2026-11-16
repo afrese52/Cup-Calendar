@@ -148,7 +148,12 @@ export const GetAdminImportHistoryResponse = zod.object({
   "skippedCount": zod.number().int(),
   "skippedWarningCount": zod.number().int().nullable(),
   "skippedPastCount": zod.number().int().nullable(),
-  "skippedInvalidCount": zod.number().int().nullable()
+  "skippedInvalidCount": zod.number().int().nullable(),
+  "skippedCards": zod.array(zod.object({
+  "id": zod.string().nullable(),
+  "title": zod.string().nullable(),
+  "reason": zod.string()
+}))
 }))
 })
 

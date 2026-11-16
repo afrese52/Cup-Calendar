@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { MhtImportHistoryEntrySkippedCardsItem } from './mhtImportHistoryEntrySkippedCardsItem';
 
 export interface MhtImportHistoryEntry {
   id: number;
@@ -22,4 +23,5 @@ export interface MhtImportHistoryEntry {
   skippedPastCount: number | null;
   /** @nullable */
   skippedInvalidCount: number | null;
+  skippedCards: MhtImportHistoryEntrySkippedCardsItem[];
 }

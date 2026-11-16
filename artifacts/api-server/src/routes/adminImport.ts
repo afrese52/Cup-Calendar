@@ -501,6 +501,27 @@ router.post(
         skippedPastCount: preview.skippedPastCount,
         invalidCount: preview.invalidCount,
       });
+      const skippedCards = [
+        ...preview.events
+          .filter((event) => event.warnings.length > 0)
+          .map((event) => ({
+            id: event.id,
+            title: event.title,
+            reason: event.warnings.join(" "),
+          })),
+        ...preview.schedule.events
+          .filter((event) => Date.parse(event.start_time) < Date.parse(preview.schedule.snapshotAt!))
+          .map((event) => ({
+            id: event.id,
+            title: event.title,
+            reason: "Der Termin lag bereits vor dem Snapshot-Zeitpunkt.",
+          })),
+        ...preview.issues.map((issue) => ({
+          id: issue.id,
+          title: issue.title,
+          reason: issue.errors.join(" "),
+        })),
+      ];
       await commitMhtImport(preview.importableEvents, {
         adminUserId: adminUser.id,
         adminEmail: adminUser.email,
@@ -511,6 +532,7 @@ router.post(
         skippedWarningCount: skippedCounts.skippedWarningCount,
         skippedPastCount: skippedCounts.skippedPastCount,
         skippedInvalidCount: skippedCounts.skippedInvalidCount,
+        skippedCards,
       });
 
       res.json({

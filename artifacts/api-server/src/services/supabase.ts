@@ -161,6 +161,13 @@ export interface MhtImportHistoryEntry {
   skippedWarningCount: number | null;
   skippedPastCount: number | null;
   skippedInvalidCount: number | null;
+  skippedCards: MhtImportSkippedCard[];
+}
+
+export interface MhtImportSkippedCard {
+  id: string | null;
+  title: string | null;
+  reason: string;
 }
 
 export interface MhtImportHistoryInput {
@@ -173,6 +180,7 @@ export interface MhtImportHistoryInput {
   skippedWarningCount: number;
   skippedPastCount: number;
   skippedInvalidCount: number;
+  skippedCards: MhtImportSkippedCard[];
 }
 
 export class ImportHistoryWriteError extends Error {
@@ -326,6 +334,7 @@ export async function recordMhtImportHistory(
       skipped_warning_count: input.skippedWarningCount,
       skipped_past_count: input.skippedPastCount,
       skipped_invalid_count: input.skippedInvalidCount,
+      skipped_cards: input.skippedCards,
     });
   if (error) {
     throw new ImportHistoryWriteError();
@@ -354,6 +363,7 @@ export async function commitMhtImport(
       skipped_warning_count: history.skippedWarningCount,
       skipped_past_count: history.skippedPastCount,
       skipped_invalid_count: history.skippedInvalidCount,
+      skipped_cards: history.skippedCards,
     },
   });
   if (error) {
@@ -370,7 +380,7 @@ export async function listRecentMhtImports(
 ): Promise<MhtImportHistoryEntry[]> {
   const { data, error } = await admin
     .from("admin_import_history")
-    .select("id, imported_at, admin_user_id, admin_email, source_hint, inserted_count, updated_count, skipped_count, skipped_warning_count, skipped_past_count, skipped_invalid_count")
+    .select("id, imported_at, admin_user_id, admin_email, source_hint, inserted_count, updated_count, skipped_count, skipped_warning_count, skipped_past_count, skipped_invalid_count, skipped_cards")
     .order("imported_at", { ascending: false })
     .limit(limit);
   if (error) {
@@ -389,5 +399,6 @@ export async function listRecentMhtImports(
     skippedWarningCount: row.skipped_warning_count ?? null,
     skippedPastCount: row.skipped_past_count ?? null,
     skippedInvalidCount: row.skipped_invalid_count ?? null,
+    skippedCards: row.skipped_cards ?? [],
   }));
 }

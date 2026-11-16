@@ -25,6 +25,7 @@ export * from './mhtImportEventTeamFormat';
 export * from './mhtImportEventTournamentSeries';
 export * from './mhtImportEventTournamentType';
 export * from './mhtImportHistoryEntry';
+export * from './mhtImportHistoryEntrySkippedCardsItem';
 export * from './mhtImportHistoryResponse';
 export * from './mhtImportIssue';
 export * from './mhtImportPreview';
