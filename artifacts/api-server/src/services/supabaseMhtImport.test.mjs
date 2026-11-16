@@ -1684,6 +1684,116 @@ test("schützt die Importhistorie vor nicht angemeldeten und nicht freigegebenen
   }
 });
 
+test("meldet einen Ausfall beim Laden der Importhistorie sicher und unverändert", async () => {
+  const originalEnv = new Map(
+    ["NODE_ENV", "SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "CUPCAL_IMPORT_ADMIN_EMAILS"]
+      .map((key) => [key, process.env[key]]),
+  );
+  const historyEntries = [{
+    id: 12,
+    imported_at: "2026-11-15T12:00:00.000Z",
+    admin_user_id: "history-admin-user",
+    admin_email: "admin@cupcal.test",
+    source_hint: "www.fortnite.com",
+    start_date: "2026-11-15",
+    end_date: "2026-11-15",
+    inserted_count: 2,
+    updated_count: 0,
+    skipped_count: 0,
+    skipped_cards: [],
+  }];
+  let historyUnavailable = true;
+  let historyReadCount = 0;
+  let historyMutationCount = 0;
+  const fakeSupabase = createServer((request, response) => {
+    response.setHeader("Content-Type", "application/json");
+    if (request.url === "/auth/v1/user") {
+      response.end(JSON.stringify({
+        id: "history-admin-user",
+        email: "admin@cupcal.test",
+      }));
+      return;
+    }
+
+    if (request.url?.startsWith("/rest/v1/admin_import_history")) {
+      if (request.method === "GET") {
+        historyReadCount += 1;
+        if (historyUnavailable) {
+          response.statusCode = 500;
+          response.end(JSON.stringify({
+            message: "secret-looking-key=must-not-escape; relation admin_import_history failed",
+            details: "postgres://internal-db.example/private",
+          }));
+          return;
+        }
+        response.end(JSON.stringify(historyEntries));
+        return;
+      }
+
+      historyMutationCount += 1;
+      response.statusCode = 405;
+      response.end(JSON.stringify({ message: "History mutations are not expected" }));
+      return;
+    }
+
+    response.statusCode = 404;
+    response.end(JSON.stringify({ message: "Unexpected test request" }));
+  });
+  let apiServer;
+  let tempDir;
+
+  try {
+    const fakeSupabaseUrl = await listen(fakeSupabase);
+    process.env["NODE_ENV"] = "production";
+    process.env["SUPABASE_URL"] = fakeSupabaseUrl;
+    process.env["SUPABASE_SERVICE_ROLE_KEY"] = "test-service-role-key";
+    process.env["CUPCAL_IMPORT_ADMIN_EMAILS"] = "admin@cupcal.test";
+
+    const loaded = await loadAdminImportApiApp();
+    tempDir = loaded.tempDir;
+    apiServer = loaded.app.listen(0, "127.0.0.1");
+    await new Promise((resolve, reject) => {
+      apiServer.once("error", reject);
+      apiServer.once("listening", resolve);
+    });
+
+    const historyUrl =
+      `http://127.0.0.1:${apiServer.address().port}/api/v1/admin/events/import/history`;
+    const headers = { Authorization: "Bearer authorized-admin-token" };
+    const failedResponse = await fetch(historyUrl, { headers });
+    const failedBody = await failedResponse.text();
+
+    assert.equal(failedResponse.status, 503);
+    assert.deepEqual(JSON.parse(failedBody), {
+      error: "Die Importhistorie kann gerade nicht geladen werden.",
+    });
+    assert.doesNotMatch(
+      failedBody,
+      /secret-looking-key|admin_import_history failed|postgres:\/\/|internal-db\.example|private/i,
+    );
+    assert.equal(historyMutationCount, 0, "Der fehlgeschlagene Lesezugriff löste keine Änderung aus.");
+    assert.deepEqual(historyEntries.map(({ id }) => id), [12]);
+
+    historyUnavailable = false;
+    const recoveredResponse = await fetch(historyUrl, { headers });
+    assert.equal(recoveredResponse.status, 200);
+    const recoveredBody = await recoveredResponse.json();
+    assert.equal(recoveredBody.entries.length, 1);
+    assert.equal(recoveredBody.entries[0].id, 12);
+    assert.equal(recoveredBody.entries[0].adminEmail, "admin@cupcal.test");
+    assert.equal(historyReadCount, 2);
+    assert.equal(historyMutationCount, 0);
+  } finally {
+    if (apiServer?.listening) await closeServer(apiServer);
+    if (fakeSupabase.listening) await closeServer(fakeSupabase);
+    if (tempDir) await rm(tempDir, { recursive: true, force: true });
+    for (const [key, value] of originalEnv) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+});
+
 test("gibt nur die jeweils geänderte bisherige Zeit zurück", () => {
   const imported = event();
   const existing = {
