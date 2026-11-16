@@ -345,6 +345,100 @@ test("alle Supabase-Migrationen laufen auf einer frischen Datenbank durch", asyn
     VALUES
       ('${accountId}', '{"display_name":"Erstes Konto"}'),
       ('${otherAccountId}', '{"display_name":"Zweites Konto"}');
+  `);
+
+  for (const role of ["anon", "authenticated"]) {
+    psql(`
+      SET ROLE ${role};
+      DO $test$
+      BEGIN
+        BEGIN
+          PERFORM public.commit_mht_import(
+            '[{
+              "id":"role-gated-import-event",
+              "title":"Nicht autorisierter Import",
+              "region":"EU",
+              "game_mode":"Battle Royale",
+              "game_ruleset":"Battle Royale",
+              "team_format":"Solo",
+              "tournament_type":"Cash Cup",
+              "category":"Turnier",
+              "start_time":"2026-12-10T18:00:00Z",
+              "end_time":"2026-12-10T20:00:00Z",
+              "updated_at":"2026-12-10T18:00:00Z"
+            }]'::jsonb,
+            '{
+              "admin_user_id":"${accountId}",
+              "admin_email":"admin@cupcal.test",
+              "source_hint":"role permission test",
+              "start_date":"2026-12-10",
+              "end_date":"2026-12-10",
+              "skipped_count":0,
+              "skipped_warning_count":0,
+              "skipped_past_count":0,
+              "skipped_invalid_count":0,
+              "skipped_cards":[]
+            }'::jsonb
+          );
+          RAISE EXCEPTION 'commit_mht_import must reject role ${role}';
+        EXCEPTION
+          WHEN insufficient_privilege THEN NULL;
+        END;
+      END
+      $test$;
+      RESET ROLE;
+    `);
+  }
+
+  psql(`
+    SET ROLE service_role;
+    SELECT public.commit_mht_import(
+      '[{
+        "id":"role-gated-import-event",
+        "title":"Autorisierter Import",
+        "region":"EU",
+        "game_mode":"Battle Royale",
+        "game_ruleset":"Battle Royale",
+        "team_format":"Solo",
+        "tournament_type":"Cash Cup",
+        "category":"Turnier",
+        "start_time":"2026-12-10T18:00:00Z",
+        "end_time":"2026-12-10T20:00:00Z",
+        "updated_at":"2026-12-10T18:00:00Z"
+      }]'::jsonb,
+      '{
+        "admin_user_id":"${accountId}",
+        "admin_email":"admin@cupcal.test",
+        "source_hint":"role permission test",
+        "start_date":"2026-12-10",
+        "end_date":"2026-12-10",
+        "skipped_count":0,
+        "skipped_warning_count":0,
+        "skipped_past_count":0,
+        "skipped_invalid_count":0,
+        "skipped_cards":[]
+      }'::jsonb
+    );
+    RESET ROLE;
+  `);
+
+  assert.equal(
+    psql(`
+      SELECT
+        (SELECT title FROM public.fortnite_events
+         WHERE id = 'role-gated-import-event')
+        || ':' ||
+        (SELECT count(*)::text FROM public.admin_import_history
+         WHERE admin_user_id = '${accountId}'
+           AND admin_email = 'admin@cupcal.test'
+           AND source_hint = 'role permission test'
+           AND inserted_count = 1);
+    `),
+    "Autorisierter Import:1",
+    "service_role muss den Import ausführen und dessen Historie schreiben können.",
+  );
+
+  psql(`
     SET ROLE authenticated;
     SET request.jwt.claim.sub = '${accountId}';
     SELECT public.sync_user_event_bookmark(
