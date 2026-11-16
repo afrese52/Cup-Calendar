@@ -36,6 +36,31 @@ function makeMht(html, { region = "EU", date = "Mon, 09 Nov 2026 23:37:49 GMT" }
   );
 }
 
+// Anonymisierte Beispiele offizieller Fortnite-Eventkarten:
+// - absolute WWW-URL mit /competitive/events/{slug}?round={round}
+// - Apex-Domain mit optionalem Schrägstrich und zusätzlichen Query-Parametern
+// - relativer Kartenlink mit round an einer anderen Query-Position
+const OFFICIAL_EVENT_LINK_EXAMPLES = [
+  {
+    href: "https://www.fortnite.com/competitive/events/AnonCupAlpha?round=AnonRoundAlpha",
+    slug: "AnonCupAlpha",
+    round: "AnonRoundAlpha",
+    title: "Battle Royale Solo Cash Cup Alpha",
+  },
+  {
+    href: "https://fortnite.com/competitive/events/AnonCupBeta/?round=AnonRoundBeta&region=EU",
+    slug: "AnonCupBeta",
+    round: "AnonRoundBeta",
+    title: "Zero Build Duos Victory Cup Beta",
+  },
+  {
+    href: "/competitive/events/AnonCupGamma?region=EU&round=AnonRoundGamma",
+    slug: "AnonCupGamma",
+    round: "AnonRoundGamma",
+    title: "Reload Trios Cash Cup Gamma",
+  },
+];
+
 function listen(server) {
   return new Promise((resolve, reject) => {
     server.once("error", reject);
@@ -214,7 +239,7 @@ test("liefert Snapshot-Alter und Warnstatus über den authentifizierten Admin-Vo
     }, {
       id: null,
       title: "Battle Royale Trios Cash Cup",
-      errors: ["Event- oder Rundenkennung fehlt im Link."],
+      errors: ["Das offizielle Eventlink-Format wird nicht erkannt; Link vor dem Import prüfen."],
     }, {
       id: null,
       title: "Battle Royale Squads Cash Cup",
@@ -305,6 +330,74 @@ test("liest Eventkarten und wandelt die Berliner Ortszeit nach UTC um", () => {
   assert.equal(result.events[0].end_time, "2026-11-10T21:00:00.000Z");
   assert.equal(result.events[0].team_format, "Solo");
   assert.equal(result.events[0].tournament_type, "Cash Cup");
+});
+
+test("erkennt dokumentierte, anonymisierte offizielle Eventlink-Muster", () => {
+  const cards = OFFICIAL_EVENT_LINK_EXAMPLES.map(({ href, title }, index) => `
+    <a id="schedule-event-link-format-example-${index}"
+      href="${href}"
+      aria-label="19:00–20:00 Uhr - ${title}">
+      <span>${title}</span>
+    </a>`).join("");
+  const result = parseMhtSchedule(makeMht(`
+    <html><body><h2>10. November 2026</h2>${cards}</body></html>
+  `));
+
+  assert.equal(result.cardCount, OFFICIAL_EVENT_LINK_EXAMPLES.length);
+  assert.equal(result.validCount, OFFICIAL_EVENT_LINK_EXAMPLES.length);
+  assert.equal(result.invalidCount, 0);
+  assert.deepEqual(result.events.map(({ id, title }) => ({ id, title })),
+    OFFICIAL_EVENT_LINK_EXAMPLES.map(({ slug, round, title }) => ({
+      id: `epic:${slug}:${round}`,
+      title,
+    })),
+  );
+  assert.deepEqual(result.issues, []);
+});
+
+test("zeigt nicht unterstützte offizielle Eventlink-Varianten mit Prüfhinweis", () => {
+  const examples = [
+    {
+      href: "https://www.fortnite.com/competition/events/AnonLegacyCup?round=AnonLegacyRound",
+      title: "Battle Royale Solo Cash Cup mit abweichendem Pfad",
+    },
+    {
+      href: "https://www.fortnite.com/competitive/events/AnonQueryCup?eventRound=AnonQueryRound",
+      title: "Battle Royale Duos Cash Cup mit abweichender Rundenangabe",
+    },
+    {
+      href: "http://www.fortnite.com/competitive/events/AnonHttpCup?round=AnonHttpRound",
+      title: "Battle Royale Trios Cash Cup mit unsicherem Protokoll",
+    },
+    {
+      href: "https://www.fortnite.com/competitive/events/Anon%2FNestedCup?round=AnonNestedRound",
+      title: "Battle Royale Squads Cash Cup mit mehrdeutigem Pfad",
+    },
+  ];
+  const cards = examples.map(({ href, title }, index) => `
+    <a id="schedule-event-link-unsupported-${index}"
+      href="${href}"
+      aria-label="19:00–20:00 Uhr - ${title}">
+      <span>${title}</span>
+    </a>`).join("");
+  const result = parseMhtSchedule(makeMht(`
+    <html><body><h2>10. November 2026</h2>${cards}</body></html>
+  `));
+
+  assert.equal(result.cardCount, examples.length);
+  assert.equal(result.validCount, 0);
+  assert.equal(result.invalidCount, examples.length);
+  assert.deepEqual(result.events, []);
+  assert.deepEqual(
+    result.issues.map(({ id, title, errors }) => ({ id, title, errors })),
+    examples.map(({ title }) => ({
+      id: null,
+      title,
+      errors: [
+        "Das offizielle Eventlink-Format wird nicht erkannt; Link vor dem Import prüfen.",
+      ],
+    })),
+  );
 });
 
 test("lehnt mehrfache oder leere Rundenkennungen mit Kennung, Titel und Grund ab", () => {

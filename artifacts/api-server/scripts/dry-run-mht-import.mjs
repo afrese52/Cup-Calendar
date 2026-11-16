@@ -456,15 +456,39 @@ function extractEventAnchors(html, sourceUrl, timeZone, region) {
         return null;
       }
     })();
-    const eventSlug = eventUrl?.pathname.match(/\/events\/([^/]+)/)?.[1] ?? null;
-    const isOfficialFortniteEventUrl = eventUrl?.protocol === "https:"
+    const isOfficialFortniteDomain = eventUrl
       && (eventUrl.hostname === "fortnite.com" || eventUrl.hostname.endsWith(".fortnite.com"));
-    const officialEventSlug = isOfficialFortniteEventUrl ? eventSlug ?? "" : "";
+    const isOfficialFortniteEventUrl = eventUrl?.protocol === "https:"
+      && isOfficialFortniteDomain;
+    const eventPathMatch = eventUrl?.pathname.match(/^\/competitive\/events\/([^/]+)\/?$/);
+    let eventSlug = null;
+    if (eventPathMatch) {
+      try {
+        const decodedSlug = decodeURIComponent(eventPathMatch[1]);
+        if (decodedSlug && !decodedSlug.includes("/")) eventSlug = decodedSlug;
+      } catch {
+        eventSlug = null;
+      }
+    }
     const roundIds = eventUrl?.searchParams.getAll("round") ?? [];
     const roundId = roundIds.length === 1 ? roundIds[0] : null;
     const hasMultipleRoundIds = roundIds.length > 1;
     const hasEmptyRoundId = roundIds.length === 1 && roundId.trim().length === 0;
-    const id = eventSlug && roundId && !hasEmptyRoundId ? `epic:${eventSlug}:${roundId}` : null;
+    const hasRecognizedOfficialEventFormat = isOfficialFortniteEventUrl
+      && Boolean(eventSlug)
+      && roundIds.length === 1
+      && !hasEmptyRoundId;
+    const officialFormatNeedsReview = isOfficialFortniteDomain
+      && !hasMultipleRoundIds
+      && !hasEmptyRoundId
+      && !hasRecognizedOfficialEventFormat;
+    const officialEventSlug = hasRecognizedOfficialEventFormat ? eventSlug : "";
+    const id = eventSlug
+      && roundId
+      && !hasEmptyRoundId
+      && (!isOfficialFortniteDomain || hasRecognizedOfficialEventFormat)
+      ? `epic:${eventSlug}:${roundId}`
+      : null;
     const errors = [];
     const timeRange = (attributes["aria-label"] ?? "").match(
       /(\d{1,2}:\d{2})\s*[–—-]\s*(\d{1,2}:\d{2})\s*(?:Uhr)?/i,
@@ -477,10 +501,14 @@ function extractEventAnchors(html, sourceUrl, timeZone, region) {
       errors.push("Der Link enthält mehrere Rundenkennungen und ist dadurch mehrdeutig.");
     } else if (hasEmptyRoundId) {
       errors.push("Die Rundenkennung im Link ist leer.");
+    } else if (officialFormatNeedsReview) {
+      errors.push(
+        "Das offizielle Eventlink-Format wird nicht erkannt; Link vor dem Import prüfen.",
+      );
     } else if (!id) {
       errors.push("Event- oder Rundenkennung fehlt im Link.");
     }
-    if (!isOfficialFortniteEventUrl) {
+    if (!isOfficialFortniteEventUrl && !officialFormatNeedsReview) {
       errors.push("Der Eventlink verweist nicht auf eine offizielle Fortnite-Domain.");
     }
 
