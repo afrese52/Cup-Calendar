@@ -276,6 +276,39 @@ test('zeigt einen Anmeldefehler sichtbar an', async () => {
   await waitFor(() => expect(sendAccessibilityFocus).toHaveBeenCalledTimes(1));
 });
 
+test.each([
+  ['Anmeldung', 'sign-in'],
+  ['Registrierung', 'sign-up'],
+] as const)('zeigt bei unbekanntem Fehler der %s keine Supabase-Details und bewahrt Eingaben', async (_name, mode) => {
+  const technicalMessage = 'private@example.invalid: unexpected_auth_error at https://auth.example.invalid (HTTP 400)';
+  const unknownError = Object.assign(new Error(technicalMessage), {
+    code: 'unexpected_auth_error',
+    status: 400,
+  });
+  if (mode === 'sign-in') {
+    auth.signInWithPassword.mockResolvedValue({ error: unknownError });
+  } else {
+    auth.signUp.mockResolvedValue({ data: { session: null }, error: unknownError });
+  }
+
+  const view = await openSettings();
+  if (mode === 'sign-up') await fireEvent.press(view.getByTestId('auth-mode-toggle'));
+  await enterCredentials(view);
+
+  await fireEvent.press(view.getByTestId('auth-submit-button'));
+
+  const errorMessage = await view.findByTestId('auth-error-message');
+  expect(errorMessage.props.children).toBe(
+    mode === 'sign-up'
+      ? 'Die Registrierung ist fehlgeschlagen. Bitte versuche es erneut.'
+      : 'Die Anmeldung ist fehlgeschlagen. Bitte versuche es erneut.',
+  );
+  expect(errorMessage.props.children).not.toContain('unexpected_auth_error');
+  expect(errorMessage.props.children).not.toContain('HTTP 400');
+  expect(view.getByTestId('auth-email-input').props.value).toBe('test@example.invalid');
+  expect(view.getByTestId('auth-password-input').props.value).toBe('test-password');
+});
+
 test('zeigt Ladezustand und sperrt die Anmeldeschaltfläche während der Anfrage', async () => {
   let finishSignIn!: (result: { error: null }) => void;
   auth.signInWithPassword.mockImplementation(

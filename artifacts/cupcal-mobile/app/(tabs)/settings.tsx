@@ -348,7 +348,15 @@ export default function SettingsScreen() {
         reportAuthError(result.error);
       }
     } catch (error) {
-      reportAuthError(friendlyAuthError(error, 'Die Registrierung oder Anmeldung ist fehlgeschlagen. Bitte versuche es erneut.'));
+      reportAuthError(friendlyAuthError(
+        error,
+        submittedMode === 'sign-up'
+          ? 'Die Registrierung ist fehlgeschlagen. Bitte versuche es erneut.'
+          : submittedMode === 'forgot-password'
+            ? 'Die E-Mail konnte nicht angefordert werden. Bitte versuche es erneut.'
+            : 'Die Anmeldung ist fehlgeschlagen. Bitte versuche es erneut.',
+        { includeUnknownDetails: submittedMode === 'forgot-password' },
+      ));
     } finally {
       isSubmittingAuthRef.current = false;
       setSubmittingAction(null);

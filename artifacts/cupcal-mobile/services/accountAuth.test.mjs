@@ -402,13 +402,20 @@ test('erklärt vorübergehende Supabase-Serverfehler ohne Netzwerkfehler zu meld
 });
 
 test('zeigt unbekannte Supabase-Fehler bereinigt mit Code und HTTP-Status', () => {
+  const error = Object.assign(new Error('Fehler für person@example.com bei https://example.com'), {
+    code: 'unexpected_auth_error',
+    status: 400,
+  });
+
   assert.equal(
-    friendlyAuthError(Object.assign(new Error('Fehler für person@example.com bei https://example.com'), {
-      code: 'unexpected_auth_error',
-      status: 400,
-    })),
+    friendlyAuthError(error),
     'Supabase hat die Anfrage abgelehnt: Fehler für [E-Mail] bei [URL] · Code: unexpected_auth_error · HTTP 400',
   );
+  const safeMessage = friendlyAuthError(error, 'Die Anmeldung ist fehlgeschlagen. Bitte versuche es erneut.', {
+    includeUnknownDetails: false,
+  });
+  assert.equal(safeMessage, 'Die Anmeldung ist fehlgeschlagen. Bitte versuche es erneut.');
+  assert.doesNotMatch(safeMessage, /person@example\.com|example\.com|unexpected_auth_error|HTTP 400/);
 });
 
 test('erklärt eine abgelaufene Sitzung und fordert zur erneuten Anmeldung auf', () => {

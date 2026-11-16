@@ -95,6 +95,7 @@ function formatRetryWait(seconds: number): string {
 export function friendlyAuthError(
   error: unknown,
   fallback = 'Das hat nicht geklappt. Bitte versuche es erneut.',
+  options: { includeUnknownDetails?: boolean } = {},
 ): string {
   const errorDetails =
     typeof error === 'object' && error !== null
@@ -230,6 +231,8 @@ export function friendlyAuthError(
   ) {
     return 'Supabase ist vorübergehend nicht verfügbar. Warte bitte kurz und versuche es dann erneut.';
   }
+
+  if (options.includeUnknownDetails === false) return fallback;
 
   if (rawMessage || code || typeof errorDetails.status === 'number') {
     const safeMessage = rawMessage
@@ -479,6 +482,7 @@ export async function submitAccountAuth(
           : mode === 'sign-up'
             ? 'Die Registrierung ist fehlgeschlagen. Bitte versuche es erneut.'
             : 'Die Anmeldung ist fehlgeschlagen. Bitte versuche es erneut.',
+        { includeUnknownDetails: mode === 'forgot-password' },
       ),
     };
   }
