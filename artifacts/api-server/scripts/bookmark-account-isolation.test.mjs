@@ -150,7 +150,7 @@ test("anonyme RPC-Aufrufe können Favoriten weder anlegen noch ändern", async (
   });
 });
 
-test("anonyme Tabellenzugriffe können Favoriten weder lesen noch einfügen oder ändern", async () => {
+test("anonyme Tabellenzugriffe können Favoriten weder lesen, schreiben noch löschen", async () => {
   await withTestAccounts(async (account) => {
     const anonymousClient = createClient(supabaseUrl, anonKey, {
       auth: { persistSession: false, autoRefreshToken: false },
@@ -197,6 +197,17 @@ test("anonyme Tabellenzugriffe können Favoriten weder lesen noch einfügen oder
       "Ein anonymer Client darf keine Favoriten ändern.",
     );
 
+    const deletion = await anonymousClient
+      .from("user_event_bookmarks")
+      .delete()
+      .eq("user_id", account.id)
+      .eq("event_id", existingEventId)
+      .select("event_id");
+    assert.ok(
+      deletion.error || deletion.data?.length === 0,
+      "Ein anonymer Client darf keine Favoriten löschen.",
+    );
+
     const savedRows = await admin
       .from("user_event_bookmarks")
       .select("user_id, event_id, is_favorite, revision")
@@ -211,7 +222,7 @@ test("anonyme Tabellenzugriffe können Favoriten weder lesen noch einfügen oder
         is_favorite: true,
         revision: 0,
       }],
-      "Anonyme Tabellenzugriffe dürfen keine Favoriten lesen oder verändern.",
+      "Anonyme Tabellenzugriffe dürfen keine Favoriten lesen, ändern oder löschen.",
     );
   });
 });
