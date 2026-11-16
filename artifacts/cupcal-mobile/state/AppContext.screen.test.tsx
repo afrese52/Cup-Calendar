@@ -50,14 +50,10 @@ jest.mock('@/services/localBookmarkStore', () => ({
 
 jest.mock('@/services/supabase', () => {
   let authListener: AuthListener | undefined;
-  const channel = {
-    on: jest.fn(function (this: typeof channel, _event: string, _filter: unknown, listener: () => void) {
-      bookmarkRealtimeListener = listener;
-      return this;
-    }),
-    subscribe: jest.fn(function (this: typeof channel) { return this; }),
-  };
-  let bookmarkRealtimeListener: (() => void) | undefined;
+  const channels: Array<{
+    listener?: () => void;
+    statusListener?: (status: string) => void;
+  }> = [];
   return {
     supabase: {
       auth: {
@@ -67,12 +63,33 @@ jest.mock('@/services/supabase', () => {
           return { data: { subscription: { unsubscribe: jest.fn() } } };
         }),
       },
-      channel: jest.fn(() => channel),
+      channel: jest.fn(() => {
+        const entry: {
+          listener?: () => void;
+          statusListener?: (status: string) => void;
+        } = {};
+        channels.push(entry);
+        const channel = {
+          on: jest.fn(function (this: typeof channel, _event: string, _filter: unknown, listener: () => void) {
+            entry.listener = listener;
+            return this;
+          }),
+          subscribe: jest.fn(function (this: typeof channel, listener?: (status: string) => void) {
+            entry.statusListener = listener;
+            return this;
+          }),
+        };
+        return channel;
+      }),
       removeChannel: jest.fn(async () => undefined),
     },
     fetchRemoteBookmarks: jest.fn(async () => []),
     saveRemoteBookmark: jest.fn(async () => undefined),
-    __emitBookmarkRealtime: () => bookmarkRealtimeListener?.(),
+    __emitBookmarkRealtime: () => channels.at(-1)?.listener?.(),
+    __emitRealtimeStatus: (status: string, channelIndex = channels.length - 1) =>
+      channels[channelIndex]?.statusListener?.(status),
+    __channelCount: () => channels.length,
+    __resetChannels: () => { channels.length = 0; },
     __emitAuthStateChange: (event: string, session: { user: { id: string } } | null) =>
       authListener?.(event, session),
   };
@@ -114,6 +131,9 @@ const bookmarkStore = jest.requireMock('@/services/localBookmarkStore') as {
 const mockedSupabase = jest.requireMock('@/services/supabase') as {
   __emitAuthStateChange: (event: string, session: { user: { id: string } } | null) => void;
   __emitBookmarkRealtime: () => void;
+  __emitRealtimeStatus: (status: string, channelIndex?: number) => void;
+  __channelCount: () => number;
+  __resetChannels: () => void;
   supabase: {
     auth: {
       getSession: jest.Mock<(...args: any[]) => any>;
@@ -170,6 +190,8 @@ afterEach(() => {
   AppState.currentState = 'unknown';
   jest.restoreAllMocks();
   jest.clearAllMocks();
+  jest.useRealTimers();
+  mockedSupabase.__resetChannels();
 });
 
 test('zeigt beim Kaltstart erst nach der Sitzungsprüfung die Favoriten des angemeldeten Kontos', async () => {
@@ -261,6 +283,41 @@ test('sagt extern synchronisierte Speichern- und Entfernen-Änderungen genau ein
   expect(announce).toHaveBeenLastCalledWith(
     'Merkliste aktualisiert: FNCS Challenger Cup aus der Merkliste entfernt.',
   );
+});
+
+test('nimmt den Realtime-Kanal nach einem Verbindungsausfall wieder auf und gleicht Favoriten ab', async () => {
+  AppState.currentState = 'active';
+  let remoteFavorite = false;
+  mockedSupabase.fetchRemoteBookmarks.mockImplementation(async () => remoteFavorite ? [{
+    event_id: 'turnier-neu',
+    is_favorite: true,
+    updated_at: '2026-01-01T00:00:00.000Z',
+    revision: 1,
+  }] : []);
+  const view = await renderProvider();
+  await emitUser('konto-a');
+  await waitFor(() => expect(mockedSupabase.fetchRemoteBookmarks).toHaveBeenCalledWith('konto-a'));
+  expect(mockedSupabase.__channelCount()).toBe(1);
+
+  jest.useFakeTimers();
+  await act(async () => {
+    mockedSupabase.__emitRealtimeStatus('CHANNEL_ERROR');
+    await jest.advanceTimersByTimeAsync(1_000);
+  });
+
+  expect(mockedSupabase.__channelCount()).toBe(2);
+  remoteFavorite = true;
+  await act(async () => {
+    mockedSupabase.__emitRealtimeStatus('SUBSCRIBED');
+  });
+  await waitFor(() => expect(view.getByTestId('bookmark-ids').props.children).toBe('turnier-neu'));
+
+  remoteFavorite = false;
+  await act(async () => {
+    mockedSupabase.__emitBookmarkRealtime();
+  });
+  await waitFor(() => expect(view.getByTestId('bookmark-ids').props.children).toBe(''));
+  expect(mockedSupabase.saveRemoteBookmark).not.toHaveBeenCalled();
 });
 
 test('sagt lokale Speichern-Aktionen nicht zusätzlich an', async () => {

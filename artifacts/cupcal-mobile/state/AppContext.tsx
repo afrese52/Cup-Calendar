@@ -37,6 +37,8 @@ interface AppContextValue {
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
+const BOOKMARK_CHANNEL_RECONNECT_BASE_MS = 1_000;
+const BOOKMARK_CHANNEL_RECONNECT_MAX_MS = 30_000;
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [events, setEvents] = useState<TournamentEvent[]>([]);
@@ -263,25 +265,61 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (state === 'active') retrySync();
     });
     const retryTimer = setInterval(retrySync, 30_000);
-    const realtimeChannel = client
-      .channel(`cupcal-bookmarks-${userId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'user_event_bookmarks',
-          filter: `user_id=eq.${userId}`,
-        },
-        retrySync,
-      )
-      .subscribe();
+    let activeChannel: ReturnType<typeof client.channel> | null = null;
+    let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
+    let reconnectAttempt = 0;
+
+    const openRealtimeChannel = () => {
+      if (!isMounted) return;
+      const channel = client
+        .channel(`cupcal-bookmarks-${userId}`)
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'user_event_bookmarks',
+            filter: `user_id=eq.${userId}`,
+          },
+          retrySync,
+        );
+      activeChannel = channel;
+      channel.subscribe((status) => {
+        if (!isMounted || activeChannel !== channel) return;
+        if (status === 'SUBSCRIBED') {
+          reconnectAttempt = 0;
+          if (reconnectTimer) clearTimeout(reconnectTimer);
+          reconnectTimer = undefined;
+          retrySync();
+          return;
+        }
+        if (status !== 'CHANNEL_ERROR' && status !== 'TIMED_OUT' && status !== 'CLOSED') return;
+        if (reconnectTimer) return;
+
+        const delay = Math.min(
+          BOOKMARK_CHANNEL_RECONNECT_BASE_MS * 2 ** reconnectAttempt,
+          BOOKMARK_CHANNEL_RECONNECT_MAX_MS,
+        );
+        reconnectAttempt += 1;
+        reconnectTimer = setTimeout(() => {
+          reconnectTimer = undefined;
+          if (!isMounted || activeChannel !== channel) return;
+          activeChannel = null;
+          void client.removeChannel(channel).finally(() => {
+            if (isMounted && activeChannel === null) openRealtimeChannel();
+          });
+        }, delay);
+      });
+    };
+
+    openRealtimeChannel();
 
     return () => {
       isMounted = false;
       appStateSubscription.remove();
       clearInterval(retryTimer);
-      void client.removeChannel(realtimeChannel);
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      if (activeChannel) void client.removeChannel(activeChannel);
     };
   }, [authReady, userId, syncBookmarks]);
 
