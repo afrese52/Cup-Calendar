@@ -96,6 +96,33 @@ function createPostgresAtomicImportAdmin(pool) {
   };
 }
 
+function createConcurrentPostgresAtomicImportAdmin(pool, expectedCalls) {
+  let arrivals = 0;
+  let releaseBarrier;
+  const barrier = new Promise((resolve) => {
+    releaseBarrier = resolve;
+  });
+
+  return {
+    async rpc(name, args) {
+      assert.equal(name, "commit_mht_import");
+      arrivals += 1;
+      if (arrivals === expectedCalls) releaseBarrier();
+      await barrier;
+
+      try {
+        await pool.query(
+          "SELECT public.commit_mht_import($1::jsonb, $2::jsonb)",
+          [JSON.stringify(args.p_events), JSON.stringify(args.p_history)],
+        );
+        return { error: null };
+      } catch (error) {
+        return { error };
+      }
+    },
+  };
+}
+
 test("wiederholter Import aktualisiert denselben Termin und erhält Admin-Felder und Snapshot-Einträge", async () => {
   const tempDir = await mkdtemp(path.join(os.tmpdir(), "cupcal-mht-import-db-test-"));
   const dataDir = path.join(tempDir, "data");
@@ -174,9 +201,10 @@ test("wiederholter Import aktualisiert denselben Termin und erhält Admin-Felder
     }
 
     const adminUserId = "2d81b842-8d9c-4de3-8411-6787a91e68e9";
+    const concurrentAdminUserId = "48b58d5e-5741-474b-bb82-d35f0847200b";
     await pool.query(
-      "INSERT INTO auth.users (id, raw_user_meta_data) VALUES ($1, '{}'::jsonb)",
-      [adminUserId],
+      "INSERT INTO auth.users (id, raw_user_meta_data) VALUES ($1, '{}'::jsonb), ($2, '{}'::jsonb)",
+      [adminUserId, concurrentAdminUserId],
     );
 
     const importedEvent = {
@@ -314,11 +342,138 @@ test("wiederholter Import aktualisiert denselben Termin und erhält Admin-Felder
       skipped_cards: [],
     }], "Der Datenbankaufruf muss Termin und Historie gemeinsam schreiben.");
 
+    const concurrentBaseEvent = {
+      ...importedEvent,
+      id: "epic:cup:concurrent-import",
+    };
+    await pool.query(
+      `INSERT INTO public.fortnite_events (
+        id, title, region, game_mode, game_ruleset, tournament_series,
+        team_format, tournament_type, category, start_time, end_time,
+        is_featured, custom_admin_note
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, TRUE, $12)`,
+      [
+        concurrentBaseEvent.id,
+        concurrentBaseEvent.title,
+        concurrentBaseEvent.region,
+        concurrentBaseEvent.game_mode,
+        concurrentBaseEvent.game_ruleset,
+        concurrentBaseEvent.tournament_series,
+        concurrentBaseEvent.team_format,
+        concurrentBaseEvent.tournament_type,
+        concurrentBaseEvent.category,
+        concurrentBaseEvent.start_time,
+        concurrentBaseEvent.end_time,
+        "Admin-Notiz vor den parallelen Importen",
+      ],
+    );
+
+    const concurrentEvents = [
+      {
+        ...concurrentBaseEvent,
+        title: "Paralleler Import A",
+        start_time: "2026-11-13T18:00:00.000Z",
+        end_time: "2026-11-13T20:00:00.000Z",
+      },
+      {
+        ...concurrentBaseEvent,
+        title: "Paralleler Import B",
+        start_time: "2026-11-14T18:00:00.000Z",
+        end_time: "2026-11-14T20:00:00.000Z",
+      },
+    ];
+    const concurrentHistories = [
+      {
+        ...history,
+        adminEmail: "admin-a@cupcal.test",
+        sourceHint: "parallel-a",
+        startDate: "2026-11-13",
+        endDate: "2026-11-13",
+      },
+      {
+        ...history,
+        adminUserId: concurrentAdminUserId,
+        adminEmail: "admin-b@cupcal.test",
+        sourceHint: "parallel-b",
+        startDate: "2026-11-14",
+        endDate: "2026-11-14",
+      },
+    ];
+    const concurrentAdmin = createConcurrentPostgresAtomicImportAdmin(pool, 2);
+    await Promise.all(
+      concurrentEvents.map((event, index) =>
+        commitMhtImport([event], concurrentHistories[index], concurrentAdmin),
+      ),
+    );
+
+    const concurrentFinalRows = await pool.query(
+      `SELECT id, title, start_time, end_time, is_featured, custom_admin_note
+       FROM public.fortnite_events
+       WHERE id = $1`,
+      [concurrentBaseEvent.id],
+    );
+    assert.equal(
+      concurrentFinalRows.rows.length,
+      1,
+      "Zwei parallele Importe derselben stabilen Kennung dürfen nur eine Terminzeile hinterlassen.",
+    );
+    const concurrentFinalEvent = concurrentFinalRows.rows[0];
+    const winningImport = concurrentEvents.find(
+      (event) => event.title === concurrentFinalEvent.title,
+    );
+    assert.ok(winningImport, "Der Termin muss vollständig einem der beiden Importe entsprechen.");
+    assert.deepEqual(
+      {
+        id: concurrentFinalEvent.id,
+        title: concurrentFinalEvent.title,
+        start_time: concurrentFinalEvent.start_time,
+        end_time: concurrentFinalEvent.end_time,
+        is_featured: concurrentFinalEvent.is_featured,
+        custom_admin_note: concurrentFinalEvent.custom_admin_note,
+      },
+      {
+        id: winningImport.id,
+        title: winningImport.title,
+        start_time: new Date(winningImport.start_time),
+        end_time: new Date(winningImport.end_time),
+        is_featured: true,
+        custom_admin_note: "Admin-Notiz vor den parallelen Importen",
+      },
+      "Terminwerte müssen aus demselben erfolgreichen Import stammen und Admin-Felder erhalten bleiben.",
+    );
+
+    const concurrentHistoryRows = await pool.query(
+      `SELECT admin_user_id, admin_email, source_hint, start_date::text AS start_date,
+              end_date::text AS end_date
+       FROM public.admin_import_history
+       WHERE source_hint IN ('parallel-a', 'parallel-b')
+       ORDER BY source_hint`,
+    );
+    assert.deepEqual(concurrentHistoryRows.rows, [
+      {
+        admin_user_id: adminUserId,
+        admin_email: "admin-a@cupcal.test",
+        source_hint: "parallel-a",
+        start_date: "2026-11-13",
+        end_date: "2026-11-13",
+      },
+      {
+        admin_user_id: concurrentAdminUserId,
+        admin_email: "admin-b@cupcal.test",
+        source_hint: "parallel-b",
+        start_date: "2026-11-14",
+        end_date: "2026-11-14",
+      },
+    ], "Beide erfolgreichen Importhistorien müssen die zugehörigen Admin- und Importfelder enthalten.");
+
     const failedNewEvent = {
       ...atomicEvent,
       id: "epic:cup:must-roll-back",
       title: "Darf nicht gespeichert werden",
     };
+    const historyCountBeforeFailure = await pool.query(
+      "SELECT count(*)::integer AS count FROM public.admin_import_history",
+    );
     await assert.rejects(
       commitMhtImport([
         { ...atomicEvent, title: "Änderung muss zurückgerollt werden" },
@@ -344,7 +499,11 @@ test("wiederholter Import aktualisiert denselben Termin und erhält Admin-Felder
     const historyCount = await pool.query(
       "SELECT count(*)::integer AS count FROM public.admin_import_history",
     );
-    assert.equal(historyCount.rows[0].count, 1, "Der fehlgeschlagene Import darf keinen Historieneintrag hinterlassen.");
+    assert.equal(
+      historyCount.rows[0].count,
+      historyCountBeforeFailure.rows[0].count,
+      "Der fehlgeschlagene Import darf keinen Historieneintrag hinterlassen.",
+    );
   } finally {
     await pool?.end();
     await setupClient?.end();
