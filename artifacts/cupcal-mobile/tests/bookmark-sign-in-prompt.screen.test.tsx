@@ -2,7 +2,7 @@ import React from 'react';
 import { afterEach, beforeEach, expect, jest, test } from '@jest/globals';
 import { act, fireEvent, render } from '@testing-library/react-native';
 import { AccessibilityInfo, Alert, Platform } from 'react-native';
-import { sampleEvents } from '../data/events';
+import { matchesEventFilter, sampleEvents, type TournamentEvent } from '../data/events';
 import { EventCard } from '../components/EventCard';
 import CalendarScreen from '../app/(tabs)/index';
 import EventDetailsScreen from '../app/event/[id]';
@@ -63,6 +63,13 @@ const mockRouterPush = (jest.requireMock('expo-router') as {
 const event = sampleEvents[0]!;
 const originalPlatformDescriptor = Object.getOwnPropertyDescriptor(Platform, 'OS');
 const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+
+function makeLegacyEvent(gameMode: TournamentEvent['gameMode']): TournamentEvent {
+  const legacyEvent: TournamentEvent = { ...event, gameMode };
+  delete legacyEvent.gameRuleset;
+  delete legacyEvent.tournamentSeries;
+  return legacyEvent;
+}
 
 function setPlatformOS(platform: 'android' | 'ios') {
   Object.defineProperty(Platform, 'OS', {
@@ -270,6 +277,67 @@ test.each([
     expect(view.getByTestId('calendar-filter').props.accessibilityLabel).toBe('Filter, Alle Termine');
   },
 );
+
+test('zeigt ältere Reload- und Zero-Build-Termine mit den passenden Filtern', async () => {
+  const today = new Date();
+  const makeTodayEvent = (
+    base: TournamentEvent,
+    id: string,
+    title: string,
+  ): TournamentEvent => ({
+    ...base,
+    id,
+    title,
+    category: 'Liga',
+    startTime: new Date(today.getFullYear(), today.getMonth(), today.getDate(), 12).toISOString(),
+    endTime: new Date(today.getFullYear(), today.getMonth(), today.getDate(), 14).toISOString(),
+  });
+  const legacyReloadEvent = makeTodayEvent(
+    makeLegacyEvent('Reload'),
+    'legacy-reload',
+    'Ältere Reload-Liga',
+  );
+  const legacyZeroBuildEvent = makeTodayEvent(
+    makeLegacyEvent('Zero Build'),
+    'legacy-zero-build',
+    'Ältere Zero-Build-Liga',
+  );
+  const explicitBattleRoyaleRuleset = {
+    ...makeTodayEvent(
+      makeLegacyEvent('Zero Build'),
+      'explicit-battle-royale',
+      'Explizites Battle-Royale-Regelwerk',
+    ),
+    gameRuleset: 'Battle Royale' as const,
+  };
+
+  expect(matchesEventFilter(legacyReloadEvent, 'Alle Termine', 'Reload')).toBe(true);
+  expect(matchesEventFilter(legacyReloadEvent, 'Alle Termine', 'Zero Build')).toBe(false);
+  expect(matchesEventFilter(legacyZeroBuildEvent, 'Alle Termine', 'Zero Build')).toBe(true);
+  expect(matchesEventFilter(explicitBattleRoyaleRuleset, 'Alle Termine', 'Zero Build')).toBe(false);
+
+  mockContext.current = {
+    authReady: true,
+    isAuthenticated: false,
+    events: [legacyReloadEvent, legacyZeroBuildEvent, explicitBattleRoyaleRuleset],
+    bookmarkedIds: [],
+    toggleBookmark: mockToggleBookmark,
+  };
+  const view = await render(<CalendarScreen />);
+
+  await fireEvent.press(view.getByTestId('calendar-filter'));
+  await fireEvent.press(view.getByTestId('calendar-filter-category-Liga'));
+  await fireEvent.press(view.getByTestId('calendar-filter-feature-Reload'));
+  expect(view.getByText('Ältere Reload-Liga')).toBeTruthy();
+  expect(view.queryByText('Ältere Zero-Build-Liga')).toBeNull();
+  expect(view.queryByText('Explizites Battle-Royale-Regelwerk')).toBeNull();
+
+  await fireEvent.press(view.getByTestId('calendar-filter-reset'));
+  await fireEvent.press(view.getByTestId('calendar-filter-feature-Zero Build'));
+  expect(view.getByText('Ältere Zero-Build-Liga')).toBeTruthy();
+  expect(view.queryByText('Ältere Reload-Liga')).toBeNull();
+  expect(view.queryByText('Explizites Battle-Royale-Regelwerk')).toBeNull();
+});
 
 test('zeigt Regelwerk und Turnierserie getrennt in den Turnierdetails', async () => {
   const reloadZeroBuildEvent = {
