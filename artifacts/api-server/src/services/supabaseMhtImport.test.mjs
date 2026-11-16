@@ -229,6 +229,130 @@ test("liefert die getrennten Felder zusätzlich zu den bisherigen API-Angaben", 
   }
 });
 
+test("liefert importierte Fixture-Termine über den passenden Turniertyp-Filter", async () => {
+  const originalEnv = new Map(
+    ["NODE_ENV", "SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "CUPCAL_IMPORT_ADMIN_EMAILS"]
+      .map((key) => [key, process.env[key]]),
+  );
+  const fixturePath = new URL("../../scripts/fixtures/real-schedule-format-sample.mht", import.meta.url);
+  const sourceText = (await readFile(fixturePath, "utf8"))
+    .replace("19. Januar 2025", "16. November 2026");
+  const storedRows = [];
+  const requestedTypes = [];
+  const fakeSupabase = createServer(async (request, response) => {
+    response.setHeader("Content-Type", "application/json");
+    if (request.url === "/auth/v1/user") {
+      if (request.headers.authorization !== "Bearer valid-admin-import-token") {
+        response.statusCode = 401;
+        response.end(JSON.stringify({ message: "Invalid test session" }));
+        return;
+      }
+      response.end(JSON.stringify({
+        id: "tournament-filter-test-user",
+        email: "admin@cupcal.test",
+      }));
+      return;
+    }
+    if (request.url?.startsWith("/rest/v1/rpc/commit_mht_import") && request.method === "POST") {
+      let body = "";
+      for await (const chunk of request) body += chunk;
+      const { p_events: importedEvents } = JSON.parse(body);
+      storedRows.push(...importedEvents);
+      response.end(JSON.stringify(null));
+      return;
+    }
+    if (request.url?.startsWith("/rest/v1/fortnite_events")) {
+      const url = new URL(request.url, "http://supabase.test");
+      const tournamentTypeFilter = url.searchParams.get("tournament_type");
+      if (tournamentTypeFilter) {
+        const requestedType = tournamentTypeFilter.replace(/^eq\./, "");
+        requestedTypes.push(requestedType);
+        response.end(JSON.stringify(
+          storedRows.filter((row) => row.tournament_type === requestedType),
+        ));
+        return;
+      }
+      response.end(JSON.stringify([]));
+      return;
+    }
+    response.statusCode = 404;
+    response.end(JSON.stringify({ message: "Unexpected test request" }));
+  });
+  let fakeSupabaseUrl;
+  let apiServer;
+  let tempDir;
+
+  try {
+    fakeSupabaseUrl = await listen(fakeSupabase);
+    process.env["NODE_ENV"] = "production";
+    process.env["SUPABASE_URL"] = fakeSupabaseUrl;
+    process.env["SUPABASE_SERVICE_ROLE_KEY"] = "test-service-role-key";
+    process.env["CUPCAL_IMPORT_ADMIN_EMAILS"] = "admin@cupcal.test";
+
+    const loaded = await loadApiApp();
+    tempDir = loaded.tempDir;
+    apiServer = loaded.app.listen(0, "127.0.0.1");
+    await new Promise((resolve, reject) => {
+      apiServer.once("error", reject);
+      apiServer.once("listening", resolve);
+    });
+    const apiUrl = `http://127.0.0.1:${apiServer.address().port}/api`;
+
+    const importResponse = await fetch(
+      `${apiUrl}/v1/admin/events/import?confirmStaleSnapshot=true`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer valid-admin-import-token",
+          "Content-Type": "text/plain; charset=utf-8",
+        },
+        body: sourceText,
+      },
+    );
+    const importResult = await importResponse.json();
+    assert.equal(importResponse.status, 200, JSON.stringify(importResult));
+    assert.equal(importResult.importedCount, storedRows.length);
+
+    const expectedTypes = ["FNCS", "Cash Cup", "Ranked Cup", "Community"];
+    assert.deepEqual(
+      [...new Set(storedRows.map((row) => row.tournament_type))].sort(),
+      [...expectedTypes].sort(),
+    );
+    assert.ok(
+      storedRows.some((row) => row.id === "epic:S33_OGCommunityCup:S33_OGCommunityCup_EU"),
+      "Der anonymisierte Community-Termin aus dem geparsten Fixture wurde gespeichert.",
+    );
+
+    for (const tournamentType of expectedTypes) {
+      const response = await fetch(
+        `${apiUrl}/v1/events?tournament_type=${encodeURIComponent(tournamentType)}`,
+      );
+      const result = await response.json();
+      const expectedRows = storedRows.filter((row) => row.tournament_type === tournamentType);
+      assert.equal(response.status, 200, JSON.stringify(result));
+      assert.ok(expectedRows.length > 0, `Das Fixture enthält gespeicherte Termine vom Typ ${tournamentType}.`);
+      assert.deepEqual(
+        result.data.map((row) => row.tournamentType),
+        expectedRows.map((row) => row.tournament_type),
+        `Der Filter ${tournamentType} liefert nur passende importierte Termine.`,
+      );
+      assert.deepEqual(
+        result.data.map((row) => row.id).sort(),
+        expectedRows.map((row) => row.id).sort(),
+      );
+    }
+    assert.deepEqual(requestedTypes, expectedTypes);
+  } finally {
+    if (apiServer?.listening) await closeServer(apiServer);
+    if (fakeSupabase.listening) await closeServer(fakeSupabase);
+    if (tempDir) await rm(tempDir, { recursive: true, force: true });
+    for (const [key, value] of originalEnv) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+});
+
 test("meldet bei neuen und unveränderten Terminen keine geänderten Details", () => {
   const imported = event();
 
