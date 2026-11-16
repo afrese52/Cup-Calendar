@@ -84,7 +84,7 @@ export default function ResetPasswordScreen() {
     }
 
     Alert.alert(title, message, [
-      { text: 'Weiter bearbeiten', style: 'cancel' },
+      { text: 'Abbrechen', style: 'cancel' },
       { text: 'Verwerfen', style: 'destructive', onPress: repeat },
     ]);
   });

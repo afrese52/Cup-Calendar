@@ -648,35 +648,49 @@ test('verhindert das Verlassen, solange die Passwortänderung noch gespeichert w
   expect(mockPreventRemoveEnabled).toBe(false);
 });
 
-test('behält eingegebene Passwörter, wenn das Verlassen abgebrochen wird', async () => {
-  const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
-  const view = await render(<ResetPasswordScreen />);
+test.each(['ios', 'android'] as const)(
+  'stellt die Passwortwarnung unter %s mit Screenreader-klaren Entscheidungen dar',
+  async (platform) => {
+    const originalPlatformOS = Platform.OS;
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    Object.defineProperty(Platform, 'OS', { configurable: true, value: platform });
 
-  await waitFor(() => expect(view.getByTestId('reset-password-submit-button')).toBeTruthy());
-  await fireEvent.changeText(view.getByTestId('reset-password-input'), 'Mein-neues-Passwort');
-  await fireEvent.changeText(view.getByTestId('reset-password-confirm-input'), 'Mein-neues-Passwort');
+    try {
+      const view = await render(<ResetPasswordScreen />);
 
-  expect(mockPreventRemoveEnabled).toBe(true);
-  const repeatBlockedNavigation = jest.fn();
-  mockPreventRemoveCallback?.({
-    data: { action: { type: 'GO_BACK' } },
-    repeat: repeatBlockedNavigation,
-  });
+      await waitFor(() => expect(view.getByTestId('reset-password-submit-button')).toBeTruthy());
+      await fireEvent.changeText(view.getByTestId('reset-password-input'), 'Mein-neues-Passwort');
+      await fireEvent.changeText(view.getByTestId('reset-password-confirm-input'), 'Mein-neues-Passwort');
 
-  expect(alertSpy).toHaveBeenCalledWith(
-    'Passwort nicht gespeichert',
-    'Wenn du jetzt gehst, gehen deine Eingaben verloren.',
-    expect.any(Array),
-  );
-  const buttons = alertSpy.mock.calls[0]?.[2];
-  buttons?.find((button) => button.text === 'Weiter bearbeiten')?.onPress?.();
+      expect(mockPreventRemoveEnabled).toBe(true);
+      const repeatBlockedNavigation = jest.fn();
+      mockPreventRemoveCallback?.({
+        data: { action: { type: 'GO_BACK' } },
+        repeat: repeatBlockedNavigation,
+      });
 
-  expect(repeatBlockedNavigation).not.toHaveBeenCalled();
-  expect(view.getByTestId('reset-password-input').props.value).toBe('Mein-neues-Passwort');
-  expect(view.getByTestId('reset-password-confirm-input').props.value).toBe('Mein-neues-Passwort');
-  expect(mockPreventRemoveEnabled).toBe(true);
-  alertSpy.mockRestore();
-});
+      expect(alertSpy).toHaveBeenCalledWith(
+        'Passwort nicht gespeichert',
+        'Wenn du jetzt gehst, gehen deine Eingaben verloren.',
+        expect.any(Array),
+      );
+      const buttons = alertSpy.mock.calls[0]?.[2];
+      expect(buttons?.map((button) => button.text)).toEqual(['Abbrechen', 'Verwerfen']);
+      expect(buttons?.[0]).toMatchObject({ text: 'Abbrechen', style: 'cancel' });
+      expect(buttons?.[1]).toMatchObject({ text: 'Verwerfen', style: 'destructive' });
+
+      buttons?.find((button) => button.text === 'Abbrechen')?.onPress?.();
+
+      expect(repeatBlockedNavigation).not.toHaveBeenCalled();
+      expect(view.getByTestId('reset-password-input').props.value).toBe('Mein-neues-Passwort');
+      expect(view.getByTestId('reset-password-confirm-input').props.value).toBe('Mein-neues-Passwort');
+      expect(mockPreventRemoveEnabled).toBe(true);
+    } finally {
+      alertSpy.mockRestore();
+      Object.defineProperty(Platform, 'OS', { configurable: true, value: originalPlatformOS });
+    }
+  },
+);
 
 test('verlässt den Bildschirm nach Bestätigung und verwirft die Passwort-Eingaben', async () => {
   const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
@@ -693,6 +707,7 @@ test('verlässt den Bildschirm nach Bestätigung und verwirft die Passwort-Einga
   });
 
   const buttons = alertSpy.mock.calls[0]?.[2];
+  expect(buttons?.map((button) => button.text)).toEqual(['Abbrechen', 'Verwerfen']);
   buttons?.find((button) => button.text === 'Verwerfen')?.onPress?.();
 
   expect(repeatBlockedNavigation).toHaveBeenCalledTimes(1);
