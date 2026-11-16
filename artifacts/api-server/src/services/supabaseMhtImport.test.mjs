@@ -64,7 +64,7 @@ async function loadApiApp() {
   }
 }
 
-async function loadAdminImportApiApp() {
+async function loadAdminImportApiApp({ markAllEventsAsWarnings = false } = {}) {
   const tempDir = await mkdtemp(path.join(os.tmpdir(), "cupcal-admin-import-counts-api-test-"));
   const bundlePath = path.join(tempDir, "app.mjs");
   const previousRequire = globalThis.require;
@@ -83,6 +83,12 @@ async function loadAdminImportApiApp() {
               const schedule = parseMhtSchedule(Buffer.from(sourceText, "utf8"), {
                 timeZone: "Europe/Berlin",
               });
+              if (${markAllEventsAsWarnings}) {
+                for (const event of schedule.events) {
+                  event.review_warnings = ["Zuordnung manuell prüfen"];
+                }
+                return schedule;
+              }
               const warningEvent = schedule.events.find(
                 (item) => item.id === "epic:WarningDuos:WarningRound",
               );
@@ -747,6 +753,111 @@ Content-Type: text/html; charset=utf-8
         skippedInvalidCount: 1,
       }],
     });
+  } finally {
+    if (apiServer?.listening) await closeServer(apiServer);
+    if (fakeSupabase.listening) await closeServer(fakeSupabase);
+    if (tempDir) await rm(tempDir, { recursive: true, force: true });
+    for (const [key, value] of originalEnv) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+});
+
+test("weist Dateien ohne importierbare Termine zurück und speichert weder Termine noch Historie", async () => {
+  const originalEnv = new Map(
+    ["NODE_ENV", "SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "CUPCAL_IMPORT_ADMIN_EMAILS"]
+      .map((key) => [key, process.env[key]]),
+  );
+  const fixturePath = new URL("../../scripts/fixtures/real-schedule-format-sample.mht", import.meta.url);
+  const sourceText = await readFile(fixturePath, "utf8");
+  let eventUpsertCalls = 0;
+  let importCommitCalls = 0;
+  let historyWriteCalls = 0;
+  const fakeSupabase = createServer(async (request, response) => {
+    const chunks = [];
+    for await (const chunk of request) chunks.push(chunk);
+    response.setHeader("Content-Type", "application/json");
+
+    if (request.url === "/auth/v1/user") {
+      if (request.headers.authorization !== "Bearer no-importable-events-token") {
+        response.statusCode = 401;
+        response.end(JSON.stringify({ message: "Invalid test session" }));
+        return;
+      }
+      response.end(JSON.stringify({
+        id: "no-importable-events-test-user",
+        email: "admin@cupcal.test",
+      }));
+      return;
+    }
+
+    if (request.url?.startsWith("/rest/v1/fortnite_events")) {
+      if (request.method === "GET") {
+        response.end("[]");
+        return;
+      }
+      eventUpsertCalls += 1;
+      response.statusCode = 201;
+      response.end("[]");
+      return;
+    }
+
+    if (request.url === "/rest/v1/rpc/commit_mht_import") {
+      importCommitCalls += 1;
+      response.statusCode = 200;
+      response.end("null");
+      return;
+    }
+
+    if (request.url?.startsWith("/rest/v1/admin_import_history")) {
+      if (request.method === "POST") historyWriteCalls += 1;
+      response.statusCode = 201;
+      response.end("");
+      return;
+    }
+
+    response.statusCode = 404;
+    response.end(JSON.stringify({ message: "Unexpected test request" }));
+  });
+  let apiServer;
+  let tempDir;
+
+  try {
+    const fakeSupabaseUrl = await listen(fakeSupabase);
+    process.env["NODE_ENV"] = "production";
+    process.env["SUPABASE_URL"] = fakeSupabaseUrl;
+    process.env["SUPABASE_SERVICE_ROLE_KEY"] = "test-service-role-key";
+    process.env["CUPCAL_IMPORT_ADMIN_EMAILS"] = "admin@cupcal.test";
+
+    const loaded = await loadAdminImportApiApp({ markAllEventsAsWarnings: true });
+    tempDir = loaded.tempDir;
+    apiServer = loaded.app.listen(0, "127.0.0.1");
+    await new Promise((resolve, reject) => {
+      apiServer.once("error", reject);
+      apiServer.once("listening", resolve);
+    });
+
+    const response = await fetch(
+      `http://127.0.0.1:${apiServer.address().port}/api/v1/admin/events/import`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer no-importable-events-token",
+          "Content-Type": "text/plain; charset=utf-8",
+        },
+        body: sourceText,
+      },
+    );
+    const result = await response.json();
+
+    assert.equal(response.status, 400);
+    assert.deepEqual(result, {
+      error: "Es gibt keine eindeutig zugeordneten zukünftigen Termine zum Importieren.",
+    });
+    assert.equal(eventUpsertCalls, 0, "Es wurden keine Termine gespeichert.");
+    assert.equal(importCommitCalls, 0, "Der transaktionale Import wurde nicht aufgerufen.");
+    assert.equal(historyWriteCalls, 0, "Es wurde kein Historieneintrag gespeichert.");
   } finally {
     if (apiServer?.listening) await closeServer(apiServer);
     if (fakeSupabase.listening) await closeServer(fakeSupabase);
