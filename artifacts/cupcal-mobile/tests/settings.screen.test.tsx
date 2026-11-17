@@ -15,6 +15,7 @@ type AuthListener = (event: string, session: unknown) => void;
 type MockAuth = Record<string, any>;
 type RenderedSettings = Awaited<ReturnType<typeof render>>;
 const mockRouteParams: { focusAccount?: string } = {};
+let mockAdminImportAuthorized = false;
 
 jest.mock('@expo/vector-icons', () => ({ Feather: () => null }));
 jest.mock('@react-native-async-storage/async-storage', () => {
@@ -38,6 +39,12 @@ jest.mock('@workspace/api-client-react', () => {
     expiresAt: '2026-11-12T12:30:00.000Z',
   }));
   return {
+    getGetAdminImportAccessQueryKey: () => ['/api/v1/admin/import-access'],
+    useGetAdminImportAccess: () => ({
+      data: mockAdminImportAuthorized
+        ? { authorized: true, reason: null }
+        : { authorized: false, reason: 'not_admin' },
+    }),
     useRequestAccountDeletion: () => ({ mutateAsync: request }),
     __requestAccountDeletion: request,
   };
@@ -186,6 +193,7 @@ async function enterCredentials(view: RenderedSettings) {
 beforeEach(() => {
   restoreAuthMocks();
   mockRouteParams.focusAccount = undefined;
+  mockAdminImportAuthorized = false;
   const storageMock = jest.requireMock('@react-native-async-storage/async-storage') as {
     __values: Map<string, string>;
   };
@@ -238,6 +246,28 @@ test('zeigt den Anmeldestatus und Erfolg nach der Anmeldung', async () => {
   expect(successMessage.props.accessibilityLiveRegion).toBe('polite');
   expect(successMessage.props.children).toBe('Du bist angemeldet.');
   expect(view.getByText('Angemeldet')).toBeTruthy();
+});
+
+test('verbirgt den Terminimport für angemeldete Konten ohne Adminfreigabe', async () => {
+  auth.getSession.mockResolvedValue({ data: { session: testSession }, error: null });
+  mockAdminImportAuthorized = false;
+
+  const view = await render(<SettingsScreen />);
+
+  expect(await view.findByText('Angemeldet')).toBeTruthy();
+  await waitFor(() => {
+    expect(view.queryByText('Turniertermine importieren')).toBeNull();
+  });
+});
+
+test('zeigt den Terminimport für freigegebene Admin-Konten', async () => {
+  auth.getSession.mockResolvedValue({ data: { session: testSession }, error: null });
+  mockAdminImportAuthorized = true;
+
+  const view = await render(<SettingsScreen />);
+
+  expect(await view.findByText('Angemeldet')).toBeTruthy();
+  expect(await view.findByText('Turniertermine importieren')).toBeTruthy();
 });
 
 test('beschriftet E-Mail- und Passwortfelder passend zu Anmeldung und Registrierung', async () => {

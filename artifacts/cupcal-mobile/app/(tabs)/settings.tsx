@@ -1,5 +1,9 @@
 import { Feather } from '@expo/vector-icons';
-import { useRequestAccountDeletion } from '@workspace/api-client-react';
+import {
+  getGetAdminImportAccessQueryKey,
+  useGetAdminImportAccess,
+  useRequestAccountDeletion,
+} from '@workspace/api-client-react';
 import * as Haptics from 'expo-haptics';
 import React, { useEffect, useRef, useState } from 'react';
 import {
@@ -96,6 +100,13 @@ export default function SettingsScreen() {
   const isCompactHeight = height < 640;
   const [session, setSession] = useState<Session | null>(null);
   const [isCheckingSession, setIsCheckingSession] = useState(Boolean(supabase));
+  const importAccessQuery = useGetAdminImportAccess({
+    query: {
+      enabled: Boolean(supabase && session?.access_token && !isCheckingSession),
+      queryKey: [...getGetAdminImportAccessQueryKey(), session?.user.id ?? 'signed-out'],
+      retry: false,
+    },
+  });
   const [authMode, setAuthMode] = useState<AuthMode>('sign-in');
   const [email, setEmail] = useState('');
   const [registrationConfirmationEmail, setRegistrationConfirmationEmail] = useState<string | null>(null);
@@ -931,7 +942,7 @@ export default function SettingsScreen() {
           ) : null}
         </View>
 
-        {session ? (
+        {session && importAccessQuery.data?.authorized ? (
           <>
             <Text style={[styles.groupLabel, { color: colors.mutedForeground }]}>APP</Text>
             <View style={[styles.group, { backgroundColor: colors.card, borderColor: colors.border }]}>
