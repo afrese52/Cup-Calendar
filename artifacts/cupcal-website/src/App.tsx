@@ -1,6 +1,8 @@
+import { useEffect, useRef } from 'react';
 import { ArrowDown, ArrowRight, Bookmark, CalendarDays, Check, Clock3, Download, Filter, WifiOff } from 'lucide-react';
 import websiteLogo from './assets/brand/cupcal-website-logo-transparent.webp';
 import appLogo from './assets/brand/cupcal-app-logo.webp';
+import { trackEvent } from './lib/analytics';
 
 const features = [
   {
@@ -24,18 +26,55 @@ const features = [
 ];
 
 function App() {
+  const viewedSections = useRef(new Set<string>());
+
+  useEffect(() => {
+    if (typeof IntersectionObserver === 'undefined') return;
+
+    const sections = document.querySelectorAll<HTMLElement>('[data-analytics-section]');
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (!entry.isIntersecting || entry.intersectionRatio < 0.5) continue;
+
+          const section = entry.target.getAttribute('data-analytics-section');
+          if (!section || viewedSections.current.has(section)) continue;
+
+          viewedSections.current.add(section);
+          trackEvent('content_section_view', { section });
+          observer.unobserve(entry.target);
+        }
+      },
+      { threshold: 0.5 },
+    );
+
+    sections.forEach((section) => observer.observe(section));
+    return () => observer.disconnect();
+  }, []);
+
   return (
     <main className="site-shell">
       <header className="container topbar">
-        <a className="brand" href="#start" aria-label="CupCal – zum Anfang" data-testid="link-home">
+        <a
+          className="brand"
+          href="#start"
+          aria-label="CupCal – zum Anfang"
+          data-testid="link-home"
+          onClick={() => trackEvent('site_navigation_click', { destination: 'home', placement: 'brand' })}
+        >
           <img className="website-logo" src={websiteLogo} alt="CupCal – Kalender für FN" data-testid="img-cupcal-icon" />
         </a>
         <nav className="nav-links" aria-label="Hauptnavigation">
-          <a href="#funktionen" data-testid="link-funktionen">Funktionen</a>
-          <a href="#vorschau" data-testid="link-vorschau">Ein Blick hinein</a>
-          <a href="#verfuegbarkeit" data-testid="link-verfuegbarkeit">Verfügbarkeit</a>
+          <a href="#funktionen" data-testid="link-funktionen" onClick={() => trackEvent('site_navigation_click', { destination: 'features', placement: 'main_nav' })}>Funktionen</a>
+          <a href="#vorschau" data-testid="link-vorschau" onClick={() => trackEvent('site_navigation_click', { destination: 'preview', placement: 'main_nav' })}>Ein Blick hinein</a>
+          <a href="#verfuegbarkeit" data-testid="link-verfuegbarkeit" onClick={() => trackEvent('site_navigation_click', { destination: 'availability', placement: 'main_nav' })}>Verfügbarkeit</a>
         </nav>
-        <a className="nav-cta" href="#verfuegbarkeit" data-testid="button-download-status">
+        <a
+          className="nav-cta"
+          href="#verfuegbarkeit"
+          data-testid="button-download-status"
+          onClick={() => trackEvent('availability_cta_click', { placement: 'header' })}
+        >
           <span>App-Status</span><ArrowRight aria-hidden="true" />
         </a>
       </header>
@@ -50,10 +89,20 @@ function App() {
               Damit du dich auf dein nächstes Match konzentrieren kannst – nicht auf die Suche nach dem Start.
             </p>
             <div className="hero-actions">
-              <a className="button-primary" href="#funktionen" data-testid="button-discover">
+              <a
+                className="button-primary"
+                href="#funktionen"
+                data-testid="button-discover"
+                onClick={() => trackEvent('hero_cta_click', { action: 'discover', destination: 'features' })}
+              >
                 CupCal entdecken <ArrowDown aria-hidden="true" />
               </a>
-              <a className="button-muted" href="#verfuegbarkeit" data-testid="button-availability">
+              <a
+                className="button-muted"
+                href="#verfuegbarkeit"
+                data-testid="button-availability"
+                onClick={() => trackEvent('availability_cta_click', { placement: 'hero' })}
+              >
                 <Download aria-hidden="true" /> Download-Status
               </a>
             </div>
@@ -109,7 +158,12 @@ function App() {
         </div>
       </section>
 
-      <section className="section preview-section" id="vorschau" data-testid="section-preview">
+      <section
+        className="section preview-section"
+        id="vorschau"
+        data-testid="section-preview"
+        data-analytics-section="calendar_preview"
+      >
         <div className="container preview-layout">
           <div className="preview-copy">
             <div className="section-label">Ein Blick in CupCal</div>
@@ -171,13 +225,23 @@ function App() {
               <p>Deine gespeicherten Termine bleiben griffbereit – auch ohne Verbindung.</p>
             </div>
           </div>
-          <a className="button-dark" href="#verfuegbarkeit" data-testid="link-offline-info">
+          <a
+            className="button-dark"
+            href="#verfuegbarkeit"
+            data-testid="link-offline-info"
+            onClick={() => trackEvent('availability_cta_click', { placement: 'offline_band' })}
+          >
             CupCal kennenlernen <ArrowRight aria-hidden="true" />
           </a>
         </div>
       </section>
 
-      <section className="availability container" id="verfuegbarkeit" data-testid="section-availability">
+      <section
+        className="availability container"
+        id="verfuegbarkeit"
+        data-testid="section-availability"
+        data-analytics-section="availability"
+      >
         <div className="section-label">Ehrlich gesagt</div>
         <h2 className="section-title">Noch nicht im Store.<br /><span>Aber auf dem Radar.</span></h2>
         <p className="section-intro">
