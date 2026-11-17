@@ -64,6 +64,7 @@ overrides:
   '@tailwindcss/oxide>@tailwindcss/oxide-linux-x64-musl': '-'
   '@tailwindcss/oxide>@tailwindcss/oxide-win32-arm64-msvc': '-'
   '@tailwindcss/oxide>@tailwindcss/oxide-win32-x64-msvc': '-'
+  body-parser: 2.4.0
   brace-expansion@^5: ^5.0.12
   esbuild: 0.28.2
   esbuild>@esbuild/aix-ppc64: '-'
@@ -91,13 +92,8 @@ overrides:
   esbuild>@esbuild/win32-arm64: '-'
   esbuild>@esbuild/win32-ia32: '-'
   esbuild>@esbuild/win32-x64: '-'
-  body-parser: 2.4.0
   fast-uri@^3: ^3.1.9
   glob: 14.0.2
-  minimatch: 11.0.1
-  postcss-selector-parser: 6.1.5
-  qs: 6.16.1
-  undici@^7: 7.30.1
   js-yaml: 4.3.2
   lightningcss>lightningcss-android-arm64: '-'
   lightningcss>lightningcss-darwin-arm64: '-'
@@ -109,7 +105,10 @@ overrides:
   lightningcss>lightningcss-linux-x64-musl: '-'
   lightningcss>lightningcss-win32-arm64-msvc: '-'
   lightningcss>lightningcss-win32-x64-msvc: '-'
+  minimatch: 11.0.1
+  postcss-selector-parser: 6.1.5
   proxy-addr@^2: ^2.0.8
+  qs: 6.16.1
   rollup>@rollup/rollup-android-arm-eabi: '-'
   rollup>@rollup/rollup-android-arm64: '-'
   rollup>@rollup/rollup-darwin-arm64: '-'
@@ -135,4 +134,9 @@ overrides:
   rollup>@rollup/rollup-win32-x64-gnu: '-'
   rollup>@rollup/rollup-win32-x64-msvc: '-'
   source-map-js@^1: ^1.2.2
+  undici@^7: 7.30.1
   zod: 4.6.6
+
+patchedDependencies:
+  picomatch@2.3.2: dependency-patches/picomatch-2.3.2.patch
+  picomatch@4.0.7: dependency-patches/picomatch-4.0.7.patch
