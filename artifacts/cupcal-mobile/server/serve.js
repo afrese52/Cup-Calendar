@@ -15,6 +15,19 @@ const path = require('path');
 
 const STATIC_ROOT = path.resolve(__dirname, '..', 'static-build');
 const basePath = (process.env.BASE_PATH || '/').replace(/\/+$/, '');
+const SITE_URL = 'https://cupcal.af-software.app/cupcal-website/';
+const SITEMAP_URL = 'https://cupcal.af-software.app/sitemap.xml';
+const ROOT_ROBOTS_TXT = `User-agent: *
+Allow: /
+Sitemap: ${SITEMAP_URL}
+`;
+const ROOT_SITEMAP_XML = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>${SITE_URL}</loc>
+  </url>
+</urlset>
+`;
 
 const MIME_TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -77,6 +90,29 @@ function serveStaticFile(urlPath, res) {
   res.end(content);
 }
 
+function serveSeoFile(urlPath, req, res) {
+  const seoFiles = {
+    '/robots.txt': {
+      contentType: 'text/plain; charset=utf-8',
+      content: ROOT_ROBOTS_TXT,
+    },
+    '/sitemap.xml': {
+      contentType: 'application/xml; charset=utf-8',
+      content: ROOT_SITEMAP_XML,
+    },
+  };
+  const file = seoFiles[urlPath];
+  if (!file || (req.method !== 'GET' && req.method !== 'HEAD')) return false;
+
+  res.writeHead(200, {
+    'content-type': file.contentType,
+    'cache-control': 'public, max-age=3600',
+    'content-length': Buffer.byteLength(file.content),
+  });
+  res.end(req.method === 'HEAD' ? undefined : file.content);
+  return true;
+}
+
 const server = http.createServer((req, res) => {
   const url = new URL(req.url || '/', `http://${req.headers.host}`);
   let pathname = url.pathname;
@@ -100,6 +136,8 @@ const server = http.createServer((req, res) => {
       return;
     }
   }
+
+  if (serveSeoFile(pathname, req, res)) return;
 
   serveStaticFile(pathname, res);
 });

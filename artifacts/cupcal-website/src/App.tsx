@@ -1,8 +1,9 @@
 import { useEffect, useRef } from 'react';
 import { ArrowDown, ArrowRight, Bookmark, CalendarDays, Check, Clock3, Download, Filter, WifiOff } from 'lucide-react';
-import websiteLogo from './assets/brand/cupcal-website-logo-transparent.webp';
-import appLogo from './assets/brand/cupcal-app-logo.webp';
 import { trackEvent } from './lib/analytics';
+
+const websiteLogo = `${import.meta.env.BASE_URL}cupcal-website-logo-transparent.webp`;
+const appLogo = `${import.meta.env.BASE_URL}cupcal-app-logo.webp`;
 
 const features = [
   {
@@ -62,7 +63,7 @@ function App() {
           data-testid="link-home"
           onClick={() => trackEvent('site_navigation_click', { destination: 'home', placement: 'brand' })}
         >
-          <img className="website-logo" src={websiteLogo} alt="CupCal – Kalender für FN" data-testid="img-cupcal-icon" />
+          <img className="website-logo" src={websiteLogo} alt="CupCal – Fortnite-Turnierkalender" width={1000} height={324} data-testid="img-cupcal-icon" />
         </a>
         <nav className="nav-links" aria-label="Hauptnavigation">
           <a href="#funktionen" data-testid="link-funktionen" onClick={() => trackEvent('site_navigation_click', { destination: 'features', placement: 'main_nav' })}>Funktionen</a>
@@ -83,9 +84,9 @@ function App() {
         <div className="hero-grid">
           <div className="fade-in">
             <div className="eyebrow">Für deinen nächsten Drop</div>
-            <h1>Dein nächster<br /><span>Wettkampf.</span><br />Schon im Blick.</h1>
+            <h1>Dein <span>Fortnite-Turnierkalender.</span><br />Schon im Blick.</h1>
             <p className="hero-copy">
-              CupCal bringt Turniere, Ligen, Qualifikationen und Trainingsrunden in deinen Kalender.
+              CupCal bündelt Fortnite-Turniere, Ligen, Qualifikationen und Trainingsrunden in einem Kalender.
               Damit du dich auf dein nächstes Match konzentrieren kannst – nicht auf die Suche nach dem Start.
             </p>
             <div className="hero-actions">
@@ -110,7 +111,7 @@ function App() {
           </div>
           <div className="hero-art fade-in fade-delay" aria-label="CupCal App-Symbol und Vorschauhinweise" data-testid="visual-hero">
             <div className="art-orbit" />
-            <img className="hero-icon" src={appLogo} alt="CupCal-App-Logo mit goldenem Pokal und Kalender auf dunklem Grund" />
+            <img className="hero-icon" src={appLogo} alt="CupCal-App-Logo mit goldenem Pokal und Kalender auf dunklem Grund" width={1024} height={1024} />
             <div className="floating-tag tag-one">
               <CalendarDays aria-hidden="true" />
               <span><strong>Alle Cups</strong><small>an einem Ort</small></span>
