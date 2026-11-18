@@ -63,7 +63,7 @@ function App() {
           data-testid="link-home"
           onClick={() => trackEvent('site_navigation_click', { destination: 'home', placement: 'brand' })}
         >
-          <img className="website-logo" src={websiteLogo} alt="CupCal – Fortnite-Turnierkalender" width={1000} height={324} data-testid="img-cupcal-icon" />
+          <img className="website-logo" src={websiteLogo} alt="CupCal – Turnierkalender" width={1000} height={324} data-testid="img-cupcal-icon" />
         </a>
         <nav className="nav-links" aria-label="Hauptnavigation">
           <a href="#funktionen" data-testid="link-funktionen" onClick={() => trackEvent('site_navigation_click', { destination: 'features', placement: 'main_nav' })}>Funktionen</a>
@@ -84,9 +84,9 @@ function App() {
         <div className="hero-grid">
           <div className="fade-in">
             <div className="eyebrow">Für deinen nächsten Drop</div>
-            <h1>Dein <span>Fortnite-Turnierkalender.</span><br />Schon im Blick.</h1>
+            <h1>Dein <span>CupCal-Turnierkalender.</span><br />Schon im Blick.</h1>
             <p className="hero-copy">
-              CupCal bündelt Fortnite-Turniere, Ligen, Qualifikationen und Trainingsrunden in einem Kalender.
+              CupCal bündelt Turniere, Ligen, Qualifikationen und Trainingsrunden in einem Kalender.
               Damit du dich auf dein nächstes Match konzentrieren kannst – nicht auf die Suche nach dem Start.
             </p>
             <div className="hero-actions">
