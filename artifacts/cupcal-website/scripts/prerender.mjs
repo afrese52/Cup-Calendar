@@ -11,6 +11,7 @@ const rootMarker = '<div id="root"></div>';
 
 const vite = await createServer({
   configFile: path.join(projectRoot, 'vite.config.ts'),
+  base: '/',
   root: projectRoot,
   cacheDir: path.join(projectRoot, 'node_modules/.vite/seo-prerender'),
   optimizeDeps: { noDiscovery: true },
