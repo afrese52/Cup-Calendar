@@ -63,7 +63,7 @@ function App() {
           data-testid="link-home"
           onClick={() => trackEvent('site_navigation_click', { destination: 'home', placement: 'brand' })}
         >
-          <img className="website-logo" src={websiteLogo} alt="CupCal – Turnierkalender" width={1000} height={324} data-testid="img-cupcal-icon" />
+          <img className="website-logo" src={websiteLogo} alt="CupCal – Turnierkalender" width={500} height={162} data-testid="img-cupcal-icon" />
         </a>
         <nav className="nav-links" aria-label="Hauptnavigation">
           <a href="#funktionen" data-testid="link-funktionen" onClick={() => trackEvent('site_navigation_click', { destination: 'features', placement: 'main_nav' })}>Funktionen</a>
@@ -82,7 +82,7 @@ function App() {
 
       <section className="container hero" id="start" data-testid="section-hero">
         <div className="hero-grid">
-          <div className="fade-in">
+          <div>
             <div className="eyebrow">Für deinen nächsten Drop</div>
             <h1>Dein <span>CupCal-<br className="mobile-h1-break" />Turnierkalender.</span><br />Schon im Blick.</h1>
             <p className="hero-copy">
@@ -109,9 +109,9 @@ function App() {
             </div>
             <div className="hero-note"><b>Für die Community gemacht.</b> Unabhängiges Fanprojekt.</div>
           </div>
-          <div className="hero-art fade-in fade-delay" aria-label="CupCal App-Symbol und Vorschauhinweise" data-testid="visual-hero">
+          <div className="hero-art" aria-label="CupCal App-Symbol und Vorschauhinweise" data-testid="visual-hero">
             <div className="art-orbit" />
-            <img className="hero-icon" src={appLogo} alt="CupCal-App-Logo mit goldenem Pokal und Kalender auf dunklem Grund" width={1024} height={1024} />
+            <img className="hero-icon" src={appLogo} alt="CupCal-App-Logo mit goldenem Pokal und Kalender auf dunklem Grund" width={640} height={640} />
             <div className="floating-tag tag-one">
               <CalendarDays aria-hidden="true" />
               <span><strong>Alle Cups</strong><small>an einem Ort</small></span>

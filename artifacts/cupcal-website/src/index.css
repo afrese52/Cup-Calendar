@@ -206,8 +206,6 @@ h1, h2, h3, p { margin-top: 0; }
 .footer { border-top: 1px solid #252e38; padding: 25px 0; }
 .footer-inner { display: flex; justify-content: space-between; align-items: center; gap: 22px; }
 .footer-copy { color: #727e8b; font-size: 10px; }.footer-note { color: #596573; font: 8px var(--app-font-mono); text-transform: uppercase; letter-spacing: .08em; text-align: right; }
-.fade-in { animation: riseIn .65s cubic-bezier(.2,.7,.25,1) both; }.fade-delay { animation-delay: .12s; }
-@keyframes riseIn { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
 @media (max-width: 820px) {
  .hero { padding: 62px 0 58px; }.hero-grid { grid-template-columns: 1fr; gap: 18px; }.hero-copy { max-width: 540px; }.hero-art { min-height: 370px; }
  .hero-icon { width: 230px; }.tag-one { right: 6%; top: 20px; }.tag-two { left: 5%; bottom: 20px; }
