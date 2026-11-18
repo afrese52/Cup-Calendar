@@ -84,10 +84,10 @@ function App() {
         <div className="hero-grid">
           <div className="fade-in">
             <div className="eyebrow">Für deinen nächsten Drop</div>
-            <h1>Dein <span>CupCal-Turnierkalender.</span><br />Schon im Blick.</h1>
+            <h1>Dein <span>CupCal-<br className="mobile-h1-break" />Turnierkalender.</span><br />Schon im Blick.</h1>
             <p className="hero-copy">
-              CupCal bündelt Turniere, Ligen, Qualifikationen und Trainingsrunden in einem Kalender.
-              Damit du dich auf dein nächstes Match konzentrieren kannst – nicht auf die Suche nach dem Start.
+              Finde mit CupCal Turniere, Ligen, Qualifikationen und Trainingsrunden.
+              Filtere Termine und speichere deine Favoriten, damit du kommende Starts schnell im Blick hast.
             </p>
             <div className="hero-actions">
               <a
@@ -156,6 +156,33 @@ function App() {
               </article>
             ))}
           </div>
+        </div>
+      </section>
+
+      <section className="section container faq-section" id="fragen" aria-labelledby="faq-title">
+        <div className="section-label">Fragen zu CupCal</div>
+        <h2 className="section-title" id="faq-title">CupCal kurz erklärt.</h2>
+        <div className="faq-grid">
+          <article className="faq-card">
+            <h3>Was ist CupCal?</h3>
+            <p>CupCal ist ein Turnierkalender, der Cups, Ligen, Qualifikationen und Trainingsrunden übersichtlich an einem Ort bündelt.</p>
+          </article>
+          <article className="faq-card">
+            <h3>Kann ich Termine filtern?</h3>
+            <p>Ja. Du kannst Termine nach Eventtyp filtern und so die Wettbewerbe finden, die dich interessieren.</p>
+          </article>
+          <article className="faq-card">
+            <h3>Wie speichere ich wichtige Termine?</h3>
+            <p>Nach der Anmeldung kannst du Termine als Favoriten speichern und später in deiner Agenda wiederfinden.</p>
+          </article>
+          <article className="faq-card">
+            <h3>Funktioniert CupCal offline?</h3>
+            <p>Gespeicherte Termine bleiben auch ohne Internetverbindung griffbereit.</p>
+          </article>
+          <article className="faq-card">
+            <h3>Wann kann ich CupCal herunterladen?</h3>
+            <p>CupCal ist derzeit noch nicht im Google Play Store oder Apple App Store verfügbar. Sobald offizielle Store-Links bereitstehen, veröffentlichen wir sie hier.</p>
+          </article>
         </div>
       </section>
 
