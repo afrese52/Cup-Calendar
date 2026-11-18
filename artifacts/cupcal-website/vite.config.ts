@@ -27,8 +27,8 @@ if (!basePath) {
   );
 }
 
-export default defineConfig(async ({ command }) => ({
-  base: command === 'build' ? '/' : basePath,
+export default defineConfig({
+  base: basePath,
   plugins: [
     react(),
     tailwindcss(),
@@ -75,4 +75,4 @@ export default defineConfig(async ({ command }) => ({
     host: '0.0.0.0',
     allowedHosts: true,
   },
-}));
+});
