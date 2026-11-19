@@ -20,9 +20,8 @@ function CupCalTabBar({ state, descriptors, emitter, navigateToTab, insets }: Cu
     (route): route is (typeof state.routes)[number] => route !== undefined,
   );
   const lineY = barBodyHeight * 0.2;
-  const shoulderY = barBodyHeight * 0.49;
-  const notchY = barBodyHeight * 0.68;
-  const topEdge = `M 0 ${lineY} H 138 C 158 ${lineY} 160 ${shoulderY} 179 ${shoulderY} C 190 ${shoulderY} 189 ${notchY} 200 ${notchY} C 211 ${notchY} 210 ${shoulderY} 221 ${shoulderY} C 240 ${shoulderY} 242 ${lineY} 262 ${lineY} H 400`;
+  const notchY = barBodyHeight * 0.7;
+  const topEdge = `M 0 ${lineY} H 140 C 170 ${lineY} 170 ${notchY} 200 ${notchY} C 230 ${notchY} 230 ${lineY} 260 ${lineY} H 400`;
 
   return (
     <View
