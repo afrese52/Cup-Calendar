@@ -12,6 +12,11 @@ function CupCalTabBar({ state, descriptors, emitter, navigateToTab, insets }: Cu
   const colors = useColors();
   const isWeb = Platform.OS === 'web';
   const bottomInset = isWeb ? 34 : insets.bottom;
+  const selectedRoute = state.routes[state.index];
+  const otherRoutes = state.routes.filter((_, index) => index !== state.index);
+  const centeredRoutes = [otherRoutes[0], selectedRoute, otherRoutes[1]].filter(
+    (route): route is (typeof state.routes)[number] => route !== undefined,
+  );
 
   return (
     <View
@@ -26,13 +31,13 @@ function CupCalTabBar({ state, descriptors, emitter, navigateToTab, insets }: Cu
       ]}
     >
       <View style={styles.tabRow}>
-        {state.routes.map((route, index) => {
+        {centeredRoutes.map((route) => {
           const { options } = descriptors[route.key];
           const label =
             typeof options.tabBarLabel === 'string'
               ? options.tabBarLabel
               : options.title ?? route.name;
-          const isFocused = state.index === index;
+          const isFocused = route.key === selectedRoute.key;
           const iconName = route.name === 'index'
             ? 'calendar'
             : route.name === 'saved'
