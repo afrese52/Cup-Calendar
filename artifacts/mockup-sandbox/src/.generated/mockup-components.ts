@@ -3,5 +3,6 @@ type ModuleMap = Record<string, () => Promise<Record<string, unknown>>>;
 export const modules: ModuleMap = {
   "./components/mockups/cupcal/CalendarAgendaLayout.tsx": () => import("../components/mockups/cupcal/CalendarAgendaLayout.tsx"),
   "./components/mockups/cupcal/CalendarCompact.tsx": () => import("../components/mockups/cupcal/CalendarCompact.tsx"),
-  "./components/mockups/cupcal/CalendarRefine.tsx": () => import("../components/mockups/cupcal/CalendarRefine.tsx")
+  "./components/mockups/cupcal/CalendarRefine.tsx": () => import("../components/mockups/cupcal/CalendarRefine.tsx"),
+  "./components/mockups/cupcal/CalendarWeekFlow.tsx": () => import("../components/mockups/cupcal/CalendarWeekFlow.tsx")
 };
