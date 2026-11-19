@@ -21,7 +21,7 @@ function CupCalTabBar({ state, descriptors, emitter, navigateToTab, insets }: Cu
   );
   const lineY = barBodyHeight * 0.2;
   const notchY = barBodyHeight * 0.7;
-  const topEdge = `M 0 ${lineY} H 140 C 170 ${lineY} 170 ${notchY} 200 ${notchY} C 230 ${notchY} 230 ${lineY} 260 ${lineY} H 400`;
+  const topEdge = `M 0 ${lineY} H 125 C 155 ${lineY} 175 ${notchY} 200 ${notchY} C 225 ${notchY} 245 ${lineY} 275 ${lineY} H 400`;
 
   return (
     <View
