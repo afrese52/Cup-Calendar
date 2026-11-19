@@ -3,7 +3,7 @@
  *
  * Serves the output of build.js (static-build/) with two special routes:
  * - GET / or /manifest with expo-platform header → platform manifest JSON
- * - GET / without expo-platform → CupCal website
+ * - GET / without expo-platform → redirect to the CupCal website root
  * Everything else falls through to static file serving from ./static-build/.
  *
  * Zero external dependencies — uses only Node.js built-ins (http, fs, path).
@@ -15,7 +15,7 @@ const path = require('path');
 
 const STATIC_ROOT = path.resolve(__dirname, '..', 'static-build');
 const basePath = (process.env.BASE_PATH || '/').replace(/\/+$/, '');
-const SITE_URL = 'https://cupcal.af-software.app/cupcal-website/';
+const SITE_URL = 'https://cupcal.af-software.app/';
 const SITEMAP_URL = 'https://cupcal.af-software.app/sitemap.xml';
 const ROOT_ROBOTS_TXT = `User-agent: *
 Allow: /
@@ -117,7 +117,10 @@ const server = http.createServer((req, res) => {
   const url = new URL(req.url || '/', `http://${req.headers.host}`);
   let pathname = url.pathname;
 
-  if (basePath && pathname.startsWith(basePath)) {
+  if (
+    basePath &&
+    (pathname === basePath || pathname.startsWith(`${basePath}/`))
+  ) {
     pathname = pathname.slice(basePath.length) || '/';
   }
 
@@ -129,7 +132,7 @@ const server = http.createServer((req, res) => {
 
     if (pathname === '/') {
       res.writeHead(302, {
-        location: `/cupcal-website/${url.search}`,
+        location: `/${url.search}`,
         'cache-control': 'no-store',
       });
       res.end();
