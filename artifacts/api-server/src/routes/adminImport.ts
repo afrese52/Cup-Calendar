@@ -1,6 +1,7 @@
 import express, { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
 import { z } from "zod";
 import { getSnapshotFreshness, parseMhtSchedule } from "../../scripts/dry-run-mht-import.mjs";
+import { parseIcsSchedule } from "../../scripts/ics-import.mjs";
 import { getAdminImportAccess, getSafeUpcomingEvents, parseAdminEmailAllowlist } from "../services/adminImportAccess";
 import {
   getSupabaseAdmin,
@@ -16,6 +17,7 @@ import {
   TournamentTypeCorrectionLogError,
   updateEventTournamentType,
   listRecentTournamentTypeCorrections,
+  type MhtImportEvent,
   type ExistingMhtEvent,
 } from "../services/supabase";
 import { MAX_MHT_UPLOAD_BYTES } from "../lib/uploadLimits";
@@ -45,6 +47,20 @@ const IMPORT_HISTORY_LIMIT = 20;
 const TOURNAMENT_TYPE_CORRECTION_HISTORY_LIMIT = 50;
 
 type ImportDateRange = { startDate: string; endDate: string };
+type ParsedSchedule = {
+  sourceUrl: string | null;
+  snapshotAt: string | null;
+  snapshotAgeMs: number | null;
+  isSnapshotStale: boolean;
+  region: string;
+  timeZone: string;
+  cardCount: number;
+  validCount: number;
+  invalidCount: number;
+  upcomingAtSnapshot: number | null;
+  events: MhtImportEvent[];
+  issues: { id?: string | null; title?: string | null; errors: string[] }[];
+};
 
 type ImportAdminRequest = Request & {
   importAdminUser?: { id: string; email: string | null };
@@ -166,12 +182,36 @@ function getLocalCalendarDate(value: string, timeZone: string): string {
 
 function parseSchedule(sourceText: string) {
   try {
-    return parseMhtSchedule(Buffer.from(sourceText, "utf8"), { timeZone: "Europe/Berlin" });
+    return parseMhtSchedule(Buffer.from(sourceText, "utf8"), { timeZone: "Europe/Berlin" }) as ParsedSchedule;
   } catch (error) {
     throw new Error(
       error instanceof Error ? error.message : "Die MHT-Datei konnte nicht gelesen werden.",
     );
   }
+}
+
+function parseScheduleFile(
+  sourceText: string,
+  region: string | undefined,
+  scheduleParser: typeof parseSchedule,
+): ParsedSchedule {
+  if (/^\uFEFF?\s*BEGIN:VCALENDAR(?:\r?\n|$)/im.test(sourceText.trimStart())) {
+    return parseIcsSchedule(sourceText, { region, timeZone: "Europe/Berlin" }) as ParsedSchedule;
+  }
+  return scheduleParser(sourceText);
+}
+
+function getRequestedRegion(req: Request, res: Response): string | undefined | null {
+  const rawRegion = req.query["region"];
+  if (rawRegion === undefined) return undefined;
+  if (
+    typeof rawRegion !== "string"
+    || !["EU", "NAE", "NAW", "BR", "ASIA", "OCE", "ME", "GLOBAL"].includes(rawRegion.toUpperCase())
+  ) {
+    res.status(400).json({ error: "Bitte wähle eine gültige Turnierregion." });
+    return null;
+  }
+  return rawRegion.toUpperCase();
 }
 
 function rejectUnconfirmedStaleSnapshot(
@@ -235,8 +275,9 @@ async function buildPreview(
   sourceText: string,
   requestedDateRange: ImportDateRange | null = null,
   scheduleParser: typeof parseSchedule = parseSchedule,
+  region?: string,
 ) {
-  const schedule = scheduleParser(sourceText);
+  const schedule = parseScheduleFile(sourceText, region, scheduleParser);
   const plan = getSafeUpcomingEvents(schedule.events, schedule.snapshotAt);
   const allUpcomingDates = plan.upcoming.map((event) => getLocalCalendarDate(event.start_time, schedule.timeZone));
   const dateRange = requestedDateRange ?? (allUpcomingDates.length > 0
@@ -446,8 +487,10 @@ router.post(
       res.status(400).json({ error: dateRangeResult.error });
       return;
     }
+    const region = getRequestedRegion(req, res);
+    if (region === null) return;
     try {
-      const preview = await buildPreview(sourceText, dateRangeResult.range, scheduleParser);
+      const preview = await buildPreview(sourceText, dateRangeResult.range, scheduleParser, region ?? undefined);
       const { schedule: _schedule, importableEvents: _events, skippedPastCount: _skipped, ...response } = preview;
       res.json(response);
     } catch (error) {
@@ -475,9 +518,11 @@ router.post(
       res.status(400).json({ error: dateRangeResult.error });
       return;
     }
+    const region = getRequestedRegion(req, res);
+    if (region === null) return;
 
     try {
-      const preview = await buildPreview(sourceText, dateRangeResult.range, scheduleParser);
+      const preview = await buildPreview(sourceText, dateRangeResult.range, scheduleParser, region ?? undefined);
       if (!preview.schedule.snapshotAt) {
         res.status(400).json({ error: "Der Snapshot-Zeitpunkt fehlt. Diese Datei kann nicht importiert werden." });
         return;

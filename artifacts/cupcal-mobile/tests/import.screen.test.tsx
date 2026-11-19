@@ -188,6 +188,26 @@ test.each(['plan.mht', 'plan.mhtml'])('liest %s ein und zeigt die Vorschau', asy
   expect(screen.getByTestId('import-end-date').props.value).toBe('12.11.2026');
 });
 
+test('prüft ICS-Dateien mit der ausgewählten Region', async () => {
+  mockGetDocumentAsync.mockResolvedValue(selectedFile('turniere.ics'));
+  mockReadFile.mockResolvedValue([
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'END:VCALENDAR',
+  ].join('\r\n'));
+  const screen = await openImportScreen();
+
+  await fireEvent.press(screen.getByTestId('choose-import-file-button'));
+  expect(await screen.findByText('Region dieser ICS-Datei')).toBeTruthy();
+  await fireEvent.press(screen.getByTestId('import-region-NAE'));
+  await fireEvent.press(screen.getByTestId('preview-import-file-button'));
+
+  await waitFor(() => expect(mockPreviewImport).toHaveBeenCalledWith({
+    data: 'BEGIN:VCALENDAR\r\nVERSION:2.0\r\nEND:VCALENDAR',
+    params: { region: 'NAE' },
+  }));
+});
+
 test('wendet den gewählten Datumsbereich auf Vorschau, Bestätigung und Import an', async () => {
   mockGetDocumentAsync.mockResolvedValue(selectedFile('plan.mht'));
   mockPreviewImport.mockImplementation(async ({ params }: { params?: { startDate?: string; endDate?: string } }) => ({
@@ -772,7 +792,7 @@ test('meldet einen Abbruch verständlich und lässt die Auswahl erneut zu', asyn
 });
 
 test.each([
-  ['falscher Dateityp', selectedFile('plan.pdf'), 'Bitte wähle eine MHT- oder MHTML-Datei aus.'],
+  ['falscher Dateityp', selectedFile('plan.pdf'), 'Bitte wähle eine MHT-, MHTML- oder ICS-Datei aus.'],
   ['Datei über 25 MB', selectedFile('plan.mht', 25 * 1024 * 1024 + 1), 'Die Datei ist größer als 25 MB. Bitte wähle eine kleinere Datei aus.'],
 ])('weist %s mit verständlichem Hinweis zurück', async (_label, selection, message) => {
   mockGetDocumentAsync.mockResolvedValue(selection);

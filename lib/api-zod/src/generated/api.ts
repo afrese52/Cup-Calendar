@@ -62,7 +62,8 @@ export const GetAdminImportAccessResponse = zod.object({
  */
 export const PreviewMhtImportQueryParams = zod.object({
   "startDate": zod.date().optional().describe('Inclusive schedule-local start date, used together with endDate'),
-  "endDate": zod.date().optional().describe('Inclusive schedule-local end date, used together with startDate')
+  "endDate": zod.date().optional().describe('Inclusive schedule-local end date, used together with startDate'),
+  "region": zod.enum(['EU', 'NAE', 'NAW', 'BR', 'ASIA', 'OCE', 'ME', 'GLOBAL']).optional().describe('Required for ICS files; region assigned to events in that calendar')
 })
 
 export const PreviewMhtImportResponse = zod.object({
@@ -119,7 +120,8 @@ export const PreviewMhtImportResponse = zod.object({
 export const ImportMhtScheduleQueryParams = zod.object({
   "confirmStaleSnapshot": zod.coerce.boolean().optional().describe('Explicitly confirms importing a snapshot older than 24 hours after the updated preview was reviewed'),
   "startDate": zod.date().optional().describe('Inclusive schedule-local start date, used together with endDate'),
-  "endDate": zod.date().optional().describe('Inclusive schedule-local end date, used together with startDate')
+  "endDate": zod.date().optional().describe('Inclusive schedule-local end date, used together with startDate'),
+  "region": zod.enum(['EU', 'NAE', 'NAW', 'BR', 'ASIA', 'OCE', 'ME', 'GLOBAL']).optional().describe('Required for ICS files; region assigned to events in that calendar')
 })
 
 export const ImportMhtScheduleResponse = zod.object({

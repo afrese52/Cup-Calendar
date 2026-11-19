@@ -7,7 +7,7 @@ import {
   useImportMhtSchedule,
   usePreviewMhtImport,
 } from '@workspace/api-client-react';
-import type { MhtImportPreview, MhtImportResult } from '@workspace/api-client-react';
+import type { MhtImportPreview, MhtImportResult, PreviewMhtImportParams } from '@workspace/api-client-react';
 import { File as ExpoFile } from 'expo-file-system';
 import * as DocumentPicker from 'expo-document-picker';
 import { Stack, useRouter } from 'expo-router';
@@ -20,6 +20,8 @@ import { watchAuthSession } from '@/services/accountAuth';
 import { supabase } from '@/services/supabase';
 
 const MAX_FILE_BYTES = 25 * 1024 * 1024;
+const IMPORT_REGIONS = ['EU', 'NAE', 'NAW', 'BR', 'ASIA', 'OCE', 'ME', 'GLOBAL'] as const;
+type ImportRegion = NonNullable<PreviewMhtImportParams['region']>;
 
 type PickedImportSource = {
   name: string;
@@ -176,7 +178,8 @@ export default function AdminImportScreen() {
   });
   const previewMutation = usePreviewMhtImport({ request: authRequest });
   const importMutation = useImportMhtSchedule({ request: authRequest });
-  const [pickedFile, setPickedFile] = useState<{ name: string; content: string } | null>(null);
+  const [pickedFile, setPickedFile] = useState<{ name: string; content: string; format: 'ics' | 'mht' } | null>(null);
+  const [selectedRegion, setSelectedRegion] = useState<ImportRegion>('EU');
   const [preview, setPreview] = useState<MhtImportPreview | null>(null);
   const [importResult, setImportResult] = useState<MhtImportResult | null>(null);
   const [startDateText, setStartDateText] = useState('');
@@ -227,10 +230,15 @@ export default function AdminImportScreen() {
         setError('Es wurde keine Datei bereitgestellt. Bitte wähle sie erneut aus.');
         return;
       }
-      if (!/\.(mht|mhtml)$/i.test(selection.name)) {
+      const format = /\.ics$/i.test(selection.name)
+        ? 'ics'
+        : /\.(mht|mhtml)$/i.test(selection.name)
+          ? 'mht'
+          : null;
+      if (!format) {
         setPickedFile(null);
         setPreview(null);
-        setError('Bitte wähle eine MHT- oder MHTML-Datei aus.');
+        setError('Bitte wähle eine MHT-, MHTML- oder ICS-Datei aus.');
         return;
       }
       if (!selection.uri) {
@@ -263,7 +271,7 @@ export default function AdminImportScreen() {
         setError('Die ausgewählte Datei ist leer.');
         return;
       }
-      setPickedFile({ name: selection.name, content });
+      setPickedFile({ name: selection.name, content, format });
       setPreview(null);
       setImportResult(null);
       setStartDateText('');
@@ -272,6 +280,14 @@ export default function AdminImportScreen() {
       setError('Die Datei konnte nicht gelesen werden. Bitte prüfe, ob sie noch verfügbar ist, und wähle sie erneut aus.');
     }
   };
+
+  function getImportParams(range?: { startDate: string; endDate: string }): PreviewMhtImportParams | undefined {
+    const params = {
+      ...(range ?? {}),
+      ...(pickedFile?.format === 'ics' ? { region: selectedRegion } : {}),
+    };
+    return Object.keys(params).length ? params : undefined;
+  }
 
   const checkFile = async () => {
     if (!pickedFile) return;
@@ -289,7 +305,7 @@ export default function AdminImportScreen() {
     try {
       const result = await previewMutation.mutateAsync({
         data: pickedFile.content,
-        params: range ?? undefined,
+        params: getImportParams(range ?? undefined),
       });
       setPreview(result);
       setStartDateText(formatDateInput(result.startDate));
@@ -329,7 +345,10 @@ export default function AdminImportScreen() {
       ? { startDate: reviewedPreview.startDate, endDate: reviewedPreview.endDate }
       : undefined;
     try {
-      const currentPreview = await previewMutation.mutateAsync({ data: pickedFile.content, params: range });
+      const currentPreview = await previewMutation.mutateAsync({
+        data: pickedFile.content,
+        params: getImportParams(range),
+      });
       setPreview(currentPreview);
       if (currentPreview.importableCount === 0) {
         setError('Es gibt keine eindeutig zugeordneten zukünftigen Termine zum Importieren.');
@@ -343,7 +362,7 @@ export default function AdminImportScreen() {
       const result = await importMutation.mutateAsync({
         data: pickedFile.content,
         params: {
-          ...range,
+          ...getImportParams(range),
           confirmStaleSnapshot: currentPreview.isSnapshotStale,
         },
       });
@@ -361,7 +380,10 @@ export default function AdminImportScreen() {
         pickedFile
       ) {
         try {
-          const currentPreview = await previewMutation.mutateAsync({ data: pickedFile.content, params: range });
+          const currentPreview = await previewMutation.mutateAsync({
+            data: pickedFile.content,
+            params: getImportParams(range),
+          });
           setPreview(currentPreview);
           if (currentPreview.isSnapshotStale) {
             showImportConfirmation(currentPreview);
@@ -384,7 +406,10 @@ export default function AdminImportScreen() {
       return;
     }
     try {
-      const currentPreview = await previewMutation.mutateAsync({ data: pickedFile.content, params: range });
+      const currentPreview = await previewMutation.mutateAsync({
+        data: pickedFile.content,
+        params: getImportParams(range),
+      });
       setPreview(currentPreview);
       if (currentPreview.importableCount === 0) {
         setError('Es gibt keine eindeutig zugeordneten zukünftigen Termine zum Importieren.');
@@ -442,7 +467,7 @@ export default function AdminImportScreen() {
         <Text style={[styles.eyebrow, { color: colors.primary }]}>CUPCAL · ADMIN</Text>
         <Text style={[styles.heading, { color: colors.foreground }]}>Termine importieren</Text>
         <Text style={[styles.intro, { color: colors.mutedForeground }]}>
-          Lade einen gespeicherten Fortnite-Spielplan als MHT-Datei hoch. Vor dem Speichern siehst du, welche Einträge neu sind, aktualisiert werden oder wegen unklarer Zuordnung ausgelassen werden.
+          Lade einen gespeicherten Spielplan als MHT-, MHTML- oder ICS-Datei hoch. Vor dem Speichern siehst du neue, aktualisierte und nicht eindeutig zuordenbare Einträge.
         </Text>
 
         {isCheckingAccess ? (
@@ -489,8 +514,36 @@ export default function AdminImportScreen() {
               </View>
               <Text style={[styles.cardTitle, { color: colors.foreground }]}>Spielplan-Datei</Text>
               <Text style={[styles.cardCopy, { color: colors.mutedForeground }]}>
-                MHT oder MHTML · maximal 25 MB · Zeitzone Europe/Berlin
+                MHT, MHTML oder ICS · maximal 25 MB · ICS-Zeitzonen werden beachtet
               </Text>
+              {pickedFile?.format === 'ics' ? (
+                <View style={styles.regionPicker}>
+                  <Text style={[styles.regionLabel, { color: colors.mutedForeground }]}>Region dieser ICS-Datei</Text>
+                  <View style={styles.regionOptions}>
+                    {IMPORT_REGIONS.map((region) => (
+                      <Pressable
+                        key={region}
+                        accessibilityRole="radio"
+                        accessibilityState={{ checked: selectedRegion === region }}
+                        testID={`import-region-${region}`}
+                        onPress={() => {
+                          setSelectedRegion(region);
+                          setPreview(null);
+                        }}
+                        style={[
+                          styles.regionOption,
+                          {
+                            borderColor: selectedRegion === region ? colors.primary : colors.border,
+                            backgroundColor: selectedRegion === region ? colors.accent : colors.card,
+                          },
+                        ]}
+                      >
+                        <Text style={[styles.regionOptionText, { color: colors.foreground }]}>{region}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                </View>
+              ) : null}
               <Pressable
                 accessibilityRole="button"
                 testID="choose-import-file-button"
@@ -972,6 +1025,11 @@ const styles = StyleSheet.create({
   primaryButton: { minHeight: 48, borderRadius: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 9, marginTop: 12, paddingHorizontal: 14 },
   primaryButtonText: { fontSize: 13, fontWeight: '800' },
   importButton: { marginTop: 0, marginBottom: 10 },
+  regionPicker: { gap: 9, marginTop: 16, marginBottom: 14 },
+  regionLabel: { fontSize: 13, fontWeight: '600' },
+  regionOptions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  regionOption: { minWidth: 52, paddingHorizontal: 12, paddingVertical: 9, alignItems: 'center', borderWidth: 1, borderRadius: 12 },
+  regionOptionText: { fontSize: 13, fontWeight: '700' },
   snapshotWarning: { marginTop: 12 },
   pressed: { opacity: 0.74 },
   disabled: { opacity: 0.5 },

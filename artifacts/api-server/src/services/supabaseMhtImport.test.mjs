@@ -2222,3 +2222,94 @@ test("lists only the 20 newest imports in descending import-time order", async (
     expectedRows.map(({ id, imported_at }) => ({ id, importedAt: imported_at })),
   );
 });
+
+test("prüft ICS-Dateien über die Admin-API und weist Nicht-Admins ab", async () => {
+  const originalEnv = new Map(
+    ["NODE_ENV", "SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "CUPCAL_IMPORT_ADMIN_EMAILS"]
+      .map((key) => [key, process.env[key]]),
+  );
+  const fakeSupabase = createServer((request, response) => {
+    response.setHeader("Content-Type", "application/json");
+    if (request.url === "/auth/v1/user") {
+      const isAdmin = request.headers.authorization === "Bearer valid-ics-admin-token";
+      response.end(JSON.stringify({
+        id: isAdmin ? "ics-admin" : "ics-ordinary-user",
+        email: isAdmin ? "admin@cupcal.test" : "user@cupcal.test",
+      }));
+      return;
+    }
+    if (request.url?.startsWith("/rest/v1/fortnite_events")) {
+      response.end("[]");
+      return;
+    }
+    response.statusCode = 404;
+    response.end(JSON.stringify({ message: "Unexpected test request" }));
+  });
+  let fakeSupabaseUrl;
+  let apiServer;
+  let tempDir;
+
+  try {
+    fakeSupabaseUrl = await listen(fakeSupabase);
+    process.env["NODE_ENV"] = "production";
+    process.env["SUPABASE_URL"] = fakeSupabaseUrl;
+    process.env["SUPABASE_SERVICE_ROLE_KEY"] = "test-service-role-key";
+    process.env["CUPCAL_IMPORT_ADMIN_EMAILS"] = "admin@cupcal.test";
+
+    const loaded = await loadApiApp();
+    tempDir = loaded.tempDir;
+    apiServer = loaded.app.listen(0, "127.0.0.1");
+    await new Promise((resolve, reject) => {
+      apiServer.once("error", reject);
+      apiServer.once("listening", resolve);
+    });
+    const apiUrl = `http://127.0.0.1:${apiServer.address().port}/api/v1/admin/events/import/preview`;
+    const icsFile = [
+      "BEGIN:VCALENDAR",
+      "VERSION:2.0",
+      "X-WR-CALNAME:CupCal EU",
+      "BEGIN:VEVENT",
+      "UID:cupcal-ics-test@example.invalid",
+      "DTSTART:20301112T180000Z",
+      "DTEND:20301112T193000Z",
+      "SUMMARY:FNCS Reload Solo Qualifier",
+      "END:VEVENT",
+      "END:VCALENDAR",
+      "",
+    ].join("\r\n");
+    const adminResponse = await fetch(`${apiUrl}?region=EU`, {
+      method: "POST",
+      headers: {
+        Authorization: "Bearer valid-ics-admin-token",
+        "Content-Type": "text/plain; charset=utf-8",
+      },
+      body: icsFile,
+    });
+    const preview = await adminResponse.json();
+    assert.equal(adminResponse.status, 200, JSON.stringify(preview));
+    PreviewMhtImportResponse.parse(preview);
+    assert.equal(preview.sourceUrl, null);
+    assert.equal(preview.region, "EU");
+    assert.equal(preview.importableCount, 1);
+    assert.equal(preview.events[0].title, "FNCS Reload Solo Qualifier");
+    assert.match(preview.events[0].id, /^ics:[a-f0-9]{64}$/);
+
+    const ordinaryResponse = await fetch(`${apiUrl}?region=EU`, {
+      method: "POST",
+      headers: {
+        Authorization: "Bearer ordinary-user-token",
+        "Content-Type": "text/plain; charset=utf-8",
+      },
+      body: icsFile,
+    });
+    assert.equal(ordinaryResponse.status, 403);
+  } finally {
+    if (apiServer) await closeServer(apiServer);
+    if (fakeSupabase.listening) await closeServer(fakeSupabase);
+    if (tempDir) await rm(tempDir, { recursive: true, force: true });
+    for (const [key, value] of originalEnv) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+});

@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { ImportMhtScheduleRegion } from './importMhtScheduleRegion';
 
 export type ImportMhtScheduleParams = {
 /**
@@ -19,4 +20,8 @@ startDate?: Date;
  * Inclusive schedule-local end date, used together with startDate
  */
 endDate?: Date;
+/**
+ * Required for ICS files; region assigned to events in that calendar
+ */
+region?: ImportMhtScheduleRegion;
 };

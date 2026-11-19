@@ -1,8 +1,8 @@
-# MHT-Terminimport
+# Terminimport
 
 In der CupCal-App gibt es unter **Info → Turniertermine importieren** eine
-geschützte Upload-Maske für gespeicherte Fortnite-Spielpläne (`.mht` oder
-`.mhtml`). Die Datei wird zuerst geprüft; erst nach einer ausdrücklichen
+geschützte Upload-Maske für gespeicherte Spielpläne (`.mht`, `.mhtml` oder
+`.ics`). Die Datei wird zuerst geprüft; erst nach einer ausdrücklichen
 Bestätigung werden eindeutig zugeordnete zukünftige Termine in
 `public.fortnite_events` geschrieben.
 
@@ -17,8 +17,11 @@ Import gesperrt. Der Supabase-Service-Schlüssel wird ausschließlich auf dem
 API-Server verwendet und nie an die App übertragen.
 
 Vergangene Termine und Datensätze mit einer unklaren Spielformat-Zuordnung
-werden in der Vorschau markiert und nicht gespeichert. Bestehende Termine mit
-derselben Epic-Kennung werden aktualisiert; persönliche Admin-Notizen und
+werden in der Vorschau markiert und nicht gespeichert. Bei ICS-Dateien wählst
+du die Region vor der Prüfung aus; Termine mit eindeutiger UID werden bei
+erneutem Import wiedererkannt. Wiederkehrende ICS-Termine werden angezeigt,
+aber nicht importiert. Bestehende Termine mit derselben Kennung werden
+aktualisiert; persönliche Admin-Notizen und
 manuelle Hervorhebungen bleiben dabei unverändert. Neue Dateien sind weiterhin
 Momentaufnahmen, keine Live-Verbindung zu Epic.
 

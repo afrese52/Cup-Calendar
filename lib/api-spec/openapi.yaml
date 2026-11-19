@@ -108,6 +108,13 @@ paths:
           required: false
           description: Inclusive schedule-local end date, used together with startDate
           schema: { type: string, format: date }
+        - in: query
+          name: region
+          required: false
+          description: Required for ICS files; region assigned to events in that calendar
+          schema:
+            type: string
+            enum: [EU, NAE, NAW, BR, ASIA, OCE, ME, GLOBAL]
       requestBody:
         required: true
         content:
@@ -155,6 +162,13 @@ paths:
           required: false
           description: Inclusive schedule-local end date, used together with startDate
           schema: { type: string, format: date }
+        - in: query
+          name: region
+          required: false
+          description: Required for ICS files; region assigned to events in that calendar
+          schema:
+            type: string
+            enum: [EU, NAE, NAW, BR, ASIA, OCE, ME, GLOBAL]
       requestBody:
         required: true
         content:
@@ -331,7 +345,7 @@ components:
       required: [confirmationToken]
     MhtScheduleFile:
       type: string
-      description: UTF-8 text content of an MHT or MHTML schedule snapshot
+      description: UTF-8 text content of an MHT, MHTML, or ICS schedule file
     MhtImportEvent:
       type: object
       properties:

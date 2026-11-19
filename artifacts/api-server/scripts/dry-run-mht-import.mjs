@@ -244,7 +244,7 @@ function getTimeZoneOffset(epochMs, timeZone) {
   ) - epochMs;
 }
 
-function wallTimeToEpoch(dateParts, hours, minutes, timeZone) {
+export function wallTimeToEpoch(dateParts, hours, minutes, timeZone) {
   const expected = {
     ...dateParts,
     hour: hours,
@@ -283,7 +283,7 @@ function datePlusOneDay(dateParts) {
   };
 }
 
-function mapTournamentType(title) {
+export function mapTournamentType(title) {
   const indicators = [
     [/\bFNCS\b/i, "FNCS"],
     [/\b(?:CASH CUP|VICTORY CUP)\b/i, "Cash Cup"],
@@ -298,7 +298,7 @@ function mapTournamentType(title) {
   return matches.length === 1 ? matches[0] : null;
 }
 
-function mapCategory(title, tournamentType) {
+export function mapCategory(title, tournamentType) {
   const lower = title.toLowerCase();
   if (lower.includes("qualifier") || lower.includes("qualification") || lower.includes("qualifikation")) {
     return "Qualifikation";
@@ -312,7 +312,7 @@ function mapCategory(title, tournamentType) {
   return "Turnier";
 }
 
-function mapGameMode(title) {
+export function mapGameMode(title) {
   const lower = title.toLowerCase();
   const hasZeroBuild = /\bzero[\s-]+build\b|\bnull bauen\b/i.test(lower);
   const hasReload = /\breload\b/i.test(lower);
@@ -340,11 +340,11 @@ function mapGameMode(title) {
   return matches.length === 1 ? matches[0] : null;
 }
 
-function mapTournamentSeries(title) {
+export function mapTournamentSeries(title) {
   return /\breload\b/i.test(title) ? "Reload" : null;
 }
 
-function mapGameRuleset(title, gameMode) {
+export function mapGameRuleset(title, gameMode) {
   const lower = title.toLowerCase();
   if (/\bzero[\s-]+build\b|\bnull bauen\b/i.test(lower)) return "Zero Build";
   if (/\bbattle royale\b/i.test(lower) || gameMode === "Reload") return "Battle Royale";

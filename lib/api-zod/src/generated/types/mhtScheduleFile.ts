@@ -7,6 +7,6 @@
  */
 
 /**
- * UTF-8 text content of an MHT or MHTML schedule snapshot
+ * UTF-8 text content of an MHT, MHTML, or ICS schedule file
  */
 export type MhtScheduleFile = string;

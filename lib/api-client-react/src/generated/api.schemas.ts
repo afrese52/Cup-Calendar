@@ -147,7 +147,7 @@ export interface AccountDeletionConfirmation {
 }
 
 /**
- * UTF-8 text content of an MHT or MHTML schedule snapshot
+ * UTF-8 text content of an MHT, MHTML, or ICS schedule file
  */
 export type MhtScheduleFile = string;
 
@@ -428,7 +428,25 @@ startDate?: string;
  * Inclusive schedule-local end date, used together with startDate
  */
 endDate?: string;
+/**
+ * Required for ICS files; region assigned to events in that calendar
+ */
+region?: PreviewMhtImportRegion;
 };
+
+export type PreviewMhtImportRegion = typeof PreviewMhtImportRegion[keyof typeof PreviewMhtImportRegion];
+
+
+export const PreviewMhtImportRegion = {
+  EU: 'EU',
+  NAE: 'NAE',
+  NAW: 'NAW',
+  BR: 'BR',
+  ASIA: 'ASIA',
+  OCE: 'OCE',
+  ME: 'ME',
+  GLOBAL: 'GLOBAL',
+} as const;
 
 export type ImportMhtScheduleParams = {
 /**
@@ -443,5 +461,23 @@ startDate?: string;
  * Inclusive schedule-local end date, used together with startDate
  */
 endDate?: string;
+/**
+ * Required for ICS files; region assigned to events in that calendar
+ */
+region?: ImportMhtScheduleRegion;
 };
+
+export type ImportMhtScheduleRegion = typeof ImportMhtScheduleRegion[keyof typeof ImportMhtScheduleRegion];
+
+
+export const ImportMhtScheduleRegion = {
+  EU: 'EU',
+  NAE: 'NAE',
+  NAW: 'NAW',
+  BR: 'BR',
+  ASIA: 'ASIA',
+  OCE: 'OCE',
+  ME: 'ME',
+  GLOBAL: 'GLOBAL',
+} as const;
 

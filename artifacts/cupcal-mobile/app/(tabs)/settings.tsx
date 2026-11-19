@@ -949,7 +949,7 @@ export default function SettingsScreen() {
               <SettingRow
                 icon="upload-cloud"
                 title="Turniertermine importieren"
-                subtitle="Gespeicherte MHT-Datei prüfen und freigegebene Termine importieren."
+                subtitle="MHT-, MHTML- und ICS-Dateien prüfen und Termine importieren."
                 onPress={() => router.push('/admin/import')}
               />
             </View>

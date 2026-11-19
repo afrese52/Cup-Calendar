@@ -10,6 +10,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "dry-run:mht": "node ./scripts/run-dry-run-mht-import.mjs",
     "test:mht-import": "node --test ./scripts/dry-run-mht-import.test.mjs",
+    "test:ics-import": "node --test ./scripts/ics-import.test.mjs",
     "test:bookmark-isolation": "node --test ./scripts/bookmark-account-isolation.test.mjs",
     "test:bookmark-concurrency": "node --test --test-name-pattern='gleichzeitige RPC-Aufrufe' ./scripts/bookmark-account-isolation.test.mjs",
     "test:bookmark-migration": "pnpm run build && node --test ./scripts/bookmark-migration.test.mjs",
