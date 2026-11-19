@@ -3,6 +3,7 @@ import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useColors } from '@/hooks/useColors';
 import { Feather } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
+import Svg, { Path } from 'react-native-svg';
 
 type CupCalTabBarProps = Parameters<
   NonNullable<React.ComponentProps<typeof Tabs>['tabBar']>
@@ -12,24 +13,45 @@ function CupCalTabBar({ state, descriptors, emitter, navigateToTab, insets }: Cu
   const colors = useColors();
   const isWeb = Platform.OS === 'web';
   const bottomInset = isWeb ? 34 : insets.bottom;
+  const barBodyHeight = isWeb ? 84 : 70;
   const selectedRoute = state.routes[state.index];
   const otherRoutes = state.routes.filter((_, index) => index !== state.index);
   const centeredRoutes = [otherRoutes[0], selectedRoute, otherRoutes[1]].filter(
     (route): route is (typeof state.routes)[number] => route !== undefined,
   );
+  const lineY = barBodyHeight * 0.2;
+  const shoulderY = barBodyHeight * 0.49;
+  const notchY = barBodyHeight * 0.68;
+  const topEdge = `M 0 ${lineY} H 138 C 158 ${lineY} 160 ${shoulderY} 179 ${shoulderY} C 190 ${shoulderY} 189 ${notchY} 200 ${notchY} C 211 ${notchY} 210 ${shoulderY} 221 ${shoulderY} C 240 ${shoulderY} 242 ${lineY} 262 ${lineY} H 400`;
 
   return (
     <View
       style={[
         styles.tabBar,
         {
-          backgroundColor: colors.card,
-          borderTopColor: colors.border,
           paddingBottom: bottomInset,
           height: (isWeb ? 84 : 70) + bottomInset,
         },
       ]}
     >
+      <Svg
+        pointerEvents="none"
+        viewBox={`0 0 400 ${barBodyHeight}`}
+        preserveAspectRatio="none"
+        style={[StyleSheet.absoluteFill, { bottom: bottomInset, height: barBodyHeight }]}
+      >
+        <Path d={`${topEdge} V ${barBodyHeight} H 0 Z`} fill={colors.card} />
+        <Path d={topEdge} fill="none" stroke={colors.border} strokeWidth={1} />
+      </Svg>
+      {bottomInset > 0 && (
+        <View
+          pointerEvents="none"
+          style={[
+            styles.safeAreaFill,
+            { height: bottomInset, backgroundColor: colors.card },
+          ]}
+        />
+      )}
       <View style={styles.tabRow}>
         {centeredRoutes.map((route) => {
           const { options } = descriptors[route.key];
@@ -66,25 +88,27 @@ function CupCalTabBar({ state, descriptors, emitter, navigateToTab, insets }: Cu
               onLongPress={() =>
                 emitter.emit({ type: 'tabLongPress', target: route.key })
               }
-              style={styles.tabButton}
+              style={[
+                styles.tabButton,
+                isFocused ? styles.tabButtonActive : styles.tabButtonInactive,
+              ]}
             >
               <View
                 style={[
-                  styles.iconWrap,
+                  isFocused ? styles.iconWrapActive : styles.iconWrapInactive,
                   isFocused && {
                     backgroundColor: colors.primary,
                     shadowColor: colors.primary,
                     shadowOpacity: 0.3,
-                    shadowRadius: 12,
-                    shadowOffset: { width: 0, height: 4 },
-                    elevation: 8,
-                    transform: [{ translateY: -8 }],
+                    shadowRadius: 16,
+                    shadowOffset: { width: 0, height: 7 },
+                    elevation: 14,
                   },
                 ]}
               >
                 <Feather
                   name={iconName}
-                  size={isFocused ? 23 : 21}
+                  size={isFocused ? 25 : 18}
                   color={isFocused ? colors.primaryForeground : colors.mutedForeground}
                 />
               </View>
@@ -94,6 +118,7 @@ function CupCalTabBar({ state, descriptors, emitter, navigateToTab, insets }: Cu
                   styles.tabLabel,
                   { color: isFocused ? colors.primary : colors.mutedForeground },
                   isFocused && styles.tabLabelActive,
+                  !isFocused && styles.tabLabelInactive,
                 ]}
               >
                 {label}
@@ -129,8 +154,15 @@ export default function TabLayout() {
 
 const styles = StyleSheet.create({
   tabBar: {
-    borderTopWidth: StyleSheet.hairlineWidth,
     paddingTop: 6,
+    backgroundColor: 'transparent',
+    overflow: 'visible',
+  },
+  safeAreaFill: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
   },
   tabRow: {
     height: 64,
@@ -145,19 +177,40 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 1,
   },
-  iconWrap: {
-    width: 44,
-    height: 44,
+  tabButtonActive: {
+    zIndex: 2,
+  },
+  tabButtonInactive: {
+    transform: [{ scale: 0.9 }],
+  },
+  iconWrapActive: {
+    position: 'absolute',
+    top: -14,
+    width: 56,
+    height: 56,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 22,
+    borderRadius: 28,
+  },
+  iconWrapInactive: {
+    width: 38,
+    height: 38,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 19,
   },
   tabLabel: {
-    fontSize: 11,
-    lineHeight: 14,
+    fontSize: 12,
+    lineHeight: 16,
     fontWeight: '500',
   },
   tabLabelActive: {
     fontWeight: '700',
+    position: 'absolute',
+    bottom: 0,
+  },
+  tabLabelInactive: {
+    fontSize: 10,
+    lineHeight: 13,
   },
 });
