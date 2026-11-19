@@ -5,6 +5,7 @@ import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-n
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { EventCard } from '@/components/EventCard';
 import { MonthCalendar } from '@/components/MonthCalendar';
+import { WeekCalendarStrip } from '@/components/WeekCalendarStrip';
 import { useColors } from '@/hooks/useColors';
 import {
   matchesEventFilter,
@@ -51,19 +52,25 @@ function deviceTimezoneLabel() {
 
 function CategoryLegend() {
   const colors = useColors();
-  const entries: { category: EventCategory; colorKey: (typeof categoryColorKey)[EventCategory] }[] = [
-    { category: 'Turnier', colorKey: 'categoryTournament' },
-    { category: 'Liga', colorKey: 'categoryLeague' },
-    { category: 'Qualifikation', colorKey: 'categoryQualification' },
-    { category: 'Trainingsrunde', colorKey: 'categoryTraining' },
+  const entries: {
+    category: EventCategory;
+    label: string;
+    colorKey: (typeof categoryColorKey)[EventCategory];
+  }[] = [
+    { category: 'Turnier', label: 'Turnier', colorKey: 'categoryTournament' },
+    { category: 'Liga', label: 'Liga', colorKey: 'categoryLeague' },
+    { category: 'Qualifikation', label: 'Quali', colorKey: 'categoryQualification' },
+    { category: 'Trainingsrunde', label: 'Training', colorKey: 'categoryTraining' },
   ];
 
   return (
     <View style={styles.legend}>
-      {entries.map(({ category, colorKey }) => (
-        <View key={category} style={styles.legendItem}>
+      {entries.map(({ category, label, colorKey }) => (
+        <View key={category} style={styles.legendItem} accessibilityLabel={category}>
           <View style={[styles.legendDot, { backgroundColor: colors[colorKey] }]} />
-          <Text style={[styles.legendText, { color: colors.mutedForeground }]}>{category}</Text>
+          <Text style={[styles.legendText, { color: colors.mutedForeground }]}>
+            {label}
+          </Text>
         </View>
       ))}
     </View>
@@ -81,6 +88,7 @@ export default function CalendarScreen() {
   const [selectedGameFeature, setSelectedGameFeature] =
     useState<CalendarGameFeatureFilter>('Alle Spielmerkmale');
   const [filterOpen, setFilterOpen] = useState(false);
+  const [monthExpanded, setMonthExpanded] = useState(false);
   const filtersActive =
     selectedCategory !== 'Alle Termine' || selectedGameFeature !== 'Alle Spielmerkmale';
   const filterSummary = filtersActive
@@ -122,7 +130,12 @@ export default function CalendarScreen() {
   );
 
   const moveMonth = (amount: number) => {
-    setCurrentMonth((month) => new Date(month.getFullYear(), month.getMonth() + amount, 1));
+    const nextMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + amount, 1);
+    const lastDay = new Date(nextMonth.getFullYear(), nextMonth.getMonth() + 1, 0).getDate();
+    setCurrentMonth(nextMonth);
+    setSelectedDate(
+      new Date(nextMonth.getFullYear(), nextMonth.getMonth(), Math.min(selectedDate.getDate(), lastDay)),
+    );
     void Haptics.selectionAsync();
   };
 
@@ -221,14 +234,55 @@ export default function CalendarScreen() {
           </View>
         </View>
 
-        <MonthCalendar
-          currentMonth={currentMonth}
+        <WeekCalendarStrip
           selectedDate={selectedDate}
           events={visibleEvents}
           onSelectDate={selectDate}
         />
 
-        <CategoryLegend />
+        <View style={styles.weekFooter}>
+          <CategoryLegend />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ expanded: monthExpanded }}
+            accessibilityLabel={monthExpanded ? 'Wochenansicht anzeigen' : 'Monat anzeigen'}
+            testID="month-calendar-toggle"
+            onPress={() => setMonthExpanded((expanded) => !expanded)}
+            style={({ pressed }) => [styles.monthToggle, pressed && styles.pressed]}
+          >
+            <Feather name="calendar" size={13} color={colors.primary} />
+            <Text style={[styles.monthToggleText, { color: colors.primary }]}>
+              {monthExpanded ? 'Woche' : 'Monat'}
+            </Text>
+            <Feather
+              name={monthExpanded ? 'chevron-up' : 'chevron-down'}
+              size={14}
+              color={colors.primary}
+            />
+          </Pressable>
+        </View>
+
+        {monthExpanded ? (
+          <MonthCalendar
+            currentMonth={currentMonth}
+            selectedDate={selectedDate}
+            events={visibleEvents}
+            onSelectDate={selectDate}
+          />
+        ) : null}
+
+        <View style={styles.dayHeading}>
+          <View style={styles.dayTitleRow}>
+            <Text style={[styles.dayTitle, { color: colors.foreground }]}>{selectedDateLabel}</Text>
+            <Text style={[styles.dayCount, { color: colors.mutedForeground }]}>
+              {selectedDayEvents.length} {selectedDayEvents.length === 1 ? 'Termin' : 'Termine'}
+            </Text>
+          </View>
+          <Text style={[styles.timezone, { color: colors.mutedForeground }]}>{deviceTimezoneLabel()}</Text>
+          {eventError ? (
+            <Text style={[styles.storageError, { color: colors.warning }]}>{eventError}</Text>
+          ) : null}
+        </View>
 
         <View style={styles.filterWrap}>
           <Pressable
@@ -312,14 +366,6 @@ export default function CalendarScreen() {
           ) : null}
         </View>
 
-        <View style={styles.dayHeading}>
-          <Text style={[styles.dayTitle, { color: colors.foreground }]}>{selectedDateLabel}</Text>
-          <Text style={[styles.timezone, { color: colors.mutedForeground }]}>{deviceTimezoneLabel()}</Text>
-          {eventError ? (
-            <Text style={[styles.storageError, { color: colors.warning }]}>{eventError}</Text>
-          ) : null}
-        </View>
-
         {selectedDayEvents.length ? (
           <View style={styles.dayEvents}>
             {selectedDayEvents.map((event) => (
@@ -357,26 +403,29 @@ export default function CalendarScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1 },
   content: { flexGrow: 1 },
-  brandRow: { marginHorizontal: 20, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', minHeight: 28, marginBottom: 18, gap: 8 },
+  brandRow: { marginHorizontal: 20, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', minHeight: 28, marginBottom: 12, gap: 8 },
   brand: { flexDirection: 'row', alignItems: 'center', gap: 9 },
   brandMark: { width: 11, height: 11, borderRadius: 3, transform: [{ rotate: '45deg' }] },
   brandName: { fontSize: 11, fontWeight: '800', letterSpacing: 2.2 },
   previewBadge: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 8, height: 26, flexDirection: 'row', alignItems: 'center', gap: 5 },
   previewBadgeText: { fontSize: 8, fontWeight: '800', letterSpacing: 0.8 },
-  monthHeading: { marginHorizontal: 20, minHeight: 70, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 13, gap: 8 },
+  monthHeading: { marginHorizontal: 20, minHeight: 56, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, gap: 8 },
   monthTitleBlock: { flexShrink: 1 },
-  monthTitle: { fontSize: 34, lineHeight: 40, fontWeight: '800', letterSpacing: -1.2 },
-  monthSub: { fontSize: 13, marginTop: 4, fontWeight: '500' },
-  monthControls: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  monthArrow: { width: 43, height: 46, borderRadius: 14, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
-  todayButton: { height: 46, borderRadius: 14, borderWidth: 1.5, paddingHorizontal: 13, alignItems: 'center', justifyContent: 'center' },
-  todayButtonText: { fontSize: 14, fontWeight: '700' },
+  monthTitle: { fontSize: 25, lineHeight: 31, fontWeight: '800', letterSpacing: -0.8 },
+  monthSub: { fontSize: 12, marginTop: 2, fontWeight: '500' },
+  monthControls: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  monthArrow: { width: 38, height: 40, borderRadius: 12, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  todayButton: { height: 40, borderRadius: 12, borderWidth: 1.5, paddingHorizontal: 11, alignItems: 'center', justifyContent: 'center' },
+  todayButtonText: { fontSize: 13, fontWeight: '700' },
   pressed: { opacity: 0.7, transform: [{ scale: 0.98 }] },
-  legend: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 12, marginHorizontal: 22, marginTop: 12, marginBottom: 15 },
-  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  weekFooter: { marginHorizontal: 20, marginTop: 9, marginBottom: 15, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6 },
+  legend: { flex: 1, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 },
+  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   legendDot: { width: 6, height: 6, borderRadius: 3 },
-  legendText: { fontSize: 11, fontWeight: '500' },
-  filterWrap: { marginHorizontal: 19, marginBottom: 22 },
+  legendText: { fontSize: 9, fontWeight: '500' },
+  monthToggle: { minHeight: 30, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingHorizontal: 2 },
+  monthToggleText: { fontSize: 10, fontWeight: '700' },
+  filterWrap: { marginHorizontal: 19, marginBottom: 14 },
   filterButton: { minHeight: 54, borderWidth: 1, borderRadius: 16, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 15, gap: 10 },
   filterTitle: { fontSize: 14, fontWeight: '700' },
   filterSelection: { flex: 1, fontSize: 13 },
@@ -387,8 +436,10 @@ const styles = StyleSheet.create({
   filterResetText: { fontSize: 13, fontWeight: '700' },
   optionDot: { width: 7, height: 7, borderRadius: 4 },
   filterOptionText: { flex: 1, fontSize: 13, fontWeight: '600' },
-  dayHeading: { marginHorizontal: 20, marginBottom: 12 },
-  dayTitle: { fontSize: 20, lineHeight: 25, fontWeight: '800', letterSpacing: -0.35 },
+  dayHeading: { marginHorizontal: 20, marginBottom: 10 },
+  dayTitleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  dayTitle: { flex: 1, fontSize: 18, lineHeight: 24, fontWeight: '800', letterSpacing: -0.35 },
+  dayCount: { fontSize: 10, fontWeight: '700' },
   timezone: { marginTop: 6, fontSize: 12 },
   dayEvents: { paddingTop: 1 },
   emptyDay: { marginHorizontal: 20, minHeight: 83, borderWidth: 1, borderRadius: 16, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, gap: 12 },

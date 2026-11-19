@@ -2,7 +2,7 @@ import React from 'react';
 import { afterEach, beforeEach, expect, jest, test } from '@jest/globals';
 import { act, fireEvent, render } from '@testing-library/react-native';
 import { AccessibilityInfo, Alert, Platform } from 'react-native';
-import { matchesEventFilter, sampleEvents, type TournamentEvent } from '../data/events';
+import { matchesEventFilter, sampleEvents, toLocalDateKey, type TournamentEvent } from '../data/events';
 import { EventCard } from '../components/EventCard';
 import CalendarScreen from '../app/(tabs)/index';
 import EventDetailsScreen from '../app/event/[id]';
@@ -40,6 +40,10 @@ jest.mock('@/hooks/useColors', () => ({
     card: '#fff',
     border: '#ddd',
     surfaceRaised: '#f5f5f5',
+    categoryTournament: '#9c0',
+    categoryLeague: '#09c',
+    categoryQualification: '#c90',
+    categoryTraining: '#90c',
   }),
 }));
 jest.mock('@/state/AppContext', () => ({
@@ -123,6 +127,57 @@ test('zeigt im Kalender keinen Hinweis auf manuellen Import', async () => {
 
   expect(view.queryByText('MANUELLER IMPORT')).toBeNull();
   expect(view.getByText('CAP-CALENDAR')).toBeTruthy();
+});
+
+test('zeigt die Wochenleiste standardmäßig und öffnet den Monatskalender auf Wunsch', async () => {
+  const today = new Date();
+  const view = await render(<CalendarScreen />);
+  const todayButton = view.getByTestId(`calendar-week-day-${toLocalDateKey(today)}`);
+
+  expect(todayButton.props.accessibilityState.selected).toBe(true);
+  expect(view.queryByTestId('month-calendar-events')).toBeNull();
+
+  await fireEvent.press(view.getByTestId('month-calendar-toggle'));
+
+  expect(view.getByTestId('month-calendar-events')).toBeTruthy();
+  expect(view.getByTestId('month-calendar-toggle').props.accessibilityState.expanded).toBe(true);
+});
+
+test('zeigt farbige Terminmarker in der Wochenleiste und aktualisiert die Tagesagenda', async () => {
+  const today = new Date();
+  const nextDay = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1, 12);
+  const todayEvent: TournamentEvent = {
+    ...event,
+    id: 'today-tournament',
+    title: 'Heutiges Turnier',
+    category: 'Turnier',
+    startTime: new Date(today.getFullYear(), today.getMonth(), today.getDate(), 12).toISOString(),
+    endTime: new Date(today.getFullYear(), today.getMonth(), today.getDate(), 14).toISOString(),
+  };
+  const nextDayEvent: TournamentEvent = {
+    ...event,
+    id: 'next-day-league',
+    title: 'Liga morgen',
+    category: 'Liga',
+    startTime: nextDay.toISOString(),
+    endTime: new Date(nextDay.getTime() + 2 * 60 * 60 * 1000).toISOString(),
+  };
+  mockContext.current = {
+    authReady: true,
+    isAuthenticated: false,
+    events: [todayEvent, nextDayEvent],
+    bookmarkedIds: [],
+    toggleBookmark: mockToggleBookmark,
+  };
+  const view = await render(<CalendarScreen />);
+
+  expect(view.getByTestId(`calendar-week-marker-${toLocalDateKey(today)}-Turnier`)).toBeTruthy();
+  expect(view.getByText('Heutiges Turnier')).toBeTruthy();
+
+  await fireEvent.press(view.getByTestId(`calendar-week-day-${toLocalDateKey(nextDay)}`));
+
+  expect(view.getByText('Liga morgen')).toBeTruthy();
+  expect(view.getByText('1 Termin')).toBeTruthy();
 });
 
 test.each(['android', 'ios'] as const)(
@@ -258,6 +313,7 @@ test.each([
       toggleBookmark: mockToggleBookmark,
     };
     const view = await render(<CalendarScreen />);
+    await fireEvent.press(view.getByTestId('month-calendar-toggle'));
 
     await fireEvent.press(view.getByTestId('calendar-filter'));
     await fireEvent.press(view.getByTestId('calendar-filter-category-Liga'));
