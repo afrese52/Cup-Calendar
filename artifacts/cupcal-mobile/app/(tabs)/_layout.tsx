@@ -98,16 +98,16 @@ function CupCalTabBar({ state, descriptors, emitter, navigateToTab, insets }: Cu
                   isFocused && {
                     backgroundColor: colors.primary,
                     shadowColor: colors.primary,
-                    shadowOpacity: 0.3,
-                    shadowRadius: 16,
-                    shadowOffset: { width: 0, height: 7 },
-                    elevation: 14,
+                    shadowOpacity: 0.38,
+                    shadowRadius: 19,
+                    shadowOffset: { width: 0, height: 8 },
+                    elevation: 16,
                   },
                 ]}
               >
                 <Feather
                   name={iconName}
-                  size={isFocused ? 25 : 18}
+                  size={isFocused ? 24 : 18}
                   color={isFocused ? colors.primaryForeground : colors.mutedForeground}
                 />
               </View>
@@ -184,12 +184,12 @@ const styles = StyleSheet.create({
   },
   iconWrapActive: {
     position: 'absolute',
-    top: -14,
-    width: 56,
-    height: 56,
+    top: -20,
+    width: 60,
+    height: 60,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 28,
+    borderRadius: 30,
   },
   iconWrapInactive: {
     width: 38,
@@ -206,7 +206,7 @@ const styles = StyleSheet.create({
   tabLabelActive: {
     fontWeight: '700',
     position: 'absolute',
-    bottom: 0,
+    bottom: -2,
   },
   tabLabelInactive: {
     fontSize: 10,
