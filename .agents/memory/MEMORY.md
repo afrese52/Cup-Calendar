@@ -19,6 +19,7 @@
 - [Zod-Schemas in Node-Tests](zod-schemas-node-tests.md) — Generierte Zod-Schemas direkt aus der TS-Ausgabe importieren, wenn Node den Paketindex mit extensionlosen TS-Exports nicht auflöst.
 - [Zustimmung für alte Gast-Favoriten](legacy-bookmark-consent.md) — Vorhandene lokale Gast-Favoriten dürfen erst nach ausdrücklicher Wahl dem aktuellen Konto zugeordnet werden.
 - [Supabase-Admin-Löschtests](supabase-admin-delete-tests.md) — `auth.admin.deleteUser()` lädt das Konto zuerst per Admin-GET und sendet danach erst das DELETE.
+- [Supabase-Migrationsabgleich](supabase-remote-migration-baseline.md) — Das verbundene Supabase-Schema kann Tabellen ohne Migrationserfassung enthalten; Remote-Migrationen nie blind vollständig erneut ausführen.
 - [Countdown-Screen-Tests](confirmation-cooldown-screen-tests.md) — Nach aktiven Countdowns unmounten und den Neustartfall ans Ende der Bildschirmtests setzen.
 - [Screenreader-Ansagen im Passwortspeicher](password-save-screenreader.md) — iOS-Ansagen und Android-Live-Regionen getrennt halten, damit Speicherfehler nicht doppelt vorgelesen werden.
 - [Stabile Daten in Hook-Tests](stable-hook-test-data.md) — Mock-Antwortobjekte für useEffect-Abhängigkeiten müssen über Renderings hinweg referenziell stabil bleiben.
