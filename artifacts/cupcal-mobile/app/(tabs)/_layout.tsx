@@ -1,124 +1,158 @@
 import React from 'react';
-import { Platform, StyleSheet, useColorScheme, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useColors } from '@/hooks/useColors';
 import { Feather } from '@expo/vector-icons';
-import { BlurView } from 'expo-blur';
-import { isLiquidGlassAvailable } from 'expo-glass-effect';
 import { Tabs } from 'expo-router';
-import { NativeTabs } from 'expo-router/unstable-native-tabs';
-import { SymbolView } from 'expo-symbols';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-// IMPORTANT: iOS 26 uses NativeTabs for native tabs with liquid glass support.
-// NativeTabs intentionally does NOT use custom design tokens — liquid glass
-// is a system-level appearance provided by iOS and cannot be overridden.
-// Custom brand colors are applied only on the ClassicTabLayout path (older iOS / Android / web).
-function NativeTabLayout() {
-  return (
-    <NativeTabs>
-      <NativeTabs.Trigger name="index">
-        <NativeTabs.Trigger.Icon sf={{ default: 'calendar', selected: 'calendar' }} />
-        <NativeTabs.Trigger.Label>Kalender</NativeTabs.Trigger.Label>
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="saved">
-        <NativeTabs.Trigger.Icon sf={{ default: 'bookmark', selected: 'bookmark.fill' }} />
-        <NativeTabs.Trigger.Label>Agenda</NativeTabs.Trigger.Label>
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="settings">
-        <NativeTabs.Trigger.Icon sf={{ default: 'info.circle', selected: 'info.circle.fill' }} />
-        <NativeTabs.Trigger.Label>Info</NativeTabs.Trigger.Label>
-      </NativeTabs.Trigger>
-    </NativeTabs>
-  );
-}
+type CupCalTabBarProps = Parameters<
+  NonNullable<React.ComponentProps<typeof Tabs>['tabBar']>
+>[0];
 
-function ClassicTabLayout() {
+function CupCalTabBar({ state, descriptors, emitter, navigateToTab, insets }: CupCalTabBarProps) {
   const colors = useColors();
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme === 'dark';
-  const isIOS = Platform.OS === 'ios';
   const isWeb = Platform.OS === 'web';
-  const insets = useSafeAreaInsets();
+  const bottomInset = isWeb ? 34 : insets.bottom;
 
   return (
-    <Tabs
-      screenOptions={{
-        tabBarActiveTintColor: colors.primary,
-        tabBarInactiveTintColor: colors.mutedForeground,
-        headerShown: false,
-        tabBarStyle: {
-          backgroundColor: isIOS ? 'transparent' : colors.card,
-          borderTopWidth: isWeb ? 1 : 0,
+    <View
+      style={[
+        styles.tabBar,
+        {
+          backgroundColor: colors.card,
           borderTopColor: colors.border,
-          elevation: 0,
-          height: isWeb ? 84 : 64 + insets.bottom,
-          paddingBottom: isWeb ? 0 : Math.max(insets.bottom, 8),
-          paddingTop: 7,
+          paddingBottom: bottomInset,
+          height: (isWeb ? 84 : 70) + bottomInset,
         },
-        tabBarBackground: () =>
-          isIOS ? (
-            <BlurView
-              intensity={100}
-              tint={isDark ? 'dark' : 'light'}
-              style={StyleSheet.absoluteFill}
-            />
-          ) : isWeb ? (
-            <View
-              style={[
-                StyleSheet.absoluteFill,
-                { backgroundColor: colors.background },
-              ]}
-            />
-          ) : null,
-      }}
+      ]}
     >
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: 'Kalender',
-          tabBarIcon: ({ color, focused }) =>
-            isIOS ? (
-              <SymbolView name="calendar" tintColor={color} size={23} />
-            ) : (
-              <Feather
-                name="calendar"
-                size={20}
-                color={focused ? colors.primary : colors.mutedForeground}
-              />
-            ),
-        }}
-      />
-      <Tabs.Screen
-        name="saved"
-        options={{
-          title: 'Agenda',
-          tabBarIcon: ({ color, focused }) =>
-            isIOS ? (
-              <SymbolView name="bookmark" tintColor={color} size={23} />
-            ) : (
-              <Feather name="bookmark" size={20} color={focused ? colors.primary : colors.mutedForeground} />
-            ),
-        }}
-      />
-      <Tabs.Screen
-        name="settings"
-        options={{
-          title: 'Info',
-          tabBarIcon: ({ color, focused }) =>
-            isIOS ? (
-              <SymbolView name="info" tintColor={color} size={23} />
-            ) : (
-              <Feather name="info" size={20} color={focused ? colors.primary : colors.mutedForeground} />
-            ),
-        }}
-      />
-    </Tabs>
+      <View style={styles.tabRow}>
+        {state.routes.map((route, index) => {
+          const { options } = descriptors[route.key];
+          const label =
+            typeof options.tabBarLabel === 'string'
+              ? options.tabBarLabel
+              : options.title ?? route.name;
+          const isFocused = state.index === index;
+          const iconName = route.name === 'index'
+            ? 'calendar'
+            : route.name === 'saved'
+              ? 'bookmark'
+              : 'info';
+
+          const onPress = () => {
+            const event = emitter.emit({
+              type: 'tabPress',
+              target: route.key,
+              canPreventDefault: true,
+            });
+            if (!isFocused && !event.defaultPrevented) {
+              navigateToTab(route.key);
+            }
+          };
+
+          return (
+            <Pressable
+              key={route.key}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: isFocused }}
+              accessibilityLabel={options.tabBarAccessibilityLabel ?? String(label)}
+              testID={`tab-${route.name}`}
+              onPress={onPress}
+              onLongPress={() =>
+                emitter.emit({ type: 'tabLongPress', target: route.key })
+              }
+              style={styles.tabButton}
+            >
+              <View
+                style={[
+                  styles.iconWrap,
+                  isFocused && {
+                    backgroundColor: colors.primary,
+                    shadowColor: colors.primary,
+                    shadowOpacity: 0.3,
+                    shadowRadius: 12,
+                    shadowOffset: { width: 0, height: 4 },
+                    elevation: 8,
+                    transform: [{ translateY: -8 }],
+                  },
+                ]}
+              >
+                <Feather
+                  name={iconName}
+                  size={isFocused ? 23 : 21}
+                  color={isFocused ? colors.primaryForeground : colors.mutedForeground}
+                />
+              </View>
+              <Text
+                numberOfLines={1}
+                style={[
+                  styles.tabLabel,
+                  { color: isFocused ? colors.primary : colors.mutedForeground },
+                  isFocused && styles.tabLabelActive,
+                ]}
+              >
+                {label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+    </View>
   );
 }
 
 export default function TabLayout() {
-  if (isLiquidGlassAvailable()) {
-    return <NativeTabLayout />;
-  }
-  return <ClassicTabLayout />;
+  return (
+    <Tabs
+      tabBar={(props) => <CupCalTabBar {...props} />}
+      screenOptions={{
+        headerShown: false,
+        tabBarStyle: {
+          position: 'absolute',
+          backgroundColor: 'transparent',
+          borderTopWidth: 0,
+          elevation: 0,
+        },
+      }}
+    >
+      <Tabs.Screen name="index" options={{ title: 'Kalender' }} />
+      <Tabs.Screen name="saved" options={{ title: 'Agenda' }} />
+      <Tabs.Screen name="settings" options={{ title: 'Info' }} />
+    </Tabs>
+  );
 }
+
+const styles = StyleSheet.create({
+  tabBar: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingTop: 6,
+  },
+  tabRow: {
+    height: 64,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-around',
+  },
+  tabButton: {
+    flex: 1,
+    height: 64,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 1,
+  },
+  iconWrap: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 22,
+  },
+  tabLabel: {
+    fontSize: 11,
+    lineHeight: 14,
+    fontWeight: '500',
+  },
+  tabLabelActive: {
+    fontWeight: '700',
+  },
+});
