@@ -17,7 +17,7 @@ startDate?: Date;
  */
 endDate?: Date;
 /**
- * Required for ICS files; region assigned to events in that calendar
+ * Required for ICS files as fallback; explicit supported title prefixes override it per event
  */
 region?: PreviewMhtImportRegion;
 };

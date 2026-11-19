@@ -1855,6 +1855,17 @@ test("upsert excludes events with unresolved mapping warnings", () => {
   );
 });
 
+test("speichert ICS-Termine mit markierten Standardwerten, aber nicht deren Prüfhinweise", () => {
+  const [row] = buildMhtEventUpsertRows([event({
+    team_format: "Squads",
+    review_warnings: [],
+    review_notes: ["Spielformat nicht erkennbar; Standardwert „Squads“ wurde gesetzt."],
+  })]);
+
+  assert.equal(row.team_format, "Squads");
+  assert.equal("review_notes" in row, false);
+});
+
 test("writes approved rows with conflict handling and never performs deletion", async () => {
   let call;
   const admin = {
@@ -2274,6 +2285,18 @@ test("prüft ICS-Dateien über die Admin-API und weist Nicht-Admins ab", async (
       "DTEND:20301112T193000Z",
       "SUMMARY:FNCS Reload Solo Qualifier",
       "END:VEVENT",
+      "BEGIN:VEVENT",
+      "UID:mobile-test-cup@example.invalid",
+      "DTSTART:20301113T180000Z",
+      "DTEND:20301113T193000Z",
+      "SUMMARY:[OCE] [Mobile] Mobile Test Cup Event 3",
+      "END:VEVENT",
+      "BEGIN:VEVENT",
+      "UID:team-knight@example.invalid",
+      "DTSTART:20301114T180000Z",
+      "DTEND:20301114T193000Z",
+      "SUMMARY:[NAW] Champion Team Knight FNCS Cup Battle Royale Session 1",
+      "END:VEVENT",
       "END:VCALENDAR",
       "",
     ].join("\r\n");
@@ -2290,9 +2313,16 @@ test("prüft ICS-Dateien über die Admin-API und weist Nicht-Admins ab", async (
     PreviewMhtImportResponse.parse(preview);
     assert.equal(preview.sourceUrl, null);
     assert.equal(preview.region, "EU");
-    assert.equal(preview.importableCount, 1);
+    assert.equal(preview.importableCount, 3);
     assert.equal(preview.events[0].title, "FNCS Reload Solo Qualifier");
     assert.match(preview.events[0].id, /^ics:[a-f0-9]{64}$/);
+    assert.equal(preview.events[1].tournamentType, "Community");
+    assert.equal(preview.events[1].teamFormat, "Solo");
+    assert.equal(preview.events[1].region, "OCE");
+    assert.equal(preview.events[1].reviewNotes.length, 3);
+    assert.equal(preview.events[2].teamFormat, "Squads");
+    assert.equal(preview.events[2].region, "NAW");
+    assert.equal(preview.events[2].reviewNotes.length, 1);
 
     const ordinaryResponse = await fetch(`${apiUrl}?region=EU`, {
       method: "POST",

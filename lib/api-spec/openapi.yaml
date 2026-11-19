@@ -40,7 +40,7 @@ paths:
           in: query
           schema:
             type: string
-            enum: [EU, NAE, NAW, BR, ASIA, OCE, ME, GLOBAL, ALL]
+            enum: [EU, NAE, NAC, NAW, BR, ASIA, OCE, ME, GLOBAL, ALL]
         - name: game_mode
           in: query
           schema:
@@ -111,10 +111,10 @@ paths:
         - in: query
           name: region
           required: false
-          description: Required for ICS files; region assigned to events in that calendar
+          description: Required for ICS files as fallback; explicit supported title prefixes override it per event
           schema:
             type: string
-            enum: [EU, NAE, NAW, BR, ASIA, OCE, ME, GLOBAL]
+            enum: [EU, NAE, NAC, NAW, BR, ASIA, OCE, ME, GLOBAL]
       requestBody:
         required: true
         content:
@@ -165,10 +165,10 @@ paths:
         - in: query
           name: region
           required: false
-          description: Required for ICS files; region assigned to events in that calendar
+          description: Required for ICS files as fallback; explicit supported title prefixes override it per event
           schema:
             type: string
-            enum: [EU, NAE, NAW, BR, ASIA, OCE, ME, GLOBAL]
+            enum: [EU, NAE, NAC, NAW, BR, ASIA, OCE, ME, GLOBAL]
       requestBody:
         required: true
         content:
@@ -278,7 +278,7 @@ components:
         description: { type: string }
         region:
           type: string
-          enum: [EU, NAE, NAW, BR, ASIA, OCE, ME, GLOBAL]
+          enum: [EU, NAE, NAC, NAW, BR, ASIA, OCE, ME, GLOBAL]
         gameMode:
           type: string
           enum: [Battle Royale, Zero Build, Reload, Community]
@@ -351,6 +351,7 @@ components:
       properties:
         id: { type: string }
         title: { type: string }
+        region: { type: string, description: Region assigned to this event }
         startTime: { type: string, format: date-time }
         endTime: { type: string, format: date-time }
         gameMode:
@@ -373,6 +374,10 @@ components:
           enum: [Turnier, Liga, Qualifikation, Trainingsrunde]
         warnings:
           type: array
+          items: { type: string }
+        reviewNotes:
+          type: array
+          description: Non-blocking notes about automatically assigned fallback values
           items: { type: string }
         willUpdate: { type: boolean }
         previousTitle:

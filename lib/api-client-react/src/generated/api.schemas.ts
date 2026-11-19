@@ -15,6 +15,7 @@ export type TournamentEventRegion = typeof TournamentEventRegion[keyof typeof To
 export const TournamentEventRegion = {
   EU: 'EU',
   NAE: 'NAE',
+  NAC: 'NAC',
   NAW: 'NAW',
   BR: 'BR',
   ASIA: 'ASIA',
@@ -216,6 +217,8 @@ export const MhtImportEventCategory = {
 export interface MhtImportEvent {
   id: string;
   title: string;
+  /** Region assigned to this event */
+  region?: string;
   startTime: string;
   endTime: string;
   gameMode: MhtImportEventGameMode;
@@ -227,6 +230,8 @@ export interface MhtImportEvent {
   tournamentType: MhtImportEventTournamentType;
   category: MhtImportEventCategory;
   warnings: string[];
+  /** Non-blocking notes about automatically assigned fallback values */
+  reviewNotes?: string[];
   willUpdate: boolean;
   /**
      * Previous title when it differs from the imported value
@@ -388,6 +393,7 @@ export type GetEventsRegion = typeof GetEventsRegion[keyof typeof GetEventsRegio
 export const GetEventsRegion = {
   EU: 'EU',
   NAE: 'NAE',
+  NAC: 'NAC',
   NAW: 'NAW',
   BR: 'BR',
   ASIA: 'ASIA',
@@ -429,7 +435,7 @@ startDate?: string;
  */
 endDate?: string;
 /**
- * Required for ICS files; region assigned to events in that calendar
+ * Required for ICS files as fallback; explicit supported title prefixes override it per event
  */
 region?: PreviewMhtImportRegion;
 };
@@ -440,6 +446,7 @@ export type PreviewMhtImportRegion = typeof PreviewMhtImportRegion[keyof typeof 
 export const PreviewMhtImportRegion = {
   EU: 'EU',
   NAE: 'NAE',
+  NAC: 'NAC',
   NAW: 'NAW',
   BR: 'BR',
   ASIA: 'ASIA',
@@ -462,7 +469,7 @@ startDate?: string;
  */
 endDate?: string;
 /**
- * Required for ICS files; region assigned to events in that calendar
+ * Required for ICS files as fallback; explicit supported title prefixes override it per event
  */
 region?: ImportMhtScheduleRegion;
 };
@@ -473,6 +480,7 @@ export type ImportMhtScheduleRegion = typeof ImportMhtScheduleRegion[keyof typeo
 export const ImportMhtScheduleRegion = {
   EU: 'EU',
   NAE: 'NAE',
+  NAC: 'NAC',
   NAW: 'NAW',
   BR: 'BR',
   ASIA: 'ASIA',

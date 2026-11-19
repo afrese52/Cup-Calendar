@@ -87,6 +87,60 @@ test("dekodiert gefaltete Zeilen und ICS-Text-Escapes", () => {
   assert.equal(result.events[0].description, "Round, one\nSecond line");
 });
 
+test("importiert die gezeigten Turniere mit transparent markierten Standardwerten", () => {
+  const result = parseIcsSchedule(makeIcs([
+    ...event({
+      uid: "mobile-test-cup@example.invalid",
+      summary: "[OCE] [Mobile] Mobile Test Cup Event 3",
+      extra: ["DESCRIPTION:Mobile Test Cup Event 3"],
+    }),
+    ...event({
+      uid: "naw-team-knight@example.invalid",
+      summary: "[NAW] Champion Team Knight FNCS Cup Battle Royale Session 1",
+    }),
+    ...event({
+      uid: "nac-team-knight@example.invalid",
+      summary: "[NAC] Champion Team Knight FNCS Cup Battle Royale Session 1",
+    }),
+  ]), { region: "OCE" });
+
+  assert.equal(result.cardCount, 3);
+  assert.equal(result.validCount, 3);
+  assert.equal(result.invalidCount, 0);
+  assert.deepEqual(
+    result.events.map(({ title, region, game_mode, team_format, tournament_type, review_notes }) => ({
+      title,
+      region,
+      game_mode,
+      team_format,
+      tournament_type,
+      review_notes,
+    })),
+    [
+      {
+        title: "[OCE] [Mobile] Mobile Test Cup Event 3",
+        region: "OCE",
+        game_mode: "Battle Royale",
+        team_format: "Solo",
+        tournament_type: "Community",
+        review_notes: [
+          "Turnierart nicht erkennbar; Standardwert „Community“ wurde gesetzt.",
+          "Spielmodus nicht erkennbar; Standardwert „Battle Royale“ wurde gesetzt.",
+          "Spielformat nicht erkennbar; Standardwert „Solo“ wurde gesetzt.",
+        ],
+      },
+      ...["[NAW]", "[NAC]"].map((prefix) => ({
+        title: `${prefix} Champion Team Knight FNCS Cup Battle Royale Session 1`,
+        region: prefix === "[NAW]" ? "NAW" : "NAC",
+        game_mode: "Battle Royale",
+        team_format: "Squads",
+        tournament_type: "FNCS",
+        review_notes: ["Spielformat nicht erkennbar; Standardwert „Squads“ wurde gesetzt."],
+      })),
+    ],
+  );
+});
+
 test("überspringt wiederkehrende oder unvollständige Termine mit verständlichem Grund", () => {
   const recurring = event({ extra: ["RRULE:FREQ=WEEKLY;COUNT=3"] });
   const incomplete = [

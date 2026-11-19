@@ -12,6 +12,7 @@ export type GetEventsRegion = typeof GetEventsRegion[keyof typeof GetEventsRegio
 export const GetEventsRegion = {
   EU: 'EU',
   NAE: 'NAE',
+  NAC: 'NAC',
   NAW: 'NAW',
   BR: 'BR',
   ASIA: 'ASIA',

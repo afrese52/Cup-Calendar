@@ -12,6 +12,7 @@ export type PreviewMhtImportRegion = typeof PreviewMhtImportRegion[keyof typeof 
 export const PreviewMhtImportRegion = {
   EU: 'EU',
   NAE: 'NAE',
+  NAC: 'NAC',
   NAW: 'NAW',
   BR: 'BR',
   ASIA: 'ASIA',

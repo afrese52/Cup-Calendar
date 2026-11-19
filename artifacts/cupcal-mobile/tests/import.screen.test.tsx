@@ -208,6 +208,47 @@ test('prüft ICS-Dateien mit der ausgewählten Region', async () => {
   }));
 });
 
+test('zeigt automatisch gesetzte Standardwerte als importierbare Prüfhinweise', async () => {
+  mockGetDocumentAsync.mockResolvedValue(selectedFile('turniere.ics'));
+  mockPreviewImport.mockResolvedValue({
+    ...preview,
+    importableCount: 1,
+    newCount: 1,
+    events: [{
+      id: 'defaulted-event',
+      title: 'Mobile Test Cup Event 3',
+      startTime: '2026-11-12T18:00:00.000Z',
+      endTime: '2026-11-12T19:30:00.000Z',
+      gameMode: 'Battle Royale',
+      teamFormat: 'Solo',
+      tournamentType: 'Community',
+      category: 'Turnier',
+      warnings: [],
+      reviewNotes: [
+        'Turnierart nicht erkennbar; Standardwert „Community“ wurde gesetzt.',
+      ],
+      willUpdate: false,
+    }],
+  });
+  const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+  const screen = await openImportScreen();
+
+  await fireEvent.press(screen.getByTestId('choose-import-file-button'));
+  await fireEvent.press(screen.getByTestId('preview-import-file-button'));
+
+  expect(await screen.findByText('Standardwert')).toBeTruthy();
+  expect(screen.getByText('Turnierart nicht erkennbar; Standardwert „Community“ wurde gesetzt.')).toBeTruthy();
+  await fireEvent.press(screen.getByTestId('confirm-import-button'));
+
+  await waitFor(() => expect(alertSpy).toHaveBeenCalledWith(
+    'Termine importieren?',
+    expect.stringContaining('1 Termin enthält automatisch gesetzte Standardwerte und wird mit Hinweis importiert.'),
+    expect.any(Array),
+  ));
+  expect(screen.getByText(/Automatisch gesetzte Standardwerte sind in der Terminliste markiert/)).toBeTruthy();
+  alertSpy.mockRestore();
+});
+
 test('wendet den gewählten Datumsbereich auf Vorschau, Bestätigung und Import an', async () => {
   mockGetDocumentAsync.mockResolvedValue(selectedFile('plan.mht'));
   mockPreviewImport.mockImplementation(async ({ params }: { params?: { startDate?: string; endDate?: string } }) => ({

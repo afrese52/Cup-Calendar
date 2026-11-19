@@ -12,6 +12,7 @@ export type TournamentEventRegion = typeof TournamentEventRegion[keyof typeof To
 export const TournamentEventRegion = {
   EU: 'EU',
   NAE: 'NAE',
+  NAC: 'NAC',
   NAW: 'NAW',
   BR: 'BR',
   ASIA: 'ASIA',

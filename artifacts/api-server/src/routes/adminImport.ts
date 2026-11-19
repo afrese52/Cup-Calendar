@@ -206,7 +206,7 @@ function getRequestedRegion(req: Request, res: Response): string | undefined | n
   if (rawRegion === undefined) return undefined;
   if (
     typeof rawRegion !== "string"
-    || !["EU", "NAE", "NAW", "BR", "ASIA", "OCE", "ME", "GLOBAL"].includes(rawRegion.toUpperCase())
+    || !["EU", "NAE", "NAC", "NAW", "BR", "ASIA", "OCE", "ME", "GLOBAL"].includes(rawRegion.toUpperCase())
   ) {
     res.status(400).json({ error: "Bitte wähle eine gültige Turnierregion." });
     return null;
@@ -315,6 +315,7 @@ async function buildPreview(
     events: upcoming.map((event) => ({
       id: event.id,
       title: event.title,
+      region: event.region,
       startTime: event.start_time,
       endTime: event.end_time,
       gameMode: event.game_mode,
@@ -324,6 +325,7 @@ async function buildPreview(
       tournamentType: event.tournament_type,
       category: event.category,
       warnings: event.review_warnings,
+      reviewNotes: event.review_notes ?? [],
       willUpdate: importable.includes(event) && existingEvents.has(event.id),
       ...getMhtEventChanges(event, existingEvents.get(event.id) ?? null),
     })),

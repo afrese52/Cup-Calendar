@@ -15,6 +15,8 @@ import type { MhtImportEventTournamentType } from './mhtImportEventTournamentTyp
 export interface MhtImportEvent {
   id: string;
   title: string;
+  /** Region assigned to this event */
+  region?: string;
   startTime: Date;
   endTime: Date;
   gameMode: MhtImportEventGameMode;
@@ -26,6 +28,8 @@ export interface MhtImportEvent {
   tournamentType: MhtImportEventTournamentType;
   category: MhtImportEventCategory;
   warnings: string[];
+  /** Non-blocking notes about automatically assigned fallback values */
+  reviewNotes?: string[];
   willUpdate: boolean;
   /**
      * Previous title when it differs from the imported value

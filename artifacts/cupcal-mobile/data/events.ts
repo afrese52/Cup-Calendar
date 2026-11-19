@@ -1,4 +1,4 @@
-export type TournamentRegion = 'EU' | 'NAE' | 'NAW' | 'BR' | 'ASIA' | 'OCE' | 'ME' | 'GLOBAL';
+export type TournamentRegion = 'EU' | 'NAE' | 'NAC' | 'NAW' | 'BR' | 'ASIA' | 'OCE' | 'ME' | 'GLOBAL';
 export type TournamentMode = 'Battle Royale' | 'Zero Build' | 'Reload' | 'Community';
 export type TournamentRuleset = 'Battle Royale' | 'Zero Build' | 'Community';
 export type TournamentSeries = 'Reload';

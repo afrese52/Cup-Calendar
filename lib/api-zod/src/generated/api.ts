@@ -21,7 +21,7 @@ export const HealthCheckResponse = zod.object({
  * @summary List tournament events
  */
 export const GetEventsQueryParams = zod.object({
-  "region": zod.enum(['EU', 'NAE', 'NAW', 'BR', 'ASIA', 'OCE', 'ME', 'GLOBAL', 'ALL']).optional(),
+  "region": zod.enum(['EU', 'NAE', 'NAC', 'NAW', 'BR', 'ASIA', 'OCE', 'ME', 'GLOBAL', 'ALL']).optional(),
   "game_mode": zod.enum(['Battle Royale', 'Zero Build', 'Reload', 'Community', 'ALL']).optional(),
   "tournament_type": zod.enum(['FNCS', 'Cash Cup', 'Ranked Cup', 'Community', 'ALL']).optional(),
   "from": zod.date().optional(),
@@ -34,7 +34,7 @@ export const GetEventsResponse = zod.object({
   "id": zod.string(),
   "title": zod.string(),
   "description": zod.string(),
-  "region": zod.enum(['EU', 'NAE', 'NAW', 'BR', 'ASIA', 'OCE', 'ME', 'GLOBAL']),
+  "region": zod.enum(['EU', 'NAE', 'NAC', 'NAW', 'BR', 'ASIA', 'OCE', 'ME', 'GLOBAL']),
   "gameMode": zod.enum(['Battle Royale', 'Zero Build', 'Reload', 'Community']).describe('Legacy mode value retained for existing API clients'),
   "gameRuleset": zod.union([zod.literal('Battle Royale'),zod.literal('Zero Build'),zod.literal('Community'),zod.literal(null)]).nullish().describe('Tournament ruleset, when known'),
   "tournamentSeries": zod.union([zod.literal('Reload'),zod.literal(null)]).nullish().describe('Tournament series, when applicable'),
@@ -63,7 +63,7 @@ export const GetAdminImportAccessResponse = zod.object({
 export const PreviewMhtImportQueryParams = zod.object({
   "startDate": zod.date().optional().describe('Inclusive schedule-local start date, used together with endDate'),
   "endDate": zod.date().optional().describe('Inclusive schedule-local end date, used together with startDate'),
-  "region": zod.enum(['EU', 'NAE', 'NAW', 'BR', 'ASIA', 'OCE', 'ME', 'GLOBAL']).optional().describe('Required for ICS files; region assigned to events in that calendar')
+  "region": zod.enum(['EU', 'NAE', 'NAC', 'NAW', 'BR', 'ASIA', 'OCE', 'ME', 'GLOBAL']).optional().describe('Required for ICS files as fallback; explicit supported title prefixes override it per event')
 })
 
 export const PreviewMhtImportResponse = zod.object({
@@ -86,6 +86,7 @@ export const PreviewMhtImportResponse = zod.object({
   "events": zod.array(zod.object({
   "id": zod.string(),
   "title": zod.string(),
+  "region": zod.string().optional().describe('Region assigned to this event'),
   "startTime": zod.coerce.date(),
   "endTime": zod.coerce.date(),
   "gameMode": zod.enum(['Battle Royale', 'Zero Build', 'Reload', 'Community']),
@@ -95,6 +96,7 @@ export const PreviewMhtImportResponse = zod.object({
   "tournamentType": zod.enum(['FNCS', 'Cash Cup', 'Ranked Cup', 'Community']),
   "category": zod.enum(['Turnier', 'Liga', 'Qualifikation', 'Trainingsrunde']),
   "warnings": zod.array(zod.string()),
+  "reviewNotes": zod.array(zod.string()).optional().describe('Non-blocking notes about automatically assigned fallback values'),
   "willUpdate": zod.boolean(),
   "previousTitle": zod.string().nullable().describe('Previous title when it differs from the imported value'),
   "previousGameMode": zod.string().nullable().describe('Previous game mode when it differs from the imported value'),
@@ -121,7 +123,7 @@ export const ImportMhtScheduleQueryParams = zod.object({
   "confirmStaleSnapshot": zod.coerce.boolean().optional().describe('Explicitly confirms importing a snapshot older than 24 hours after the updated preview was reviewed'),
   "startDate": zod.date().optional().describe('Inclusive schedule-local start date, used together with endDate'),
   "endDate": zod.date().optional().describe('Inclusive schedule-local end date, used together with startDate'),
-  "region": zod.enum(['EU', 'NAE', 'NAW', 'BR', 'ASIA', 'OCE', 'ME', 'GLOBAL']).optional().describe('Required for ICS files; region assigned to events in that calendar')
+  "region": zod.enum(['EU', 'NAE', 'NAC', 'NAW', 'BR', 'ASIA', 'OCE', 'ME', 'GLOBAL']).optional().describe('Required for ICS files as fallback; explicit supported title prefixes override it per event')
 })
 
 export const ImportMhtScheduleResponse = zod.object({

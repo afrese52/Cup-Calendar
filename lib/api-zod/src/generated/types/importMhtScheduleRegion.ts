@@ -12,6 +12,7 @@ export type ImportMhtScheduleRegion = typeof ImportMhtScheduleRegion[keyof typeo
 export const ImportMhtScheduleRegion = {
   EU: 'EU',
   NAE: 'NAE',
+  NAC: 'NAC',
   NAW: 'NAW',
   BR: 'BR',
   ASIA: 'ASIA',

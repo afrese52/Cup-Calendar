@@ -20,7 +20,7 @@ import { watchAuthSession } from '@/services/accountAuth';
 import { supabase } from '@/services/supabase';
 
 const MAX_FILE_BYTES = 25 * 1024 * 1024;
-const IMPORT_REGIONS = ['EU', 'NAE', 'NAW', 'BR', 'ASIA', 'OCE', 'ME', 'GLOBAL'] as const;
+const IMPORT_REGIONS = ['EU', 'NAE', 'NAC', 'NAW', 'BR', 'ASIA', 'OCE', 'ME', 'GLOBAL'] as const;
 type ImportRegion = NonNullable<PreviewMhtImportParams['region']>;
 
 type PickedImportSource = {
@@ -319,9 +319,16 @@ export default function AdminImportScreen() {
     const periodCopy = currentPreview.startDate && currentPreview.endDate
       ? ` Zeitraum: ${formatDateInput(currentPreview.startDate)} bis ${formatDateInput(currentPreview.endDate)}.`
       : '';
+    const standardValueCount = currentPreview.events.filter((event) => (event.reviewNotes?.length ?? 0) > 0).length;
+    const standardValueCopy = standardValueCount === 1
+      ? '1 Termin enthält automatisch gesetzte Standardwerte und wird mit Hinweis importiert. '
+      : standardValueCount > 1
+        ? `${standardValueCount} Termine enthalten automatisch gesetzte Standardwerte und werden mit Hinweis importiert. `
+        : '';
     const message =
       `${currentPreview.importableCount} geprüfte Termine importieren.${periodCopy} ` +
       `${currentPreview.warningCount} Termine mit Zuordnungswarnungen bleiben ausgelassen. ` +
+      standardValueCopy +
       `${currentPreview.outOfRangeCount} Termine außerhalb der Spanne bleiben unverändert. ` +
       `${currentPreview.updateCount} vorhandene Einträge werden aktualisiert; persönliche Admin-Notizen bleiben erhalten.` +
       (currentPreview.isSnapshotStale
@@ -686,7 +693,7 @@ export default function AdminImportScreen() {
                     <Stat value={preview.warningCount} label="Warnungen" color={colors.warning} />
                   </View>
                   <Text style={[styles.detailCopy, { color: colors.mutedForeground }]}>
-                    Vergangene Termine und Termine mit Zuordnungswarnungen werden nicht gespeichert. Fehlerhafte Karten ohne lesbares Datum lassen sich keinem Zeitraum zuordnen.
+                    Vergangene Termine und Termine mit nicht auflösbaren Zuordnungen werden nicht gespeichert. Automatisch gesetzte Standardwerte sind in der Terminliste markiert und werden mit importiert.
                   </Text>
                   {preview.sourceUrl ? (
                     <Text numberOfLines={2} style={[styles.sourceCopy, { color: colors.mutedForeground }]}>{preview.sourceUrl}</Text>
@@ -742,13 +749,14 @@ export default function AdminImportScreen() {
                       </Pressable>
                     </View>
                     {visiblePreviewEvents.map((event) => {
-                      const hasWarnings = event.warnings.length > 0;
+                      const reviewNotes = event.reviewNotes ?? [];
+                      const hasWarnings = event.warnings.length > 0 || reviewNotes.length > 0;
                       return (
                         <View key={event.id} style={[styles.eventRow, { borderBottomColor: colors.border }]}>
                           <View style={styles.eventCopy}>
                             <Text style={[styles.eventTitle, { color: colors.foreground }]}>{event.title}</Text>
                             <Text style={[styles.eventMeta, { color: colors.mutedForeground }]}>
-                              {formatImportTime(event.startTime, preview.timeZone)} · {event.teamFormat} · {event.gameRuleset ?? event.gameMode}
+                              {event.region ?? preview.region} · {formatImportTime(event.startTime, preview.timeZone)} · {event.teamFormat} · {event.gameRuleset ?? event.gameMode}
                               {event.tournamentSeries ? ` · ${event.tournamentSeries}` : ''}
                             </Text>
                             {event.previousTitle
@@ -793,11 +801,19 @@ export default function AdminImportScreen() {
                               </Text>
                             ) : null}
                             {hasWarnings ? (
-                              <Text style={[styles.warningText, { color: colors.warning }]}>{event.warnings.join(' ')}</Text>
+                              <Text style={[styles.warningText, { color: colors.warning }]}>
+                                {[...event.warnings, ...reviewNotes].join(' ')}
+                              </Text>
                             ) : null}
                           </View>
                           <Text style={[styles.eventState, { color: hasWarnings ? colors.warning : event.willUpdate ? colors.categoryLeague : colors.success }]}>
-                            {hasWarnings ? 'Prüfen' : event.willUpdate ? 'Update' : 'Neu'}
+                            {event.warnings.length > 0
+                              ? 'Prüfen'
+                              : reviewNotes.length > 0
+                                ? 'Standardwert'
+                                : event.willUpdate
+                                  ? 'Update'
+                                  : 'Neu'}
                           </Text>
                         </View>
                       );

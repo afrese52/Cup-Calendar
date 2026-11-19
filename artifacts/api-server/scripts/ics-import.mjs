@@ -10,7 +10,7 @@ import {
 } from "./dry-run-mht-import.mjs";
 
 const DEFAULT_TIME_ZONE = "Europe/Berlin";
-const REGION_CODES = new Set(["EU", "NAE", "NAW", "BR", "ASIA", "OCE", "ME", "GLOBAL"]);
+const REGION_CODES = new Set(["EU", "NAE", "NAC", "NAW", "BR", "ASIA", "OCE", "ME", "GLOBAL"]);
 
 function unfoldLines(text) {
   return text.replace(/\r?\n[ \t]/g, "").split(/\r?\n/);
@@ -160,14 +160,33 @@ function eventId(uid, title, startTime, endTime, region) {
   return `ics:${createHash("sha256").update(key).digest("hex")}`;
 }
 
+function eventRegion(title, fallbackRegion) {
+  const prefix = title.match(/^\s*\[([A-Z]{2,5})\](?:\s|$)/i)?.[1]?.toUpperCase();
+  return prefix && REGION_CODES.has(prefix) ? prefix : fallbackRegion;
+}
+
+function hasTournamentTypeClue(value) {
+  return /\bFNCS\b|\b(?:CASH CUP|VICTORY CUP|RANKED CUP)\b|\bCOMMUNITY\s+(?:CUP|TOURNAMENT)\b/i.test(value);
+}
+
+function hasGameModeClue(value) {
+  return /\bZERO[\s-]+BUILD\b|\bNULL BAUEN\b|\bRELOAD\b|\bCREATIVE\b|\bBATTLE ROYALE\b/i.test(value);
+}
+
+function hasTeamFormatClue(value) {
+  return /\bSOLOS?\b|\bDUOS?\b|\bTRIOS?\b|\bSQUADS?\b/i.test(value);
+}
+
 function parseEvent(event, index, region, calendarName, timeZone) {
   const summary = firstProperty(event, "SUMMARY");
   const description = firstProperty(event, "DESCRIPTION");
   const location = firstProperty(event, "LOCATION");
   const title = decodeText(summary?.value ?? "");
+  const resolvedRegion = eventRegion(title, region);
   const desc = decodeText(description?.value ?? "");
   const details = `${title} ${desc} ${decodeText(location?.value ?? "")} ${calendarName}`;
   const errors = [];
+  const reviewNotes = [];
   if (!title) errors.push("Der Terminname fehlt.");
   if (firstProperty(event, "RRULE")) {
     errors.push("Wiederkehrende ICS-Termine werden derzeit nicht unterstützt.");
@@ -195,18 +214,37 @@ function parseEvent(event, index, region, calendarName, timeZone) {
     errors.push(error instanceof Error ? error.message : "Datum und Uhrzeit konnten nicht gelesen werden.");
   }
 
-  const tournamentType = mapTournamentType(details);
-  const gameMode = mapGameMode(details);
-  const teamFormat = mapTeamFormat(details);
-  if (!tournamentType) errors.push("Turnierart fehlt oder ist nicht eindeutig im Namen oder in der Beschreibung angegeben.");
-  if (!gameMode) errors.push("Spielmodus fehlt oder ist nicht eindeutig im Namen oder in der Beschreibung angegeben.");
-  if (!teamFormat) errors.push("Spielformat fehlt oder ist nicht eindeutig im Namen oder in der Beschreibung angegeben.");
+  let tournamentType = mapTournamentType(details);
+  if (!tournamentType && !hasTournamentTypeClue(details)) {
+    tournamentType = "Community";
+    reviewNotes.push("Turnierart nicht erkennbar; Standardwert „Community“ wurde gesetzt.");
+  } else if (!tournamentType) {
+    errors.push("Turnierart ist widersprüchlich im Namen oder in der Beschreibung angegeben.");
+  }
+
+  let gameMode = mapGameMode(details);
+  if (!gameMode && !hasGameModeClue(details)) {
+    gameMode = "Battle Royale";
+    reviewNotes.push("Spielmodus nicht erkennbar; Standardwert „Battle Royale“ wurde gesetzt.");
+  } else if (!gameMode) {
+    errors.push("Spielmodus ist widersprüchlich im Namen oder in der Beschreibung angegeben.");
+  }
+
+  let teamFormat = mapTeamFormat(details);
+  if (!teamFormat && !hasTeamFormatClue(details)) {
+    teamFormat = /\bTEAM\b/i.test(details) ? "Squads" : "Solo";
+    reviewNotes.push(
+      `Spielformat nicht erkennbar; Standardwert „${teamFormat}“ wurde gesetzt.`,
+    );
+  } else if (!teamFormat) {
+    errors.push("Spielformat ist widersprüchlich im Namen oder in der Beschreibung angegeben.");
+  }
 
   if (errors.length) {
     return {
       issue: {
         id: firstProperty(event, "UID")?.value
-          ? eventId(firstProperty(event, "UID").value, title, startTime ?? "", endTime ?? "", region)
+          ? eventId(firstProperty(event, "UID").value, title, startTime ?? "", endTime ?? "", resolvedRegion)
           : `ics-row-${index + 1}`,
         title: title || null,
         errors,
@@ -217,11 +255,11 @@ function parseEvent(event, index, region, calendarName, timeZone) {
   const uid = firstProperty(event, "UID")?.value?.trim() ?? "";
   return {
     event: {
-      id: eventId(uid, title, startTime, endTime, region),
+      id: eventId(uid, title, startTime, endTime, resolvedRegion),
       title,
       description: desc,
       poster_url: null,
-      region,
+      region: resolvedRegion,
       game_mode: gameMode,
       game_ruleset: mapGameRuleset(details, gameMode),
       tournament_series: mapTournamentSeries(details),
@@ -232,6 +270,7 @@ function parseEvent(event, index, region, calendarName, timeZone) {
       end_time: endTime,
       is_featured: false,
       review_warnings: [],
+      review_notes: reviewNotes,
     },
   };
 }

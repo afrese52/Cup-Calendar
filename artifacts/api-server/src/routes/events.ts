@@ -28,7 +28,7 @@ interface EventQueryError {
 }
 
 const querySchema = z.object({
-  region: z.enum(["EU", "NAE", "NAW", "BR", "ASIA", "OCE", "ME", "GLOBAL", "ALL"]).optional(),
+  region: z.enum(["EU", "NAE", "NAC", "NAW", "BR", "ASIA", "OCE", "ME", "GLOBAL", "ALL"]).optional(),
   game_mode: z.enum(["Battle Royale", "Zero Build", "Reload", "Community", "ALL"]).optional(),
   tournament_type: z.enum(["FNCS", "Cash Cup", "Ranked Cup", "Community", "ALL"]).optional(),
   from: z.string().datetime({ offset: true }).optional(),

@@ -18,6 +18,7 @@ export interface MhtImportEvent {
   poster_url: string | null;
   is_featured: boolean;
   review_warnings: string[];
+  review_notes?: string[];
 }
 
 export interface ExistingMhtEvent {

@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
-const REGION_CODES = new Set(["EU", "NAE", "NAW", "BR", "ASIA", "OCE", "ME", "GLOBAL"]);
+const REGION_CODES = new Set(["EU", "NAE", "NAC", "NAW", "BR", "ASIA", "OCE", "ME", "GLOBAL"]);
 export const MAX_SNAPSHOT_AGE_MS = 24 * 60 * 60 * 1000;
 const MONTHS = new Map([
   ["januar", 1], ["january", 1],
