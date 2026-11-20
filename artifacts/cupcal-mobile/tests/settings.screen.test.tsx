@@ -771,8 +771,8 @@ test('hält Erklärung und Aktionen des Löschdialogs auf kleinem Display erreic
   expect(compactScreen.queryByText('Konto wirklich löschen?')).toBeNull();
 });
 
-test('hält E-Mail, Absenden und Zurück bei geöffneter Tastatur auf kleinem Display erreichbar', async () => {
-  const compactDimensions = { width: 320, height: 568, scale: 1, fontScale: 1 };
+test('hält Wiederherstellungsaktionen bei großer Schrift und geöffneter Tastatur erreichbar', async () => {
+  const compactDimensions = { width: 320, height: 568, scale: 1, fontScale: 2 };
   Dimensions.set({
     window: compactDimensions,
     screen: compactDimensions,
@@ -780,8 +780,8 @@ test('hält E-Mail, Absenden und Zurück bei geöffneter Tastatur auf kleinem Di
   const view = await openSettings();
   await fireEvent.press(view.getByTestId('forgot-password-button'));
 
-  const emailInput = view.getByTestId('auth-email-input');
-  await fireEvent(emailInput, 'focus');
+  const focusedEmailInput = view.getByTestId('auth-email-input');
+  await fireEvent(focusedEmailInput, 'focus');
   const keyboardVisibleWindow = { ...compactDimensions, height: 320 };
   await act(async () => {
     Dimensions.set({
@@ -802,14 +802,28 @@ test('hält E-Mail, Absenden und Zurück bei geöffneter Tastatur auf kleinem Di
   });
 
   const compactScreen = within(scrollView);
-  expect(compactScreen.getByTestId('auth-email-input')).toBeTruthy();
-  expect(compactScreen.getByTestId('auth-submit-button')).toBeTruthy();
-  expect(compactScreen.getByTestId('auth-mode-toggle')).toBeTruthy();
+  const emailInput = compactScreen.getByTestId('auth-email-input');
+  const submitButton = compactScreen.getByTestId('auth-submit-button');
+  const backButton = compactScreen.getByTestId('auth-mode-toggle');
+  const submitLabel = compactScreen.getByText('Link anfordern');
+  expect(emailInput).toBeTruthy();
+  expect(submitButton).toBeTruthy();
+  expect(backButton).toBeTruthy();
+  expect(emailInput.props.allowFontScaling).not.toBe(false);
+  expect(StyleSheet.flatten(emailInput.props.style).height).toBeUndefined();
+  expect(submitLabel.props.allowFontScaling).not.toBe(false);
+  expect(submitLabel.props.numberOfLines).toBeUndefined();
+  expect(submitLabel.props.ellipsizeMode).toBeUndefined();
+  expect(backButton.props.accessibilityState?.disabled).not.toBe(true);
+  expect(StyleSheet.flatten(compactScreen.getByText('Zurück zur Anmeldung').props.style))
+    .toMatchObject({ width: '100%', flexShrink: 1, textAlign: 'center' });
+  expect(compactScreen.getByText('Zurück zur Anmeldung').props.numberOfLines).toBeUndefined();
+  expect(compactScreen.getByText('Zurück zur Anmeldung').props.ellipsizeMode).toBeUndefined();
   await fireEvent.changeText(compactScreen.getByTestId('auth-email-input'), 'test@example.invalid');
-  await fireEvent.press(compactScreen.getByTestId('auth-submit-button'));
+  await fireEvent.press(submitButton);
 
   expect(await compactScreen.findByTestId('auth-success-message')).toBeTruthy();
-  await fireEvent.press(compactScreen.getByTestId('auth-mode-toggle'));
+  await fireEvent.press(backButton);
   expect(compactScreen.getByText('Bei CupCal anmelden')).toBeTruthy();
 });
 

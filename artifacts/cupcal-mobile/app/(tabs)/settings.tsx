@@ -1013,7 +1013,7 @@ const styles = StyleSheet.create({
   deleteConfirmButton: { minHeight: 46, borderRadius: 11, alignItems: 'center', justifyContent: 'center', marginTop: 12 },
   deleteConfirmButtonText: { fontSize: 13, fontWeight: '700' },
   modeToggle: { minHeight: 40, alignItems: 'center', justifyContent: 'center', marginTop: 4 },
-  modeToggleText: { fontSize: 12, fontWeight: '700' },
+  modeToggleText: { width: '100%', flexShrink: 1, textAlign: 'center', fontSize: 12, fontWeight: '700' },
   authNotice: { fontSize: 12, lineHeight: 17, marginTop: 10 },
   row: { minHeight: 72, flexDirection: 'row', alignItems: 'center', borderBottomWidth: StyleSheet.hairlineWidth, gap: 12 },
   rowIcon: { width: 34, height: 34, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
