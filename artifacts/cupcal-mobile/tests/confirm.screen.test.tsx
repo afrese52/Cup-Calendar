@@ -14,10 +14,12 @@ let mockPersistedSession: { user: { id: string } } | null = null;
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
-  const promise = new Promise<T>((resolvePromise) => {
+  let reject!: (error: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
     resolve = resolvePromise;
+    reject = rejectPromise;
   });
-  return { promise, resolve };
+  return { promise, resolve, reject };
 }
 
 jest.mock('@expo/vector-icons', () => ({ Feather: () => null }));
@@ -203,6 +205,61 @@ test('lässt eine verspätete Antwort des ersten Links das zuletzt geöffnete Ko
       'account-b-code',
       { flowId: 'account-b-flow' },
     );
+    expect(mockPersistedSession?.user.id).toBe('account-b');
+    expect(view.getByText(
+      'Deine E-Mail-Adresse ist bestätigt. Du kannst CupCal jetzt verwenden.',
+    )).toBeTruthy();
+  });
+});
+
+test('verarbeitet den zweiten Link nach einem fehlgeschlagenen ersten Austausch', async () => {
+  const firstExchange = deferred<any>();
+  const secondExchange = deferred<any>();
+  mockInitialUrl.current =
+    'cupcal-android://auth/confirm?code=account-a-code&flow_id=account-a-flow';
+  supabase.auth.exchangeCodeForSession.mockImplementation((code: string) => {
+    const response = code === 'account-a-code' ? firstExchange.promise : secondExchange.promise;
+    return response.then((result: any) => {
+      mockPersistedSession = result.data.session;
+      return result;
+    });
+  });
+  const view = await render(<ConfirmEmailScreen />);
+
+  await waitFor(() => {
+    expect(supabase.auth.exchangeCodeForSession).toHaveBeenCalledTimes(1);
+  });
+  await act(async () => {
+    mockUrlListener.current?.({
+      url: 'cupcal-android://auth/confirm?code=account-b-code&sb_flow_id=account-b-flow',
+    });
+    await Promise.resolve();
+  });
+  expect(supabase.auth.exchangeCodeForSession).toHaveBeenCalledTimes(1);
+
+  await act(async () => {
+    firstExchange.reject(new Error('Der erste Bestätigungscode wurde abgelehnt.'));
+    await firstExchange.promise.catch(() => undefined);
+  });
+
+  await waitFor(() => {
+    expect(supabase.auth.exchangeCodeForSession).toHaveBeenNthCalledWith(
+      2,
+      'account-b-code',
+      { flowId: 'account-b-flow' },
+    );
+  });
+  expect(mockPersistedSession).toBeNull();
+
+  await act(async () => {
+    secondExchange.resolve({
+      data: { session: { user: { id: 'account-b' } } },
+      error: null,
+    });
+    await secondExchange.promise;
+  });
+
+  await waitFor(() => {
     expect(mockPersistedSession?.user.id).toBe('account-b');
     expect(view.getByText(
       'Deine E-Mail-Adresse ist bestätigt. Du kannst CupCal jetzt verwenden.',

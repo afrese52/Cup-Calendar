@@ -438,7 +438,7 @@ test('ordnet zwei offene Registrierungslinks den Konten zu und meldet zuletzt da
   }
 });
 
-test('serialisiert gleichzeitig geöffnete Bestätigungslinks und behält das zuletzt gestartete Konto', async () => {
+test('verarbeitet den zweiten Bestätigungslink nach Ablehnung des ersten Kontos', async () => {
   const storage = createPersistentStorage();
   const flowIdA = '33333333-3333-4333-8333-333333333333';
   const flowIdB = '44444444-4444-4444-8444-444444444444';
@@ -455,7 +455,6 @@ test('serialisiert gleichzeitig geöffnete Bestätigungslinks und behält das zu
   const firstResponse = new Promise((resolve) => {
     resolveFirstResponse = resolve;
   });
-  let firstTokenResponse;
   const tokenRequests = [];
   const userForCode = {
     'account-a-code': {
@@ -494,10 +493,7 @@ test('serialisiert gleichzeitig geöffnete Bestätigungslinks und behält das zu
         headers: { 'Content-Type': 'application/json' },
       });
 
-      if (request.auth_code === 'account-a-code') {
-        firstTokenResponse = response;
-        return firstResponse;
-      }
+      if (request.auth_code === 'account-a-code') return firstResponse;
       return response;
     }
     return fakeUserFetch(input, init);
@@ -515,11 +511,24 @@ test('serialisiert gleichzeitig geöffnete Bestätigungslinks und behält das zu
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     assert.deepEqual(tokenRequests.map(({ auth_code }) => auth_code), ['account-a-code']);
-    resolveFirstResponse(firstTokenResponse);
-    const [sessionA, sessionB] = await Promise.all([firstConfirmation, secondConfirmation]);
+    resolveFirstResponse(new Response(JSON.stringify({
+      message: 'The authorization code was rejected.',
+      code: 'invalid_grant',
+    }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json' },
+    }));
+    const [firstResult, secondResult] = await Promise.allSettled([
+      firstConfirmation,
+      secondConfirmation,
+    ]);
 
-    assert.equal(sessionA.user.id, userForCode['account-a-code'].id);
-    assert.equal(sessionB.user.id, userForCode['account-b-code'].id);
+    assert.equal(firstResult.status, 'rejected');
+    assert.equal(secondResult.status, 'fulfilled');
+    if (secondResult.status !== 'fulfilled') {
+      throw new Error('Der zweite Bestätigungslink hätte erfolgreich sein müssen.');
+    }
+    assert.equal(secondResult.value.user.id, userForCode['account-b-code'].id);
     assert.deepEqual(tokenRequests.map(({ auth_code }) => auth_code), [
       'account-a-code',
       'account-b-code',
