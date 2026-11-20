@@ -52,7 +52,7 @@ function App({ pathname }: AppProps = {}) {
           if (!section || viewedSections.current.has(section)) continue;
 
           viewedSections.current.add(section);
-          trackEvent('content_section_view', { section });
+          trackEvent('content_section_view', { section, page: currentPath });
           observer.unobserve(entry.target);
         }
       },
@@ -147,7 +147,12 @@ function App({ pathname }: AppProps = {}) {
         </div>
       </div>
 
-      <section className="section container" id="funktionen" data-testid="section-features">
+      <section
+        className="section container"
+        id="funktionen"
+        data-testid="section-features"
+        data-analytics-section="features"
+      >
         <div className="overview">
           <div>
             <div className="section-label">Der Überblick vor dem Match</div>
@@ -172,7 +177,12 @@ function App({ pathname }: AppProps = {}) {
         </div>
       </section>
 
-      <section className="section container faq-section" id="fragen" aria-labelledby="faq-title">
+      <section
+        className="section container faq-section"
+        id="fragen"
+        aria-labelledby="faq-title"
+        data-analytics-section="faq"
+      >
         <div className="section-label">Fragen zu CupCal</div>
         <h2 className="section-title" id="faq-title">CupCal kurz erklärt.</h2>
         <div className="faq-grid">
@@ -299,7 +309,11 @@ function App({ pathname }: AppProps = {}) {
         <div className="disclaimer">Inoffizielles Fanprojekt · Nicht mit Epic Games verbunden oder von Epic Games unterstützt</div>
       </section>
 
-      <section className="container topic-directory" aria-labelledby="topic-directory-heading">
+      <section
+        className="container topic-directory"
+        aria-labelledby="topic-directory-heading"
+        data-analytics-section="topic_directory"
+      >
         <div className="section-label">CupCal-Wissen</div>
         <h2 className="section-title" id="topic-directory-heading">Mehr zum <span>Kalender.</span></h2>
         <p className="section-intro">

@@ -59,9 +59,18 @@ export function SeoTopicPageView({ page }: SeoTopicPageViewProps) {
         </a>
       </header>
 
-      <article className="container topic-article">
+      <article className="container topic-article" data-analytics-section="topic_article">
         <nav className="topic-breadcrumb" aria-label="Brotkrumennavigation">
-          <a href="/" data-testid="link-topic-breadcrumb-home">Startseite</a>
+          <a
+            href="/"
+            data-testid="link-topic-breadcrumb-home"
+            onClick={() => trackEvent('site_navigation_click', {
+              destination: 'home',
+              placement: 'topic_breadcrumb',
+            })}
+          >
+            Startseite
+          </a>
           <span aria-hidden="true">/</span>
           <span aria-current="page">{page.eyebrow}</span>
         </nav>
@@ -96,7 +105,11 @@ export function SeoTopicPageView({ page }: SeoTopicPageViewProps) {
         </aside>
       </article>
 
-      <section className="container topic-related" aria-labelledby="related-topics-heading">
+      <section
+        className="container topic-related"
+        aria-labelledby="related-topics-heading"
+        data-analytics-section="related_topics"
+      >
         <div className="section-label">Weiterlesen</div>
         <h2 className="section-title" id="related-topics-heading">Mehr zu <span>CupCal.</span></h2>
         <div className="topic-card-grid">
@@ -123,7 +136,17 @@ export function SeoTopicPageView({ page }: SeoTopicPageViewProps) {
       <footer className="footer">
         <div className="container footer-inner">
           <div className="footer-copy">© CupCal · Der Kalender für deinen Wettkampf-Alltag</div>
-          <a className="topic-footer-home" href="/" data-testid="link-topic-footer-home">CupCal-Startseite</a>
+          <a
+            className="topic-footer-home"
+            href="/"
+            data-testid="link-topic-footer-home"
+            onClick={() => trackEvent('site_navigation_click', {
+              destination: 'home',
+              placement: 'topic_footer',
+            })}
+          >
+            CupCal-Startseite
+          </a>
           <div className="footer-note">Community-Projekt · Keine offizielle Verbindung zu Epic Games</div>
         </div>
       </footer>
