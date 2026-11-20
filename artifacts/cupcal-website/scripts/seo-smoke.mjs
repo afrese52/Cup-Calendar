@@ -50,6 +50,32 @@ function extractRobotsDirective(html) {
   return tag ? readAttribute(tag, 'content') ?? '' : '';
 }
 
+function extractStructuredData(html, pathname) {
+  const scripts = [...html.matchAll(
+    /<script\b(?=[^>]*\btype=["']application\/ld\+json["'])[^>]*>([\s\S]*?)<\/script>/gi,
+  )];
+  assert.ok(scripts.length > 0, `${pathname} enthält keine JSON-LD-Daten.`);
+
+  return scripts.flatMap((script) => {
+    let document;
+    try {
+      document = JSON.parse(script[1]);
+    } catch (error) {
+      assert.fail(`${pathname} enthält ungültiges JSON-LD: ${error.message}`);
+    }
+    assert.equal(document['@context'], 'https://schema.org', `${pathname} muss Schema.org verwenden.`);
+    return Array.isArray(document['@graph']) ? document['@graph'] : [document];
+  });
+}
+
+function schemaNodesOfType(nodes, type) {
+  return nodes.filter((node) =>
+    Array.isArray(node['@type'])
+      ? node['@type'].includes(type)
+      : node['@type'] === type,
+  );
+}
+
 function extractHeadings(html) {
   return [...html.matchAll(/<h1\b[^>]*>([\s\S]*?)<\/h1>/gi)].map((match) =>
     decodeHtml(match[1].replace(/<[^>]*>/g, '').trim()),
@@ -158,6 +184,7 @@ async function runSmokeTest() {
     const observedTitles = new Set();
     const observedDescriptions = new Set();
     const observedCanonicals = new Set();
+    let organizationLogoChecked = false;
 
     for (const sitemapUrl of sitemapUrls) {
       const sitemapPageUrl = new URL(sitemapUrl);
@@ -189,15 +216,62 @@ async function runSmokeTest() {
       const headings = extractHeadings(html);
       assert.equal(headings.length, 1, `${sitemapPageUrl.pathname} muss genau eine H1 enthalten.`);
 
+      const schemaNodes = extractStructuredData(html, sitemapPageUrl.pathname);
+      const schemaIds = schemaNodes
+        .map((node) => node['@id'])
+        .filter((id) => typeof id === 'string');
+      assert.equal(new Set(schemaIds).size, schemaIds.length, `${sitemapPageUrl.pathname} enthält doppelte Schema-IDs.`);
+
       const topicPage = topicPagesByUrl.get(sitemapUrl);
       if (topicPage) {
         assert.equal(title, topicPage.title, `Seitentitel weicht von der SEO-Definition für ${sitemapPageUrl.pathname} ab.`);
         assert.equal(description, topicPage.description, `Meta-Beschreibung weicht für ${sitemapPageUrl.pathname} ab.`);
         assert.equal(headings[0], topicPage.h1, `H1 weicht von der SEO-Definition für ${sitemapPageUrl.pathname} ab.`);
+
+        const [webPage] = schemaNodesOfType(schemaNodes, 'WebPage');
+        const [breadcrumb] = schemaNodesOfType(schemaNodes, 'BreadcrumbList');
+        assert.ok(webPage, `${sitemapPageUrl.pathname} enthält keine WebPage-Angabe.`);
+        assert.equal(webPage.url, sitemapUrl, `${sitemapPageUrl.pathname} hat eine falsche WebPage-URL.`);
+        assert.equal(webPage.name, title, `${sitemapPageUrl.pathname} hat einen abweichenden Schema-Titel.`);
+        assert.equal(webPage.description, description, `${sitemapPageUrl.pathname} hat eine abweichende Schema-Beschreibung.`);
+        assert.ok(breadcrumb, `${sitemapPageUrl.pathname} enthält keine Breadcrumb-Angabe.`);
+        assert.deepEqual(
+          breadcrumb.itemListElement?.map((item) => [item.position, item.name, item.item]),
+          [
+            [1, 'Startseite', `${sitemapOrigin}/`],
+            [2, topicPage.eyebrow, sitemapUrl],
+          ],
+          `${sitemapPageUrl.pathname} hat eine ungültige Breadcrumb-Reihenfolge.`,
+        );
+      } else if (sitemapUrl === `${sitemapOrigin}/`) {
+        const [organization] = schemaNodesOfType(schemaNodes, 'Organization');
+        const [website] = schemaNodesOfType(schemaNodes, 'WebSite');
+        assert.ok(organization, 'Die Startseite enthält keine Organization-Angabe.');
+        assert.ok(website, 'Die Startseite enthält keine WebSite-Angabe.');
+        assert.equal(organization.name, 'CupCal', 'Der Markenname der Organization muss CupCal sein.');
+        assert.equal(organization.url, `${sitemapOrigin}/`, 'Die Organization muss auf die CupCal-Startseite verweisen.');
+        assert.equal(
+          organization.description,
+          'Unabhängiges Community-Projekt für einen Kalender mit Cups, Ligen, Qualifikationen und Trainingsrunden.',
+          'Die Organization-Beschreibung muss den bestätigten Projektumfang wiedergeben.',
+        );
+        assert.equal(website.name, 'CupCal', 'Der Google-Seitenname muss mit dem sichtbaren Markennamen übereinstimmen.');
+        assert.equal(website.url, `${sitemapOrigin}/`, 'Die WebSite muss auf die CupCal-Startseite verweisen.');
+        assert.equal(website.publisher?.['@id'], organization['@id'], 'Die WebSite muss CupCal als Herausgeber referenzieren.');
+        assert.equal(
+          organization.logo,
+          `${sitemapOrigin}/cupcal-app-icon.png`,
+          'Das Organization-Logo muss auf das App-Symbol verweisen.',
+        );
+        const logoResponse = await fetch(`${baseUrl}/cupcal-app-icon.png`);
+        assert.equal(logoResponse.status, 200, 'Das strukturierte Organization-Logo muss erreichbar sein.');
+        assertContentType(logoResponse, 'image/png', 'Das Organization-Logo');
+        organizationLogoChecked = true;
       }
 
       console.log(`SEO geprüft: ${sitemapPageUrl.pathname} (HTTP 200)`);
     }
+    assert.ok(organizationLogoChecked, 'Die Organization- und WebSite-Daten der Startseite wurden nicht geprüft.');
 
     const notFoundResponse = await fetch(`${baseUrl}/__cupcal-seo-smoke-test-not-found__/`);
     assert.equal(notFoundResponse.status, 404, 'Eine unbekannte HTML-Route muss mit echtem HTTP 404 antworten.');
