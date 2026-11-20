@@ -271,6 +271,38 @@ test('behält eine neuere lokale Änderung, wenn der vorherige Sync noch aussteh
   assert.equal((await prepareBookmarksForSync('konto-a'))[eventId].isFavorite, false);
 });
 
+test('behält aktuelle Änderungen mehrerer Turniere bis zur jeweiligen Serverbestätigung', async () => {
+  await setBookmarksFavorite('konto-a', ['turnier-a'], true);
+  await setBookmarksFavorite('konto-a', ['turnier-b'], false);
+  const firstSyncSnapshot = await prepareBookmarksForSync('konto-a');
+
+  await setBookmarksFavorite('konto-a', ['turnier-a'], false);
+  await setBookmarksFavorite('konto-a', ['turnier-b'], true);
+
+  const staleRemote = await reconcileBookmarks('konto-a', [
+    { event_id: 'turnier-a', is_favorite: true, updated_at: firstSyncSnapshot['turnier-a'].updatedAt, revision: 1 },
+    { event_id: 'turnier-b', is_favorite: false, updated_at: firstSyncSnapshot['turnier-b'].updatedAt, revision: 2 },
+  ]);
+  assert.deepEqual(staleRemote.eventIds, ['turnier-b']);
+  assert.equal(staleRemote.pendingCount, 2);
+  assert.deepEqual(
+    Object.fromEntries(
+      Object.entries(await prepareBookmarksForSync('konto-a')).map(([eventId, change]) => [
+        eventId,
+        change.isFavorite,
+      ]),
+    ),
+    { 'turnier-a': false, 'turnier-b': true },
+  );
+
+  const acknowledged = await reconcileBookmarks('konto-a', [
+    { event_id: 'turnier-a', is_favorite: false, updated_at: '2026-01-02T00:00:00.000Z', revision: 3 },
+    { event_id: 'turnier-b', is_favorite: true, updated_at: '2026-01-02T00:00:00.000Z', revision: 4 },
+  ]);
+  assert.deepEqual(acknowledged.eventIds, ['turnier-b']);
+  assert.equal(acknowledged.pendingCount, 0);
+});
+
 test('hält Favoriten und ausstehende Änderungen pro Konto getrennt', async () => {
   await setBookmarksFavorite('konto-a', ['nur-a'], true);
   await setBookmarksFavorite('konto-b', ['nur-b'], true);

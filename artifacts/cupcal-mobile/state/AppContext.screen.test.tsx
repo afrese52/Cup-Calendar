@@ -22,7 +22,10 @@ function deferred<T>() {
 
 jest.mock('@workspace/api-client-react', () => {
   const eventsResponse = {
-    data: [{ id: 'turnier-neu', title: 'FNCS Challenger Cup' }],
+    data: [
+      { id: 'turnier-neu', title: 'FNCS Challenger Cup' },
+      { id: 'turnier-zweit', title: 'FNCS Zweiter Cup' },
+    ],
   };
   return {
     useGetEvents: () => ({ data: eventsResponse, isError: false }),
@@ -114,6 +117,9 @@ function BookmarkState() {
       <Text testID="can-retry-local-bookmark-load">{String(canRetryLocalBookmarkLoad)}</Text>
       <Pressable testID="toggle-bookmark" onPress={() => toggleBookmark('turnier-neu')}>
         <Text>Favorit ändern</Text>
+      </Pressable>
+      <Pressable testID="toggle-second-bookmark" onPress={() => toggleBookmark('turnier-zweit')}>
+        <Text>Zweiten Favoriten ändern</Text>
       </Pressable>
       <Pressable testID="clear-bookmarks" onPress={() => clearBookmarks()}>
         <Text>Favoriten löschen</Text>
@@ -747,4 +753,97 @@ test('synchronisiert die neueste lokale Änderung nach Abschluss eines laufenden
     (call[1] as { isFavorite: boolean }).isFavorite,
   )).toEqual([true, false]);
   expect(remoteFavorite).toBe(false);
+});
+
+test('synchronisiert während eines Schreibens die neuesten Änderungen für mehrere Turniere', async () => {
+  const firstWrite = deferred<void>();
+  const pending = new Map<string, { isFavorite: boolean; updatedAt: string }>([
+    ['turnier-neu', { isFavorite: true, updatedAt: '2026-01-01T00:00:00.000Z' }],
+    ['turnier-zweit', { isFavorite: false, updatedAt: '2026-01-01T00:00:00.000Z' }],
+  ]);
+  const localIds = new Set(['turnier-neu']);
+  const remote = new Map<string, boolean>();
+  bookmarkStore.loadBookmarksForUser.mockImplementation(async (userId: string | null) =>
+    userId === 'konto-a' ? [...localIds] : [],
+  );
+  bookmarkStore.setBookmarksFavorite.mockImplementation(async (
+    _userId: string,
+    eventIds: string[],
+    isFavorite: boolean,
+  ) => {
+    for (const eventId of eventIds) {
+      if (isFavorite) localIds.add(eventId);
+      else localIds.delete(eventId);
+      pending.set(eventId, { isFavorite, updatedAt: '2026-01-02T00:00:00.000Z' });
+    }
+    return [...localIds];
+  });
+  bookmarkStore.prepareBookmarksForSync.mockImplementation(async () =>
+    Object.fromEntries([...pending.entries()].map(([eventId, change]) => [eventId, { ...change }])),
+  );
+  bookmarkStore.reconcileBookmarks.mockImplementation(async (_userId: string, remoteBookmarks: RemoteBookmark[]) => {
+    const remoteById = new Map(remoteBookmarks.map((bookmark) => [bookmark.event_id, bookmark]));
+    for (const [eventId, change] of pending) {
+      if (remoteById.get(eventId)?.is_favorite === change.isFavorite) pending.delete(eventId);
+    }
+    const ids = new Set(
+      remoteBookmarks.filter((bookmark) => bookmark.is_favorite).map((bookmark) => bookmark.event_id),
+    );
+    for (const [eventId, change] of pending) {
+      if (change.isFavorite) ids.add(eventId);
+      else ids.delete(eventId);
+    }
+    return { eventIds: [...ids], pendingCount: pending.size };
+  });
+  mockedSupabase.fetchRemoteBookmarks.mockImplementation(async () =>
+    [...remote.entries()].map(([event_id, is_favorite], revision) => ({
+      event_id,
+      is_favorite,
+      updated_at: '2026-01-02T00:00:00.000Z',
+      revision,
+    })),
+  );
+  const saveRemoteBookmark = mockedSupabase.saveRemoteBookmark;
+  saveRemoteBookmark.mockImplementation(async (
+    eventId: string,
+    change: { isFavorite: boolean },
+  ) => {
+    if (saveRemoteBookmark.mock.calls.length === 1) await firstWrite.promise;
+    remote.set(eventId, change.isFavorite);
+  });
+
+  const view = await renderProvider();
+  await emitUser('konto-a');
+  await waitFor(() => expect(saveRemoteBookmark).toHaveBeenCalledTimes(1));
+
+  await act(async () => {
+    await fireEvent.press(view.getByTestId('toggle-bookmark'));
+    await fireEvent.press(view.getByTestId('toggle-second-bookmark'));
+  });
+  expect(view.getByTestId('bookmark-ids').props.children).toBe('turnier-zweit');
+  expect([...pending.entries()].map(([eventId, change]) => [eventId, change.isFavorite])).toEqual([
+    ['turnier-neu', false],
+    ['turnier-zweit', true],
+  ]);
+
+  await act(async () => {
+    firstWrite.resolve();
+    await firstWrite.promise;
+  });
+
+  await waitFor(() => expect(view.getByTestId('bookmark-sync-status').props.children).toBe('synced'));
+  expect(saveRemoteBookmark.mock.calls.map((call: unknown[]) => [
+    call[0],
+    (call[1] as { isFavorite: boolean }).isFavorite,
+  ])).toEqual([
+    ['turnier-neu', true],
+    ['turnier-zweit', false],
+    ['turnier-neu', false],
+    ['turnier-zweit', true],
+  ]);
+  expect([...remote.entries()]).toEqual([
+    ['turnier-neu', false],
+    ['turnier-zweit', true],
+  ]);
+  expect(pending.size).toBe(0);
 });
