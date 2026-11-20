@@ -607,6 +607,83 @@ test('führt parallele Wiederholungen und Realtime-Auslöser für denselben Favo
   expect(saveRemoteBookmark).toHaveBeenCalledTimes(1);
 });
 
+test('merkt App-Wechsel und 30-Sekunden-Timer während eines Syncs vor', async () => {
+  AppState.currentState = 'active';
+  const firstWrite = deferred<void>();
+  let remoteFavorite = false;
+  let pendingFavorite: boolean | null = true;
+  bookmarkStore.loadBookmarksForUser.mockImplementation(async (userId: string | null) =>
+    userId === 'konto-a' ? ['turnier-neu'] : [],
+  );
+  bookmarkStore.setBookmarksFavorite.mockImplementation(async (
+    _userId: string,
+    _eventIds: string[],
+    isFavorite: boolean,
+  ) => {
+    pendingFavorite = isFavorite;
+    return isFavorite ? ['turnier-neu'] : [];
+  });
+  bookmarkStore.prepareBookmarksForSync.mockImplementation(async () => pendingFavorite === null
+    ? {}
+    : {
+        'turnier-neu': {
+          isFavorite: pendingFavorite,
+          updatedAt: '2026-01-01T00:00:00.000Z',
+        },
+      });
+  bookmarkStore.reconcileBookmarks.mockImplementation(async (_userId: string, remote: RemoteBookmark[]) => {
+    if (pendingFavorite !== null && remote.some((bookmark) =>
+      bookmark.event_id === 'turnier-neu' && bookmark.is_favorite === pendingFavorite
+    )) {
+      pendingFavorite = null;
+    }
+    const eventIds = new Set(remote.filter((bookmark) => bookmark.is_favorite).map((bookmark) => bookmark.event_id));
+    if (pendingFavorite === true) eventIds.add('turnier-neu');
+    if (pendingFavorite === false) eventIds.delete('turnier-neu');
+    return { eventIds: [...eventIds], pendingCount: pendingFavorite === null ? 0 : 1 };
+  });
+  mockedSupabase.fetchRemoteBookmarks.mockImplementation(async () => [{
+    event_id: 'turnier-neu',
+    is_favorite: remoteFavorite,
+    updated_at: '2026-01-01T00:00:00.000Z',
+    revision: remoteFavorite ? 1 : 2,
+  }]);
+  const saveRemoteBookmark = mockedSupabase.saveRemoteBookmark;
+  saveRemoteBookmark.mockImplementation(async (_eventId: string, change: { isFavorite: boolean }) => {
+    if (saveRemoteBookmark.mock.calls.length === 1) await firstWrite.promise;
+    remoteFavorite = change.isFavorite;
+  });
+
+  const view = await renderProvider();
+  const appStateSpy = jest.spyOn(AppState, 'addEventListener');
+  jest.useFakeTimers();
+  await emitUser('konto-a');
+  await waitFor(() => expect(saveRemoteBookmark).toHaveBeenCalledTimes(1));
+  const appStateChangeListener = appStateSpy.mock.calls
+    .find(([eventName]) => eventName === 'change')?.[1];
+  expect(appStateChangeListener).toBeDefined();
+
+  await act(async () => {
+    await fireEvent.press(view.getByTestId('toggle-bookmark'));
+  });
+  await act(async () => {
+    appStateChangeListener?.('active');
+    await jest.advanceTimersByTimeAsync(30_000);
+  });
+  expect(saveRemoteBookmark).toHaveBeenCalledTimes(1);
+
+  await act(async () => {
+    firstWrite.resolve();
+    await firstWrite.promise;
+  });
+
+  await waitFor(() => expect(saveRemoteBookmark).toHaveBeenCalledTimes(2));
+  expect(saveRemoteBookmark.mock.calls.map((call: unknown[]) =>
+    (call[1] as { isFavorite: boolean }).isFavorite,
+  )).toEqual([true, false]);
+  expect(remoteFavorite).toBe(false);
+});
+
 test('synchronisiert die neueste lokale Änderung nach Abschluss eines laufenden Schreibens', async () => {
   const firstWrite = deferred<void>();
   let remoteFavorite = false;
