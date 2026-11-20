@@ -1,6 +1,7 @@
 - [Expo-Vorschau-Timing](expo-preview-timing.md) — Screenshots direkt nach einem Expo-Neustart können vor dem ersten Web-Bundle leer sein.
 - [EAS- und Replit-GitHub-Zugriff](eas-github-replit-access.md) — EAS-Zugriff auf ein Repository ersetzt nicht die Replit-GitHub-Verbindung fürs Projekt.
 - [EAS-Android-Signaturrechte](eas-android-signing-permissions.md) — Für neue Remote-Keystores braucht der EAS-Zugriff CREATE-Rechte oder zuvor angelegte Signaturdaten.
+- [EAS-Android-JDK-Version](eas-android-jdk-version.md) — Gradle 9.4.1 scheitert mit JVM 11; die EAS-Android-Umgebung braucht Java 17 oder neuer.
 - [Expo-Go-Dateiauswahl](expo-go-file-picker.md) — Android braucht den DocumentPicker-Anzeigenamen; Legacy-Reader unterstützen nicht alle Dokumentanbieter-URIs.
 - [Expo-SQLite-Web-Fallback](expo-sqlite-web-fallback.md) — Ein Laufzeit-Platform-Check verhindert nicht, dass Metro SQLite-WASM fürs Web bündelt.
 - [Manueller CupCal-Terminimport](cupcal-manual-event-import.md) — Der Kalender erhält Termine über den freigegebenen MHT/MHTML-Import, nicht über FortniteAPI.io.
