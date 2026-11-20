@@ -63,7 +63,13 @@ export default function EventDetailsScreen() {
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]} edges={['top']}>
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+        scrollEnabled
+        testID="event-details-scroll-view"
+      >
         <View style={styles.nav}>
           <Pressable
             accessibilityRole="button"
@@ -74,7 +80,7 @@ export default function EventDetailsScreen() {
           >
             <Feather name="arrow-left" size={19} color={colors.foreground} />
           </Pressable>
-          <Text style={[styles.navLabel, { color: colors.mutedForeground }]}>TURNIERDETAILS</Text>
+          <Text allowFontScaling style={[styles.navLabel, { color: colors.mutedForeground }]}>TURNIERDETAILS</Text>
           <Pressable
             ref={headerBookmarkRef}
             accessibilityRole="button"
@@ -112,9 +118,11 @@ export default function EventDetailsScreen() {
           <View style={[styles.heroIcon, { backgroundColor: colors.heroHighlight }]}>
             <Feather name="zap" size={20} color={colors.primary} />
           </View>
-          <Text style={[styles.heroEyebrow, { color: colors.heroMeta }]}>BEISPIELTERMIN · {event.region}</Text>
-          <Text style={[styles.title, { color: colors.heroForeground }]}>{event.title}</Text>
-          <Text style={[styles.heroCopy, { color: colors.heroMeta }]}>{event.description}</Text>
+          <Text allowFontScaling style={[styles.heroEyebrow, { color: colors.heroMeta }]}>
+            BEISPIELTERMIN · {event.region}
+          </Text>
+          <Text allowFontScaling style={[styles.title, { color: colors.heroForeground }]}>{event.title}</Text>
+          <Text allowFontScaling style={[styles.heroCopy, { color: colors.heroMeta }]}>{event.description}</Text>
         </View>
 
         <View style={styles.infoGrid}>
@@ -129,7 +137,7 @@ export default function EventDetailsScreen() {
 
         <View style={[styles.notice, { backgroundColor: colors.surfaceRaised, borderColor: colors.border }]}>
           <Feather name="info" size={17} color={colors.warning} />
-          <Text style={[styles.noticeText, { color: colors.mutedForeground }]}>
+          <Text allowFontScaling style={[styles.noticeText, { color: colors.mutedForeground }]}>
             Das sind Beispieldaten. Aktuelle offizielle Turniertermine werden angezeigt, sobald die Live-Datenquelle verbunden ist.
           </Text>
         </View>
@@ -165,7 +173,10 @@ export default function EventDetailsScreen() {
             size={17}
             color={isSavedByUser ? colors.secondaryForeground : colors.primaryForeground}
           />
-          <Text style={[styles.saveText, { color: isSavedByUser ? colors.secondaryForeground : colors.primaryForeground }]}>
+          <Text
+            allowFontScaling
+            style={[styles.saveText, { color: isSavedByUser ? colors.secondaryForeground : colors.primaryForeground }]}
+          >
             {!authReady
               ? 'Anmeldung wird geprüft'
               : isSavedByUser
@@ -185,14 +196,15 @@ function InfoBlock({ icon, label, value }: { icon: React.ComponentProps<typeof F
   return (
     <View style={[styles.info, { backgroundColor: colors.card, borderColor: colors.border }]}>
       <Feather name={icon} size={16} color={colors.primary} />
-      <Text style={[styles.infoLabel, { color: colors.mutedForeground }]}>{label}</Text>
-      <Text style={[styles.infoValue, { color: colors.foreground }]} numberOfLines={2}>{value}</Text>
+      <Text allowFontScaling style={[styles.infoLabel, { color: colors.mutedForeground }]}>{label}</Text>
+      <Text allowFontScaling style={[styles.infoValue, { color: colors.foreground }]}>{value}</Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   safe: { flex: 1 },
+  scroll: { flex: 1 },
   content: { paddingHorizontal: 20, paddingTop: 8, paddingBottom: 36 },
   nav: { height: 46, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 },
   navButton: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 13 },
@@ -210,8 +222,16 @@ const styles = StyleSheet.create({
   infoValue: { fontSize: 13, lineHeight: 18, fontWeight: '700', textTransform: 'capitalize' },
   notice: { borderWidth: 1, borderRadius: 16, padding: 14, flexDirection: 'row', gap: 10, alignItems: 'flex-start', marginBottom: 15 },
   noticeText: { flex: 1, fontSize: 12, lineHeight: 18 },
-  saveButton: { minHeight: 52, borderRadius: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 9 },
-  saveText: { fontSize: 14, fontWeight: '700' },
+  saveButton: {
+    minHeight: 52,
+    paddingHorizontal: 16,
+    borderRadius: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 9,
+  },
+  saveText: { flexShrink: 1, textAlign: 'center', fontSize: 14, fontWeight: '700' },
   notFound: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 14 },
   backText: { fontSize: 14, fontWeight: '700' },
 });

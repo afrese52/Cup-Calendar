@@ -1,7 +1,7 @@
 import React from 'react';
 import { afterEach, beforeEach, expect, jest, test } from '@jest/globals';
 import { act, fireEvent, render } from '@testing-library/react-native';
-import { AccessibilityInfo, Alert, Platform } from 'react-native';
+import { AccessibilityInfo, Alert, Dimensions, Platform, StyleSheet } from 'react-native';
 import { matchesEventFilter, sampleEvents, toLocalDateKey, type TournamentEvent } from '../data/events';
 import { EventCard } from '../components/EventCard';
 import CalendarScreen from '../app/(tabs)/index';
@@ -67,6 +67,8 @@ const mockRouterPush = (jest.requireMock('expo-router') as {
 }).router.push;
 const event = sampleEvents[0]!;
 const originalPlatformDescriptor = Object.getOwnPropertyDescriptor(Platform, 'OS');
+const defaultWindowDimensions = Dimensions.get('window');
+const defaultScreenDimensions = Dimensions.get('screen');
 const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
 
 function makeLegacyEvent(gameMode: TournamentEvent['gameMode']): TournamentEvent {
@@ -130,6 +132,10 @@ afterEach(() => {
   if (originalPlatformDescriptor) {
     Object.defineProperty(Platform, 'OS', originalPlatformDescriptor);
   }
+  Dimensions.set({
+    window: defaultWindowDimensions,
+    screen: defaultScreenDimensions,
+  });
 });
 
 test('zeigt im Kalender keinen Hinweis auf manuellen Import', async () => {
@@ -455,6 +461,60 @@ test('zeigt Regelwerk und Turnierserie getrennt in den Turnierdetails', async ()
   expect(view.getByText('Zero Build')).toBeTruthy();
   expect(view.getByText('Reload')).toBeTruthy();
 });
+
+test.each(['android', 'ios'] as const)(
+  'hält Turnierdetails und Speichern bei großer Schrift auf kleinem %s-Bildschirm erreichbar',
+  async (platform) => {
+    setPlatformOS(platform);
+    const compactDimensions = { width: 320, height: 480, scale: 1, fontScale: 2 };
+    Dimensions.set({
+      window: compactDimensions,
+      screen: compactDimensions,
+    });
+    const largeTextEvent: TournamentEvent = {
+      ...event,
+      title: 'FNCS Challenger Cup – Europäische Meisterschaft in mehreren Runden',
+      description:
+        'Teilnahmeberechtigte Teams spielen über mehrere Runden um die Qualifikation. Alle Ergebnisse und Hinweise zu den Spielzeiten bleiben in dieser ausführlichen Beschreibung enthalten.',
+      teamFormat: 'Duos',
+      gameRuleset: 'Zero Build',
+      tournamentSeries: 'Reload',
+    };
+    setAuthState(true);
+    mockContext.current.events = [largeTextEvent];
+
+    const view = await render(<EventDetailsScreen />);
+    const scrollView = view.getByTestId('event-details-scroll-view');
+    const contentStyle = StyleSheet.flatten(scrollView.props.contentContainerStyle);
+    const title = view.getByText(largeTextEvent.title);
+    const description = view.getByText(largeTextEvent.description);
+    const format = view.getByText(largeTextEvent.teamFormat);
+    const ruleset = view.getByText(largeTextEvent.gameRuleset!);
+    const series = view.getByText(largeTextEvent.tournamentSeries!);
+    const saveButton = view.getByTestId('event-save-button');
+    const saveText = view.getByText('In Merkliste speichern');
+
+    expect(scrollView.props.scrollEnabled).toBe(true);
+    expect(StyleSheet.flatten(scrollView.props.style).flex).toBe(1);
+    expect(contentStyle.paddingBottom).toBeGreaterThan(0);
+    for (const text of [title, description, format, ruleset, series, saveText]) {
+      expect(text.props.allowFontScaling).toBe(true);
+      expect(text.props.numberOfLines).toBeUndefined();
+    }
+    expect(saveButton.props).toMatchObject({
+      accessibilityRole: 'button',
+      accessibilityLabel: `${largeTextEvent.title}, In Merkliste speichern`,
+      accessibilityState: { disabled: false },
+    });
+    expect(StyleSheet.flatten(saveText.props.style)).toMatchObject({
+      flexShrink: 1,
+      textAlign: 'center',
+    });
+
+    await fireEvent.press(saveButton);
+    expect(mockToggleBookmark).toHaveBeenCalledWith(largeTextEvent.id);
+  },
+);
 
 test.each(['android', 'ios'] as const)(
   'Turnierdetails behalten Gäste auf der Ansicht und erlauben Speichern nach Anmeldung auf %s',
