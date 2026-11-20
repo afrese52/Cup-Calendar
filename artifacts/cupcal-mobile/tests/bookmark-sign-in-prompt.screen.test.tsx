@@ -5,6 +5,7 @@ import { AccessibilityInfo, Alert, Platform } from 'react-native';
 import { matchesEventFilter, sampleEvents, toLocalDateKey, type TournamentEvent } from '../data/events';
 import { EventCard } from '../components/EventCard';
 import CalendarScreen from '../app/(tabs)/index';
+import SavedScreen from '../app/(tabs)/saved';
 import EventDetailsScreen from '../app/event/[id]';
 import { promptAccountSignIn } from '../services/accountSignInPrompt';
 
@@ -94,6 +95,15 @@ function setAuthState(isAuthenticated: boolean, bookmarkedIds: string[] = []) {
     events: [event],
     bookmarkedIds,
     toggleBookmark: mockToggleBookmark,
+    storageError: null,
+    isReady: true,
+    bookmarkSyncError: null,
+    bookmarkSyncStatus: 'local',
+    clearBookmarks: jest.fn(async () => undefined),
+    retryBookmarkSync: jest.fn(async () => undefined),
+    retryLocalBookmarkLoad: jest.fn(async () => undefined),
+    canRetryLocalBookmarkLoad: false,
+    isRetryingLocalBookmarkLoad: false,
   };
 }
 
@@ -127,6 +137,27 @@ test('zeigt im Kalender keinen Hinweis auf manuellen Import', async () => {
 
   expect(view.queryByText('MANUELLER IMPORT')).toBeNull();
   expect(view.getByText('CAP-CALENDAR')).toBeTruthy();
+});
+
+test('zeigt den nativen Favoritenspeicherfehler im Kalender', async () => {
+  setAuthState(true);
+  mockContext.current.storageError = 'Favoriten konnten nicht geladen werden.';
+
+  const view = await render(<CalendarScreen />);
+
+  expect(view.getByText('Favoriten konnten nicht geladen werden.')).toBeTruthy();
+});
+
+test('zeigt den nativen Favoritenspeicherfehler in der Merkliste', async () => {
+  setAuthState(true, [event.id]);
+  mockContext.current.storageError =
+    'Favorit konnte nicht gespeichert werden. Bitte versuche es erneut.';
+
+  const view = await render(<SavedScreen />);
+
+  expect(
+    view.getByText('Favorit konnte nicht gespeichert werden. Bitte versuche es erneut.'),
+  ).toBeTruthy();
 });
 
 test('zeigt die Wochenleiste standardmäßig und öffnet den Monatskalender auf Wunsch', async () => {
