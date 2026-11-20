@@ -66,9 +66,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   eventsRef.current = events;
   const currentBookmarkIds = useRef<string[]>([]);
   const currentUserId = useRef<string | null>(null);
-  const syncingUsers = useRef(new Set<string>());
-  const queuedSyncUsers = useRef(new Set<string>());
-  const queuedAnnouncementUsers = useRef(new Set<string>());
+  const currentSessionVersion = useRef(0);
+  const syncingSessions = useRef(new Set<string>());
+  const queuedSyncSessions = useRef(new Set<string>());
+  const queuedAnnouncementSessions = useRef(new Set<string>());
   const eventsQuery = useGetEvents(undefined, {
     query: {
       staleTime: 5 * 60 * 1000,
@@ -90,6 +91,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     let authEventCount = 0;
     const setActiveUser = (nextUserId: string | null) => {
       if (currentUserId.current !== nextUserId) {
+        currentSessionVersion.current += 1;
         currentBookmarkIds.current = [];
         setBookmarkedIds([]);
         setStorageError(null);
@@ -131,68 +133,79 @@ export function AppProvider({ children }: { children: ReactNode }) {
       !supabase ||
       currentUserId.current !== targetUserId
     ) return;
-    if (announceRemoteChanges) queuedAnnouncementUsers.current.add(targetUserId);
+    const sessionVersion = currentSessionVersion.current;
+    const sessionKey = `${targetUserId}:${sessionVersion}`;
+    const isCurrentSession = () =>
+      currentUserId.current === targetUserId &&
+      currentSessionVersion.current === sessionVersion;
+    if (announceRemoteChanges) queuedAnnouncementSessions.current.add(sessionKey);
     let unclaimedIds: string[];
     try {
       unclaimedIds = await getAnonymousBookmarksForImport(targetUserId);
     } catch (error) {
-      queuedAnnouncementUsers.current.delete(targetUserId);
-      if (currentUserId.current === targetUserId) {
+      queuedAnnouncementSessions.current.delete(sessionKey);
+      if (isCurrentSession()) {
         setBookmarkSyncStatus('pending');
         setBookmarkSyncError(getBookmarkSyncErrorMessage(error));
       }
       return;
     }
-    if (currentUserId.current !== targetUserId) {
-      queuedAnnouncementUsers.current.delete(targetUserId);
+    if (!isCurrentSession()) {
+      queuedAnnouncementSessions.current.delete(sessionKey);
       return;
     }
     if (unclaimedIds.length) {
-      queuedAnnouncementUsers.current.delete(targetUserId);
+      queuedAnnouncementSessions.current.delete(sessionKey);
       setLegacyBookmarkImport({ userId: targetUserId, count: unclaimedIds.length });
       return;
     }
     setLegacyBookmarkImport((current) => current?.userId === targetUserId ? null : current);
-    if (syncingUsers.current.has(targetUserId)) {
-      queuedSyncUsers.current.add(targetUserId);
+    if (syncingSessions.current.has(sessionKey)) {
+      queuedSyncSessions.current.add(sessionKey);
       return;
     }
 
-    syncingUsers.current.add(targetUserId);
+    syncingSessions.current.add(sessionKey);
 
     try {
       do {
-        queuedSyncUsers.current.delete(targetUserId);
-        if (currentUserId.current !== targetUserId) break;
+        queuedSyncSessions.current.delete(sessionKey);
+        if (!isCurrentSession()) break;
 
         setBookmarkSyncStatus('syncing');
         setBookmarkSyncError(null);
 
         try {
           const pending = await prepareBookmarksForSync(targetUserId);
+          if (!isCurrentSession()) break;
           let remoteBookmarks = await fetchRemoteBookmarks(targetUserId);
+          if (!isCurrentSession()) break;
           let writeError: unknown = null;
 
           for (const [eventId, change] of Object.entries(pending)) {
+            if (!isCurrentSession()) break;
             const remote = remoteBookmarks.find((bookmark) => bookmark.event_id === eventId);
             if (shouldUploadBookmarkChange(change, remote)) {
               try {
                 await saveRemoteBookmark(eventId, change);
+                if (!isCurrentSession()) break;
               } catch (error) {
                 writeError = error;
                 break;
               }
             }
           }
+          if (!isCurrentSession()) break;
 
           remoteBookmarks = await fetchRemoteBookmarks(targetUserId);
+          if (!isCurrentSession()) break;
           const reconciled = await reconcileBookmarks(targetUserId, remoteBookmarks);
-          if (currentUserId.current === targetUserId) {
+          if (isCurrentSession()) {
             const previousIds = currentBookmarkIds.current;
             const nextIds = reconciled.eventIds;
             const hasBookmarkChanges = previousIds.some((id) => !nextIds.includes(id)) ||
               nextIds.some((id) => !previousIds.includes(id));
-            if (hasBookmarkChanges && queuedAnnouncementUsers.current.has(targetUserId)) {
+            if (hasBookmarkChanges && queuedAnnouncementSessions.current.has(sessionKey)) {
               const getEventTitle = (eventId: string) =>
                 eventsRef.current.find((event) => event.id === eventId)?.title ?? 'Ein Turnier';
               const added = nextIds
@@ -204,9 +217,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
               AccessibilityInfo.announceForAccessibility(
                 `Merkliste aktualisiert: ${[...added, ...removed].join('. ')}.`,
               );
-              queuedAnnouncementUsers.current.delete(targetUserId);
-            } else if (!queuedSyncUsers.current.has(targetUserId)) {
-              queuedAnnouncementUsers.current.delete(targetUserId);
+              queuedAnnouncementSessions.current.delete(sessionKey);
+            } else if (!queuedSyncSessions.current.has(sessionKey)) {
+              queuedAnnouncementSessions.current.delete(sessionKey);
             }
             currentBookmarkIds.current = nextIds;
             setBookmarkedIds(nextIds);
@@ -221,19 +234,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
             );
           }
         } catch (error) {
-          if (currentUserId.current === targetUserId) {
+          if (isCurrentSession()) {
             setBookmarkSyncStatus('pending');
             setBookmarkSyncError(getBookmarkSyncErrorMessage(error));
           }
         }
       } while (
-        queuedSyncUsers.current.has(targetUserId) &&
-        currentUserId.current === targetUserId
+        queuedSyncSessions.current.has(sessionKey) &&
+        isCurrentSession()
       );
     } finally {
-      syncingUsers.current.delete(targetUserId);
-      queuedSyncUsers.current.delete(targetUserId);
-      queuedAnnouncementUsers.current.delete(targetUserId);
+      syncingSessions.current.delete(sessionKey);
+      queuedSyncSessions.current.delete(sessionKey);
+      queuedAnnouncementSessions.current.delete(sessionKey);
     }
   }, []);
 

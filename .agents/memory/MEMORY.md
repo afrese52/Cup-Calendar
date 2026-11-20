@@ -26,3 +26,4 @@
 - [Stabile Daten in Hook-Tests](stable-hook-test-data.md) — Mock-Antwortobjekte für useEffect-Abhängigkeiten müssen über Renderings hinweg referenziell stabil bleiben.
 - [Turnierart-Korrekturprotokoll](tournament-type-audit-history.md) — Audit-Snapshots ohne Fremdschlüssel behalten Einträge auch nach Löschung von Termin oder Konto.
 - [Datenschutz bei Kontoauth-Fehlern](account-auth-error-privacy.md) — Unbekannte Anmelde- und Registrierungsfehler bleiben allgemein; andere Auth-Abläufe behalten ihre bisherige Diagnose.
+- [Favoriten-Sync nach Sitzungswechsel](bookmark-session-generation.md) — Asynchrone Favoritenantworten müssen an die konkrete Anmeldung gebunden und bei Kontowechsel verworfen werden.

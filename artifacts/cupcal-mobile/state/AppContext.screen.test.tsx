@@ -301,6 +301,88 @@ test('sagt externe Merkliste-Änderungen einmal an, ohne den Accessibility-Fokus
   expect(sendAccessibilityEvent).not.toHaveBeenCalled();
 });
 
+test('verwirft verspätete externe Merkliste-Änderungen nach einem Kontowechsel', async () => {
+  AppState.currentState = 'active';
+  const accountAExternalChange = deferred<RemoteBookmark[]>();
+  let accountAFetches = 0;
+  let accountBExternalFavorite = false;
+  bookmarkStore.loadBookmarksForUser.mockImplementation((userId: string | null) =>
+    Promise.resolve(userId === 'konto-b' ? ['favorit-b'] : []),
+  );
+  mockedSupabase.fetchRemoteBookmarks.mockImplementation((userId: string) => {
+    if (userId === 'konto-a') {
+      accountAFetches += 1;
+      return accountAFetches === 3
+        ? accountAExternalChange.promise
+        : Promise.resolve(accountAFetches > 3 ? [{
+          event_id: 'favorit-a',
+          is_favorite: true,
+          updated_at: '2026-01-01T00:00:00.000Z',
+          revision: 1,
+        }] : []);
+    }
+    return Promise.resolve([
+      {
+        event_id: 'favorit-b',
+        is_favorite: true,
+        updated_at: '2026-01-01T00:00:00.000Z',
+        revision: 1,
+      },
+      ...(accountBExternalFavorite ? [{
+        event_id: 'turnier-zweit',
+        is_favorite: true,
+        updated_at: '2026-01-01T00:00:00.000Z',
+        revision: 2,
+      }] : []),
+    ]);
+  });
+  const announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility').mockImplementation(() => {});
+  const view = await renderProvider();
+
+  await emitUser('konto-a');
+  await waitFor(() => expect(accountAFetches).toBe(2));
+  await act(async () => {
+    mockedSupabase.__emitBookmarkRealtime();
+  });
+  await waitFor(() => expect(accountAFetches).toBe(3));
+
+  await emitUser('konto-b');
+  await waitFor(() => expect(view.getByTestId('bookmark-ids').props.children).toBe('favorit-b'));
+  announce.mockClear();
+
+  await act(async () => {
+    accountAExternalChange.resolve([{
+      event_id: 'favorit-a',
+      is_favorite: true,
+      updated_at: '2026-01-01T00:00:00.000Z',
+      revision: 2,
+    }]);
+    await accountAExternalChange.promise;
+  });
+
+  expect(view.getByTestId('bookmark-ids').props.children).toBe('favorit-b');
+  expect(announce).not.toHaveBeenCalled();
+  expect(
+    (bookmarkStore.reconcileBookmarks.mock.calls as [string, RemoteBookmark[]][])
+      .some(([userId, remote]) =>
+        userId === 'konto-a' && remote.some((bookmark) => bookmark.event_id === 'favorit-a'),
+      ),
+  ).toBe(false);
+
+  accountBExternalFavorite = true;
+  await act(async () => {
+    mockedSupabase.__emitBookmarkRealtime();
+  });
+
+  await waitFor(() =>
+    expect(view.getByTestId('bookmark-ids').props.children).toBe('favorit-b,turnier-zweit'),
+  );
+  await waitFor(() => expect(announce).toHaveBeenCalledTimes(1));
+  expect(announce).toHaveBeenLastCalledWith(
+    'Merkliste aktualisiert: FNCS Zweiter Cup zur Merkliste hinzugefügt.',
+  );
+});
+
 test('nimmt den Realtime-Kanal nach einem Verbindungsausfall wieder auf und gleicht Favoriten ab', async () => {
   AppState.currentState = 'active';
   let remoteFavorite = false;
@@ -533,12 +615,13 @@ test('zeigt nach Abmeldung während Kontoladen und Sync nur Gastfavoriten', asyn
     }]);
     await Promise.all([accountALoad.promise, accountARemote.promise]);
   });
-  await waitFor(() => expect(bookmarkStore.reconcileBookmarks).toHaveBeenCalledWith(
-    'konto-a',
-    expect.arrayContaining([expect.objectContaining({ event_id: 'konto-favorit' })]),
-  ));
-
   expect(view.getByTestId('bookmark-ids').props.children).toBe('gast-favorit');
+  expect(
+    (bookmarkStore.reconcileBookmarks.mock.calls as [string, RemoteBookmark[]][])
+      .some(([userId, remote]) =>
+        userId === 'konto-a' && remote.some((bookmark) => bookmark.event_id === 'konto-favorit'),
+      ),
+  ).toBe(false);
   expect(bookmarkStore.loadBookmarksForUser).toHaveBeenCalledWith(null);
 });
 
@@ -573,12 +656,13 @@ test('überschreibt neue Favoriten nicht mit einer verspäteten Sync-Antwort des
     }]);
     await accountARemote.promise;
   });
-  await waitFor(() => expect(bookmarkStore.reconcileBookmarks).toHaveBeenCalledWith(
-    'konto-a',
-    expect.arrayContaining([expect.objectContaining({ event_id: 'favorit-a' })]),
-  ));
-
   expect(view.getByTestId('bookmark-ids').props.children).toBe('favorit-b');
+  expect(
+    (bookmarkStore.reconcileBookmarks.mock.calls as [string, RemoteBookmark[]][])
+      .some(([userId, remote]) =>
+        userId === 'konto-a' && remote.some((bookmark) => bookmark.event_id === 'favorit-a'),
+      ),
+  ).toBe(false);
 });
 
 test('führt parallele Wiederholungen und Realtime-Auslöser für denselben Favoriten nur einmal aus', async () => {
