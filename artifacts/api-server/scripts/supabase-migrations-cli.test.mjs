@@ -14,6 +14,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { test } from "node:test";
+import { createClient } from "@supabase/supabase-js";
 
 const projectDir = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -68,6 +69,33 @@ function runSupabase(workDir, ...args) {
     cwd: workDir,
     env: { ...localEnvironment },
   });
+}
+
+function parseEnvironmentOutput(output) {
+  return Object.fromEntries(
+    output
+      .split("\n")
+      .map((line) => line.match(/^([A-Z_]+)=(.*)$/))
+      .filter(Boolean)
+      .map(([, key, rawValue]) => [
+        key,
+        rawValue.startsWith('"') ? JSON.parse(rawValue) : rawValue,
+      ]),
+  );
+}
+
+async function waitForSignal(signal, message) {
+  let timeout;
+  try {
+    return await Promise.race([
+      signal,
+      new Promise((_, reject) => {
+        timeout = setTimeout(() => reject(new Error(message)), 10_000);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 async function findAvailablePort() {
@@ -305,6 +333,128 @@ test(
         `${accountId}:${eventId}:true`,
         "Die Favoriten-RPC muss mit der echten Auth-Rolle und auth.uid() funktionieren.",
       );
+
+      const localStatus = runSupabase(workDir, "status", "-o", "env");
+      const localCredentials = parseEnvironmentOutput(localStatus.stdout);
+      assert.ok(
+        localCredentials.API_URL && localCredentials.ANON_KEY && localCredentials.SERVICE_ROLE_KEY,
+        "Der lokale Supabase-Stack muss API-URL sowie lokale API-Schlüssel bereitstellen.",
+      );
+      const localAdmin = createClient(
+        localCredentials.API_URL,
+        localCredentials.SERVICE_ROLE_KEY,
+        { auth: { persistSession: false, autoRefreshToken: false } },
+      );
+      const localClient = createClient(
+        localCredentials.API_URL,
+        localCredentials.ANON_KEY,
+        { auth: { persistSession: false, autoRefreshToken: false } },
+      );
+      const realtimeEmail = `realtime-${randomUUID()}@cupcal.invalid`;
+      const realtimePassword = `${randomUUID()}Aa1!`;
+      const realtimeEventId = `realtime-${randomUUID()}`;
+      let realtimeUserId;
+      let realtimeChannel;
+
+      try {
+        const createdAccount = await localAdmin.auth.admin.createUser({
+          email: realtimeEmail,
+          password: realtimePassword,
+          email_confirm: true,
+          user_metadata: { display_name: "Realtime-Testkonto" },
+        });
+        assert.ifError(createdAccount.error);
+        assert.ok(createdAccount.data.user, "Das lokale Realtime-Testkonto muss erstellt werden.");
+        realtimeUserId = createdAccount.data.user.id;
+
+        const signedIn = await localClient.auth.signInWithPassword({
+          email: realtimeEmail,
+          password: realtimePassword,
+        });
+        assert.ifError(signedIn.error);
+        assert.equal(signedIn.data.user?.id, realtimeUserId);
+        assert.ok(signedIn.data.session?.access_token);
+        await localClient.realtime.setAuth(signedIn.data.session.access_token);
+
+        const initialBookmark = await localClient.rpc("sync_user_event_bookmark", {
+          p_event_id: realtimeEventId,
+          p_is_favorite: false,
+          p_updated_at: "1900-01-01T00:00:00.000Z",
+        });
+        assert.ifError(initialBookmark.error);
+
+        let resolveSubscribed;
+        let rejectSubscription;
+        const subscribed = new Promise((resolve, reject) => {
+          resolveSubscribed = resolve;
+          rejectSubscription = reject;
+        });
+        let resolveRealtimeChange;
+        const realtimeChange = new Promise((resolve) => {
+          resolveRealtimeChange = resolve;
+        });
+        const realtimeStatuses = [];
+        realtimeChannel = localClient
+          .channel(`migration-realtime-${randomUUID()}`, {
+            config: { postgres_changes_options: { wait: true } },
+          })
+          .on(
+            "postgres_changes",
+            {
+              event: "UPDATE",
+              schema: "public",
+              table: "user_event_bookmarks",
+              filter: `user_id=eq.${realtimeUserId}`,
+            },
+            (payload) => {
+              resolveRealtimeChange(payload);
+            },
+          )
+          .subscribe((status, error) => {
+            realtimeStatuses.push(status);
+            if (status === "SUBSCRIBED") resolveSubscribed();
+            if (["CHANNEL_ERROR", "TIMED_OUT"].includes(status)) {
+              rejectSubscription(error ?? new Error(`Realtime-Status: ${status}`));
+            }
+          });
+
+        await waitForSignal(
+          subscribed,
+          "Der angemeldete lokale Client konnte Realtime nicht abonnieren.",
+        );
+        const changedBookmark = await localClient.rpc("sync_user_event_bookmark", {
+          p_event_id: realtimeEventId,
+          p_is_favorite: true,
+          p_updated_at: "2000-01-01T00:00:00.000Z",
+        });
+        assert.ifError(changedBookmark.error);
+        const persistedBookmark = await localAdmin
+          .from("user_event_bookmarks")
+          .select("user_id, event_id, is_favorite")
+          .eq("user_id", realtimeUserId)
+          .eq("event_id", realtimeEventId)
+          .single();
+        assert.ifError(persistedBookmark.error);
+        assert.equal(persistedBookmark.data?.is_favorite, true);
+
+        const received = await waitForSignal(
+          realtimeChange,
+          `Der angemeldete lokale Client erhielt keine Favoritenänderung über Realtime (Status: ${realtimeStatuses.join(", ")}).`,
+        );
+        assert.equal(received.eventType, "UPDATE");
+        assert.equal(received.new.user_id, realtimeUserId);
+        assert.equal(received.new.event_id, realtimeEventId);
+        assert.equal(received.new.is_favorite, true);
+      } finally {
+        if (realtimeChannel) await localClient.removeChannel(realtimeChannel);
+        localClient.realtime.disconnect();
+        await localClient.auth.signOut();
+        if (realtimeUserId) {
+          const deletedAccount = await localAdmin.auth.admin.deleteUser(realtimeUserId);
+          assert.ifError(deletedAccount.error);
+        }
+      }
+
       assert.equal(
         psql(`
           SELECT display_name

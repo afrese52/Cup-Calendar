@@ -14,6 +14,7 @@
 - [Supabase-Profile für Auth-Konten](supabase-user-profiles.md) — Jedes CupCal-Auth-Konto braucht einen passenden Eintrag in `public.user_profiles`.
 - [Supabase-Migrationen für Live-Tests](supabase-live-migrations.md) — Vor Konto-Isolationstests muss das Live-Schema die lokalen Favoritenmigrationen enthalten.
 - [Supabase-CLI-Migrationstests](supabase-cli-migrations.md) — `supabase start` wendet lokale Migrationen an; `db reset` kann beim Neustart von Kong in dieser Umgebung scheitern.
+- [Supabase-Realtime-Testabos](supabase-realtime-test-subscriptions.md) — `SUBSCRIBED` kann vor aktiver Postgres-Changes-Replikation kommen; lokale E2E-Tests sollen auf die Bestätigung warten.
 - [Supabase-Passwortregel](supabase-password-policy.md) — Beim CupCal-Passwort-Reset gelten mindestens sechs Zeichen, ohne zusätzliche Zeichenklassen.
 - [Supabase-Retry-After](supabase-retry-after.md) — Die Auth-SDK-Fehler enthalten die HTTP-Header nicht; die Client-Fetch-Schicht muss die Wartezeit in den Fehlertext übernehmen.
 - [Bookmark-Zeitordnung](bookmark-clock-ordering.md) — Favoritenänderungen anhand serverseitiger Revisionen statt Gerätezeitstempeln ordnen.
