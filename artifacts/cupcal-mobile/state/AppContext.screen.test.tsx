@@ -100,8 +100,10 @@ function BookmarkState() {
     bookmarkedIds,
     bookmarkSyncStatus,
     storageError,
+    canRetryLocalBookmarkLoad,
     toggleBookmark,
     clearBookmarks,
+    retryLocalBookmarkLoad,
     retryBookmarkSync,
   } = useCupCal();
   return (
@@ -109,6 +111,7 @@ function BookmarkState() {
       <Text testID="bookmark-ids">{bookmarkedIds.join(',')}</Text>
       <Text testID="bookmark-sync-status">{bookmarkSyncStatus}</Text>
       <Text testID="storage-error">{storageError ?? ''}</Text>
+      <Text testID="can-retry-local-bookmark-load">{String(canRetryLocalBookmarkLoad)}</Text>
       <Pressable testID="toggle-bookmark" onPress={() => toggleBookmark('turnier-neu')}>
         <Text>Favorit ändern</Text>
       </Pressable>
@@ -117,6 +120,9 @@ function BookmarkState() {
       </Pressable>
       <Pressable testID="retry-bookmark-sync" onPress={() => retryBookmarkSync()}>
         <Text>Synchronisierung wiederholen</Text>
+      </Pressable>
+      <Pressable testID="retry-local-bookmark-load" onPress={() => retryLocalBookmarkLoad()}>
+        <Text>Favoriten erneut laden</Text>
       </Pressable>
     </>
   );
@@ -378,6 +384,40 @@ test('meldet einen Fehler beim Laden lokaler Favoriten verständlich', async () 
     );
   });
   expect(view.getByTestId('bookmark-ids').props.children).toBe('');
+  expect(view.getByTestId('can-retry-local-bookmark-load').props.children).toBe('true');
+});
+
+test('lädt lokale Favoriten nach einem Ladefehler erneut und entfernt den Fehler bei Erfolg', async () => {
+  bookmarkStore.loadBookmarksForUser
+    .mockRejectedValueOnce(new Error('device storage unavailable'))
+    .mockResolvedValueOnce(['erneut-geladen']);
+  const view = await renderProvider();
+
+  await waitFor(() => expect(view.getByTestId('can-retry-local-bookmark-load').props.children).toBe('true'));
+  await act(async () => {
+    await fireEvent.press(view.getByTestId('retry-local-bookmark-load'));
+  });
+
+  expect(bookmarkStore.loadBookmarksForUser).toHaveBeenCalledTimes(2);
+  expect(bookmarkStore.loadBookmarksForUser).toHaveBeenLastCalledWith(null);
+  expect(view.getByTestId('bookmark-ids').props.children).toBe('erneut-geladen');
+  expect(view.getByTestId('storage-error').props.children).toBe('');
+  expect(view.getByTestId('can-retry-local-bookmark-load').props.children).toBe('false');
+});
+
+test('behält den verständlichen Ladefehler, wenn das erneute Laden erneut scheitert', async () => {
+  bookmarkStore.loadBookmarksForUser.mockRejectedValue(new Error('device storage unavailable'));
+  const view = await renderProvider();
+
+  await waitFor(() => expect(view.getByTestId('can-retry-local-bookmark-load').props.children).toBe('true'));
+  await act(async () => {
+    await fireEvent.press(view.getByTestId('retry-local-bookmark-load'));
+  });
+
+  expect(view.getByTestId('storage-error').props.children).toBe(
+    'Favoriten konnten nicht geladen werden.',
+  );
+  expect(view.getByTestId('can-retry-local-bookmark-load').props.children).toBe('true');
 });
 
 test('zeigt einen Favoriten erst nach erfolgreichem lokalem Speichern an', async () => {

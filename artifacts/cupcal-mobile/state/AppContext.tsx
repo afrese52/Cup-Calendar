@@ -26,12 +26,15 @@ interface AppContextValue {
   isAuthenticated: boolean;
   eventError: string | null;
   storageError: string | null;
+  canRetryLocalBookmarkLoad: boolean;
+  isRetryingLocalBookmarkLoad: boolean;
   bookmarkSyncStatus: 'local' | 'syncing' | 'synced' | 'pending';
   bookmarkSyncError: string | null;
   legacyBookmarkImportCount: number;
   importLegacyBookmarks: () => Promise<void>;
   keepLegacyBookmarksLocal: () => Promise<void>;
   toggleBookmark: (eventId: string) => Promise<void>;
+  retryLocalBookmarkLoad: () => Promise<void>;
   retryBookmarkSync: () => Promise<void>;
   clearBookmarks: () => Promise<void>;
 }
@@ -55,6 +58,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [eventsReady, setEventsReady] = useState(false);
   const [eventError, setEventError] = useState<string | null>(null);
   const [storageError, setStorageError] = useState<string | null>(null);
+  const [canRetryLocalBookmarkLoad, setCanRetryLocalBookmarkLoad] = useState(false);
+  const [isRetryingLocalBookmarkLoad, setIsRetryingLocalBookmarkLoad] = useState(false);
+  const localBookmarkLoadRetryInFlight = useRef(false);
   const hasLoadedServerEvents = useRef(false);
   const eventsRef = useRef(events);
   eventsRef.current = events;
@@ -86,6 +92,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (currentUserId.current !== nextUserId) {
         currentBookmarkIds.current = [];
         setBookmarkedIds([]);
+        setStorageError(null);
+        setCanRetryLocalBookmarkLoad(false);
         setBookmarkSyncStatus('local');
         setBookmarkSyncError(null);
       }
@@ -248,7 +256,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
         await syncBookmarks(userId);
       } catch {
-        if (isMounted) setStorageError('Favoriten konnten nicht geladen werden.');
+        if (isMounted && currentUserId.current === userId) {
+          setStorageError('Favoriten konnten nicht geladen werden.');
+          setCanRetryLocalBookmarkLoad(true);
+        }
       }
     })();
 
@@ -395,6 +406,30 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (activeUserId) await syncBookmarks(activeUserId, true);
   }, [syncBookmarks]);
 
+  const retryLocalBookmarkLoad = useCallback(async () => {
+    if (localBookmarkLoadRetryInFlight.current) return;
+    localBookmarkLoadRetryInFlight.current = true;
+    setIsRetryingLocalBookmarkLoad(true);
+    const activeUserId = currentUserId.current;
+    try {
+      const localIds = await loadBookmarksForUser(activeUserId);
+      if (currentUserId.current !== activeUserId) return;
+      currentBookmarkIds.current = localIds;
+      setBookmarkedIds(localIds);
+      setStorageError(null);
+      setCanRetryLocalBookmarkLoad(false);
+      if (activeUserId) await syncBookmarks(activeUserId);
+    } catch {
+      if (currentUserId.current === activeUserId) {
+        setStorageError('Favoriten konnten nicht geladen werden.');
+        setCanRetryLocalBookmarkLoad(true);
+      }
+    } finally {
+      localBookmarkLoadRetryInFlight.current = false;
+      setIsRetryingLocalBookmarkLoad(false);
+    }
+  }, [syncBookmarks]);
+
   const importLegacyBookmarks = useCallback(async () => {
     const activeUserId = currentUserId.current;
     if (!activeUserId || legacyBookmarkImport?.userId !== activeUserId) return;
@@ -452,12 +487,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
       isAuthenticated,
       eventError,
       storageError,
+      canRetryLocalBookmarkLoad,
+      isRetryingLocalBookmarkLoad,
       bookmarkSyncStatus,
       bookmarkSyncError,
       legacyBookmarkImportCount: legacyBookmarkImport?.count ?? 0,
       importLegacyBookmarks,
       keepLegacyBookmarksLocal: keepLegacyBookmarks,
       toggleBookmark,
+      retryLocalBookmarkLoad,
       retryBookmarkSync,
       clearBookmarks,
     }),
@@ -469,12 +507,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
       isAuthenticated,
       eventError,
       storageError,
+      canRetryLocalBookmarkLoad,
+      isRetryingLocalBookmarkLoad,
       bookmarkSyncStatus,
       bookmarkSyncError,
       legacyBookmarkImport,
       importLegacyBookmarks,
       keepLegacyBookmarks,
       toggleBookmark,
+      retryLocalBookmarkLoad,
       retryBookmarkSync,
       clearBookmarks,
     ],

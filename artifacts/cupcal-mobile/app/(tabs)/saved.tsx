@@ -21,6 +21,9 @@ export default function SavedScreen() {
     bookmarkSyncStatus,
     clearBookmarks,
     retryBookmarkSync,
+    retryLocalBookmarkLoad,
+    canRetryLocalBookmarkLoad,
+    isRetryingLocalBookmarkLoad,
     storageError,
   } = useCupCal();
   const [savedOnly, setSavedOnly] = useState(false);
@@ -119,6 +122,33 @@ export default function SavedScreen() {
                 </View>
               </View>
             ) : null}
+            {storageError ? (
+              <View style={[styles.errorCard, { borderColor: colors.border, backgroundColor: colors.card }]}>
+                <Text style={[styles.error, { color: colors.warning }]}>{storageError}</Text>
+                {canRetryLocalBookmarkLoad ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityState={{ disabled: isRetryingLocalBookmarkLoad }}
+                    disabled={isRetryingLocalBookmarkLoad}
+                    testID="agenda-retry-local-bookmarks"
+                    onPress={() => {
+                      void Haptics.selectionAsync();
+                      void retryLocalBookmarkLoad();
+                    }}
+                    style={({ pressed }) => [styles.textAction, pressed && styles.pressed]}
+                  >
+                    {isRetryingLocalBookmarkLoad ? (
+                      <ActivityIndicator size="small" color={colors.primary} />
+                    ) : (
+                      <Feather name="refresh-cw" size={14} color={colors.primary} />
+                    )}
+                    <Text style={[styles.textActionLabel, { color: colors.primary }]}>
+                      {isRetryingLocalBookmarkLoad ? 'Favoriten werden geladen …' : 'Favoriten erneut laden'}
+                    </Text>
+                  </Pressable>
+                ) : null}
+              </View>
+            ) : null}
             {savedOnly && isAuthenticated ? (
               <View style={[styles.syncCard, { borderColor: colors.border, backgroundColor: colors.card }]}>
                 <View style={styles.syncStatus}>
@@ -166,8 +196,8 @@ export default function SavedScreen() {
                     <Text style={[styles.textActionLabel, { color: colors.destructive }]}>Merkliste leeren</Text>
                   </Pressable>
                 ) : null}
-                {storageError || bookmarkSyncError ? (
-                  <Text style={[styles.error, { color: colors.warning }]}>{storageError ?? bookmarkSyncError}</Text>
+                {bookmarkSyncError ? (
+                  <Text style={[styles.error, { color: colors.warning }]}>{bookmarkSyncError}</Text>
                 ) : null}
               </View>
             ) : null}
@@ -218,6 +248,7 @@ const styles = StyleSheet.create({
   signInButton: { minHeight: 40, borderRadius: 11, alignItems: 'center', justifyContent: 'center', marginTop: 12 },
   signInText: { fontSize: 12, fontWeight: '700' },
   syncCard: { borderWidth: 1, borderRadius: 16, padding: 13, marginTop: 14, gap: 11 },
+  errorCard: { borderWidth: 1, borderRadius: 16, padding: 13, marginTop: 14, gap: 8 },
   syncStatus: { flexDirection: 'row', alignItems: 'center', gap: 9 },
   syncText: { flex: 1, fontSize: 12, lineHeight: 18 },
   textAction: { minHeight: 34, flexDirection: 'row', alignItems: 'center', gap: 8 },
