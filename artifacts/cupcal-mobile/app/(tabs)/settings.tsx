@@ -1011,7 +1011,7 @@ const styles = StyleSheet.create({
   deleteConfirmationTitle: { fontSize: 14, fontWeight: '700' },
   deleteConfirmationCopy: { fontSize: 12, lineHeight: 18, marginTop: 6 },
   deleteConfirmButton: { minHeight: 46, borderRadius: 11, alignItems: 'center', justifyContent: 'center', marginTop: 12 },
-  deleteConfirmButtonText: { fontSize: 13, fontWeight: '700' },
+  deleteConfirmButtonText: { width: '100%', flexShrink: 1, textAlign: 'center', fontSize: 13, fontWeight: '700' },
   modeToggle: { minHeight: 40, alignItems: 'center', justifyContent: 'center', marginTop: 4 },
   modeToggleText: { width: '100%', flexShrink: 1, textAlign: 'center', fontSize: 12, fontWeight: '700' },
   authNotice: { fontSize: 12, lineHeight: 17, marginTop: 10 },

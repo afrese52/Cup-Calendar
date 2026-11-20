@@ -733,8 +733,8 @@ test('hält Eingabe, Rückmeldung und Zurück-Aktion auf kleinem Display erreich
   expect(compactScreen.getByText('Zurück zur Anmeldung')).toBeTruthy();
 });
 
-test('hält Erklärung und Aktionen des Löschdialogs auf kleinem Display erreichbar', async () => {
-  const compactDimensions = { width: 320, height: 480, scale: 1, fontScale: 1 };
+test('hält Erklärung und Aktionen des Löschdialogs bei großer Schrift erreichbar', async () => {
+  const compactDimensions = { width: 320, height: 480, scale: 1, fontScale: 2 };
   Dimensions.set({
     window: compactDimensions,
     screen: compactDimensions,
@@ -745,11 +745,17 @@ test('hält Erklärung und Aktionen des Löschdialogs auf kleinem Display erreic
 
   const scrollView = view.getByTestId('settings-scroll-view');
   const compactScreen = within(scrollView);
+  expect(Dimensions.get('window').fontScale).toBe(2);
   expect(scrollView.props.scrollEnabled).toBe(true);
   expect(StyleSheet.flatten(scrollView.props.style).flex).toBe(1);
 
   await fireEvent.press(compactScreen.getByTestId('delete-account-button'));
-  expect(compactScreen.getByText('Konto wirklich löschen?')).toBeTruthy();
+  const title = compactScreen.getByText('Konto wirklich löschen?');
+  const description = compactScreen.getByTestId('delete-account-confirmation-description');
+  expect(title).toBeTruthy();
+  expect(description.props.allowFontScaling).not.toBe(false);
+  expect(description.props.numberOfLines).toBeUndefined();
+  expect(description.props.ellipsizeMode).toBeUndefined();
   expect(compactScreen.getByText(
     'Dein Konto und deine gespeicherten Favoriten werden endgültig entfernt. Zuerst senden wir einen Link an deine E-Mail-Adresse. Gelöscht wird erst, wenn du diesen Link öffnest.',
   )).toBeTruthy();
@@ -763,11 +769,18 @@ test('hält Erklärung und Aktionen des Löschdialogs auf kleinem Display erreic
   });
 
   expect(compactScreen.getByTestId('delete-account-confirm-button')).toBeTruthy();
-  expect(compactScreen.getByText('Bestätigungslink senden')).toBeTruthy();
-  expect(compactScreen.getByTestId('delete-account-cancel-button')).toBeTruthy();
-  expect(compactScreen.getByText('Abbrechen')).toBeTruthy();
+  const confirmLabel = compactScreen.getByText('Bestätigungslink senden');
+  const cancelButton = compactScreen.getByTestId('delete-account-cancel-button');
+  const cancelLabel = compactScreen.getByText('Abbrechen');
+  expect(confirmLabel.props.allowFontScaling).not.toBe(false);
+  expect(confirmLabel.props.numberOfLines).toBeUndefined();
+  expect(confirmLabel.props.ellipsizeMode).toBeUndefined();
+  expect(cancelButton).toBeTruthy();
+  expect(cancelLabel.props.allowFontScaling).not.toBe(false);
+  expect(cancelLabel.props.numberOfLines).toBeUndefined();
+  expect(cancelLabel.props.ellipsizeMode).toBeUndefined();
 
-  await fireEvent.press(compactScreen.getByTestId('delete-account-cancel-button'));
+  await fireEvent.press(cancelButton);
   expect(compactScreen.queryByText('Konto wirklich löschen?')).toBeNull();
 });
 
