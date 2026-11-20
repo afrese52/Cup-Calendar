@@ -323,6 +323,58 @@ test.each([
   },
 );
 
+test.each([
+  {
+    name: 'beiden leeren Feldern',
+    password: '',
+    confirmPassword: '',
+    message: 'Bitte gib dein neues Passwort ein und bestätige es.',
+  },
+  {
+    name: 'fehlendem neuen Passwort',
+    password: '',
+    confirmPassword: 'Mein-neues-Passwort-123',
+    message: 'Bitte gib dein neues Passwort ein.',
+  },
+  {
+    name: 'fehlender Passwortbestätigung',
+    password: 'Mein-neues-Passwort-123',
+    confirmPassword: '',
+    message: 'Bitte bestätige dein neues Passwort.',
+  },
+])(
+  'zeigt bei $name nach Enter die zugängliche Fehlermeldung auf iOS und Android',
+  async ({ password, confirmPassword, message }) => {
+    for (const platform of ['ios', 'android'] as const) {
+      const originalPlatformOS = Platform.OS;
+      Object.defineProperty(Platform, 'OS', { configurable: true, value: platform });
+      try {
+        const view = await render(<ResetPasswordScreen />);
+
+        await waitFor(() => expect(view.getByTestId('reset-password-confirm-input')).toBeTruthy());
+        if (password) {
+          await fireEvent.changeText(view.getByTestId('reset-password-input'), password);
+        }
+        if (confirmPassword) {
+          await fireEvent.changeText(view.getByTestId('reset-password-confirm-input'), confirmPassword);
+        }
+        await fireEvent(view.getByTestId('reset-password-confirm-input'), 'submitEditing', {
+          nativeEvent: { text: confirmPassword },
+        });
+
+        const errorMessage = await view.findByText(message);
+        expect(errorMessage.props.accessible).toBe(true);
+        expect(errorMessage.props.accessibilityRole).toBe(platform === 'ios' ? 'alert' : 'text');
+        expect(errorMessage.props.accessibilityLiveRegion).toBe(platform === 'android' ? 'assertive' : undefined);
+        expect(mockSaveNewPassword).not.toHaveBeenCalled();
+        await act(async () => view.unmount());
+      } finally {
+        Object.defineProperty(Platform, 'OS', { configurable: true, value: originalPlatformOS });
+      }
+    }
+  },
+);
+
 test('aktualisiert den Fehler bei einem leeren Passwort während der Eingabe', async () => {
   const view = await render(<ResetPasswordScreen />);
 
