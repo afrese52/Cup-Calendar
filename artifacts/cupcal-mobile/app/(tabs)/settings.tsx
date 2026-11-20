@@ -113,6 +113,7 @@ export default function SettingsScreen() {
   const [password, setPassword] = useState('');
   const [submittingAction, setSubmittingAction] = useState<AuthAction | null>(null);
   const isSubmittingAuthRef = useRef(false);
+  const isResendingConfirmationRef = useRef(false);
   const isSubmittingAuth = submittingAction !== null;
   const [authError, setAuthError] = useState<string | null>(null);
   const [authErrorFocusRequest, setAuthErrorFocusRequest] = useState(0);
@@ -375,8 +376,14 @@ export default function SettingsScreen() {
   };
 
   const resendConfirmation = async () => {
-    if (!supabase || !confirmationResendCooldownLoaded || confirmationResendSecondsLeft > 0) return;
+    if (
+      !supabase ||
+      isResendingConfirmationRef.current ||
+      !confirmationResendCooldownLoaded ||
+      confirmationResendSecondsLeft > 0
+    ) return;
 
+    isResendingConfirmationRef.current = true;
     setSubmittingAction('resend-confirmation');
     setAuthError(null);
     setAuthMessage(null);
@@ -410,6 +417,7 @@ export default function SettingsScreen() {
         reportAuthError(result.error);
       }
     } finally {
+      isResendingConfirmationRef.current = false;
       setSubmittingAction(null);
     }
   };

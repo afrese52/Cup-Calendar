@@ -984,7 +984,7 @@ test('zeigt einen Fehler beim erneuten Anfordern des Bestätigungslinks', async 
   const mockedSupabase = jest.requireMock('@/services/supabase') as {
     requestEmailConfirmation: jest.Mock;
   };
-  mockedSupabase.requestEmailConfirmation.mockImplementation(async () => {
+  mockedSupabase.requestEmailConfirmation.mockImplementationOnce(async () => {
     throw new Error('Email rate limit exceeded');
   });
   const view = await openSettings();
@@ -994,6 +994,13 @@ test('zeigt einen Fehler beim erneuten Anfordern des Bestätigungslinks', async 
 
   expect(await view.findByText(
     'Zu viele Versuche in kurzer Zeit. Warte bitte einige Minuten und versuche es dann erneut.',
+  )).toBeTruthy();
+
+  await fireEvent.press(view.getByTestId('resend-confirmation-button'));
+
+  expect(mockedSupabase.requestEmailConfirmation).toHaveBeenCalledTimes(2);
+  expect(await view.findByText(
+    'Wenn dein Konto noch nicht bestätigt ist, erhältst du in Kürze einen neuen Bestätigungslink.',
   )).toBeTruthy();
 });
 
@@ -1010,6 +1017,9 @@ test('kennzeichnet das erneute Senden des Bestätigungslinks als laufende Anfrag
   const view = await openSettings();
   await fireEvent.changeText(view.getByTestId('auth-email-input'), 'test@example.invalid');
   await fireEvent.press(view.getByTestId('resend-confirmation-button'));
+  await fireEvent.press(view.getByTestId('resend-confirmation-button'));
+
+  expect(mockedSupabase.requestEmailConfirmation).toHaveBeenCalledTimes(1);
 
   await waitFor(() => {
     expect(view.getByTestId('resend-confirmation-button').props.accessibilityState).toEqual({
