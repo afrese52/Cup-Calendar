@@ -63,3 +63,18 @@ jobs:
       - name: Stop PostgreSQL container
         if: always()
         run: docker rm --force cupcal-postgres || true
+
+  require-fresh-supabase-migrations:
+    name: Fresh Supabase migrations
+    if: ${{ always() }}
+    needs: fresh-supabase-migrations
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require all migration tests to pass
+        env:
+          MIGRATION_TEST_RESULT: ${{ needs.fresh-supabase-migrations.result }}
+        run: |
+          if [[ "$MIGRATION_TEST_RESULT" != "success" ]]; then
+            echo "Migration tests did not succeed (result: $MIGRATION_TEST_RESULT)." >&2
+            exit 1
+          fi
