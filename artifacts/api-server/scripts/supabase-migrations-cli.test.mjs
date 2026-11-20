@@ -22,6 +22,7 @@ const projectDir = path.resolve(
 const migrationsDir = path.join(projectDir, "supabase/migrations");
 const supabaseCliVersion = "3.1.0";
 const accountId = "10000000-0000-0000-0000-000000000001";
+const preexistingAccountId = "20000000-0000-0000-0000-000000000002";
 const eventId = "supabase-cli-migration-test-event";
 
 function run(command, args, options = {}) {
@@ -96,6 +97,11 @@ test(
       .filter((file) => /^\d+.*\.sql$/.test(file))
       .sort();
     assert.ok(migrationFiles.length > 0, "Keine Supabase-Migrationen gefunden.");
+    const profileMigration = migrationFiles.find((file) =>
+      /^0006_.*user_profiles\.sql$/.test(file),
+    );
+    assert.ok(profileMigration, "Migration 0006 für Profile wurde nicht gefunden.");
+    const profileMigrationIndex = migrationFiles.indexOf(profileMigration);
 
     const workDir = await mkdtemp(
       path.join(os.tmpdir(), "cupcal-supabase-cli-migrations-"),
@@ -113,7 +119,7 @@ test(
     try {
       await mkdir(migrationTarget, { recursive: true });
       await Promise.all(
-        migrationFiles.map((file) =>
+        migrationFiles.slice(0, profileMigrationIndex).map((file) =>
           copyFile(path.join(migrationsDir, file), path.join(migrationTarget, file)),
         ),
       );
@@ -247,6 +253,33 @@ test(
         `),
         "t",
         "Die Migration muss die Favoriten in der echten Realtime-Publikation registrieren.",
+      );
+
+      psql(`
+        INSERT INTO auth.users (
+          id, aud, role, email, encrypted_password, raw_user_meta_data
+        ) VALUES (
+          '${preexistingAccountId}', 'authenticated', 'authenticated',
+          'existing-migration-test@cupcal.invalid', '',
+          '{"display_name":"Bestandskonto"}'
+        );
+      `);
+
+      await Promise.all(
+        migrationFiles.slice(profileMigrationIndex).map((file) =>
+          copyFile(path.join(migrationsDir, file), path.join(migrationTarget, file)),
+        ),
+      );
+      runSupabase(workDir, "migration", "up", "--local");
+
+      assert.equal(
+        psql(`
+          SELECT id::text || ':' || display_name
+          FROM public.user_profiles
+          WHERE id = '${preexistingAccountId}';
+        `),
+        `${preexistingAccountId}:Bestandskonto`,
+        "Migration 0006 muss bestehende Auth-Konten mit ihren Metadaten zurückbefüllen.",
       );
 
       psql(`
