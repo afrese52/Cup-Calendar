@@ -1364,8 +1364,13 @@ test.each(['ios', 'android'] as const)(
       expect(mockedApi.__requestAccountDeletion).not.toHaveBeenCalled();
 
       await fireEvent.press(view.getByTestId('delete-account-button'));
-      await fireEvent.press(view.getByTestId('delete-account-confirm-button'));
+      const rapidPressButton = view.getByTestId('delete-account-confirm-button');
+      await act(async () => {
+        rapidPressButton.props.onClick();
+        rapidPressButton.props.onClick();
+      });
       const pendingButton = view.getByTestId('delete-account-confirm-button');
+      expect(mockedApi.__requestAccountDeletion).toHaveBeenCalledTimes(1);
       expect(pendingButton.props.accessibilityLabel).toBe('Bestätigungslink wird angefordert');
       expect(pendingButton.props.accessibilityState).toMatchObject({
         disabled: true,
@@ -1379,6 +1384,7 @@ test.each(['ios', 'android'] as const)(
         confirmationToken: 'signed.confirmation.token',
         expiresAt: '2026-11-12T12:30:00.000Z',
       }));
+      expect(auth.signInWithOtp).toHaveBeenCalledTimes(1);
       const successMessage = await view.findByTestId('auth-success-message');
       expect(successMessage.props.accessible).toBe(true);
       expect(successMessage.props.accessibilityRole).toBe('alert');
@@ -1397,7 +1403,9 @@ test.each(['ios', 'android'] as const)(
     Object.defineProperty(Platform, 'OS', { configurable: true, value: platform });
     try {
       auth.getSession.mockResolvedValue({ data: { session: testSession }, error: null });
-      auth.signInWithOtp.mockResolvedValue({ error: new Error('Mailversand nicht verfügbar') });
+      auth.signInWithOtp
+        .mockResolvedValueOnce({ error: new Error('Mailversand nicht verfügbar') })
+        .mockResolvedValueOnce({ error: null });
       const view = await render(<SettingsScreen />);
       expect(await view.findByText('test@example.invalid')).toBeTruthy();
       await fireEvent.press(view.getByTestId('delete-account-button'));
@@ -1408,6 +1416,14 @@ test.each(['ios', 'android'] as const)(
       expect(errorMessage.props.accessibilityRole).toBe('alert');
       expect(errorMessage.props.accessibilityLiveRegion).toBe('assertive');
       expect(errorMessage.props.children).toContain('Mailversand nicht verfügbar');
+
+      await fireEvent.press(view.getByTestId('delete-account-confirm-button'));
+      expect(await view.findByText(/Bestätigungslink an test@example\.invalid gesendet/)).toBeTruthy();
+      expect(auth.signInWithOtp).toHaveBeenCalledTimes(2);
+      const mockedApi = jest.requireMock('@workspace/api-client-react') as {
+        __requestAccountDeletion: jest.Mock;
+      };
+      expect(mockedApi.__requestAccountDeletion).toHaveBeenCalledTimes(2);
     } finally {
       Object.defineProperty(Platform, 'OS', { configurable: true, value: originalPlatformOS });
     }

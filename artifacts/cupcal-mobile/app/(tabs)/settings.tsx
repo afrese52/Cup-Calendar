@@ -114,6 +114,7 @@ export default function SettingsScreen() {
   const [submittingAction, setSubmittingAction] = useState<AuthAction | null>(null);
   const isSubmittingAuthRef = useRef(false);
   const isResendingConfirmationRef = useRef(false);
+  const isRequestingAccountDeletionRef = useRef(false);
   const isSubmittingAuth = submittingAction !== null;
   const [authError, setAuthError] = useState<string | null>(null);
   const [authErrorFocusRequest, setAuthErrorFocusRequest] = useState(0);
@@ -449,7 +450,9 @@ export default function SettingsScreen() {
       reportAuthError('Für dieses angemeldete Konto ist keine E-Mail-Adresse verfügbar.');
       return;
     }
+    if (isRequestingAccountDeletionRef.current) return;
 
+    isRequestingAccountDeletionRef.current = true;
     setSubmittingAction('delete-account');
     setAuthError(null);
     setAuthMessage(null);
@@ -475,6 +478,7 @@ export default function SettingsScreen() {
         ),
       );
     } finally {
+      isRequestingAccountDeletionRef.current = false;
       setSubmittingAction(null);
     }
   };
