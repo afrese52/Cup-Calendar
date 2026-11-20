@@ -108,6 +108,7 @@ export default function SettingsScreen() {
     },
   });
   const [authMode, setAuthMode] = useState<AuthMode>('sign-in');
+  const previousAuthModeRef = useRef(authMode);
   const [email, setEmail] = useState('');
   const [registrationConfirmationEmail, setRegistrationConfirmationEmail] = useState<string | null>(null);
   const [password, setPassword] = useState('');
@@ -219,6 +220,14 @@ export default function SettingsScreen() {
       AccessibilityInfo.sendAccessibilityEvent(authErrorRef.current, 'focus');
     }
   }, [authError, authErrorFocusRequest, isSubmittingAuth]);
+
+  useEffect(() => {
+    if (previousAuthModeRef.current === authMode) return;
+    previousAuthModeRef.current = authMode;
+
+    if (Platform.OS === 'web' || !accountFocusRef.current) return;
+    AccessibilityInfo.sendAccessibilityEvent(accountFocusRef.current, 'focus');
+  }, [authMode]);
 
   useEffect(() => {
     if (focusAccount !== 'true' || isCheckingSession || Platform.OS === 'web') return;
@@ -701,7 +710,7 @@ export default function SettingsScreen() {
               <Text
                 ref={accountFocusRef}
                 accessible
-                accessibilityRole="text"
+                accessibilityRole="header"
                 accessibilityLiveRegion={Platform.OS === 'android' ? 'polite' : 'none'}
                 testID="account-session-status"
                 style={[styles.accountTitle, { color: colors.foreground }]}

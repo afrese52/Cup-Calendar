@@ -210,9 +210,58 @@ test('öffnet die Kontoeinstellungen mit Fokus auf der Anmeldeüberschrift', asy
   mockRouteParams.focusAccount = 'true';
   const view = await openSettings();
 
-  expect(view.getByText('Bei CupCal anmelden').props.accessibilityRole).toBe('text');
+  expect(view.getByText('Bei CupCal anmelden').props.accessibilityRole).toBe('header');
   await waitFor(() => expect(sendAccessibilityFocus).toHaveBeenCalledWith(expect.anything(), 'focus'));
 });
+
+test.each(['ios', 'android'] as const)(
+  'fokussiert nach jedem Kontomoduswechsel die neue Überschrift auf %s',
+  async (platform) => {
+    const originalPlatformOS = Platform.OS;
+    Object.defineProperty(Platform, 'OS', { configurable: true, value: platform });
+
+    try {
+      const view = await openSettings();
+      const transitions = [
+        {
+          press: () => fireEvent.press(view.getByTestId('auth-mode-toggle')),
+          heading: 'Konto erstellen',
+        },
+        {
+          press: () => fireEvent.press(view.getByTestId('auth-mode-toggle')),
+          heading: 'Bei CupCal anmelden',
+        },
+        {
+          press: () => fireEvent.press(view.getByTestId('forgot-password-button')),
+          heading: 'Passwort zurücksetzen',
+        },
+        {
+          press: () => fireEvent.press(view.getByTestId('auth-mode-toggle')),
+          heading: 'Bei CupCal anmelden',
+        },
+      ];
+
+      for (const transition of transitions) {
+        sendAccessibilityFocus.mockClear();
+        await transition.press();
+
+        await waitFor(() => {
+          expect(sendAccessibilityFocus).toHaveBeenCalledTimes(1);
+        });
+        const [focusTarget, focusEvent] = sendAccessibilityFocus.mock.calls[0]!;
+        expect(focusEvent).toBe('focus');
+        expect((focusTarget as { props?: { testID?: string; children?: string; accessibilityRole?: string } })
+          .props).toMatchObject({
+          testID: 'account-session-status',
+          children: transition.heading,
+          accessibilityRole: 'header',
+        });
+      }
+    } finally {
+      Object.defineProperty(Platform, 'OS', { configurable: true, value: originalPlatformOS });
+    }
+  },
+);
 
 test.each([
   ['Anmeldung', 'sign-in'],
@@ -225,6 +274,7 @@ test.each([
   } else if (mode === 'forgot-password') {
     await fireEvent.press(view.getByTestId('forgot-password-button'));
   }
+  sendAccessibilityFocus.mockClear();
 
   await fireEvent.press(view.getByTestId('auth-submit-button'));
 
@@ -407,6 +457,7 @@ test('verschiebt den Screenreader-Fokus während einer laufenden Registrierung n
   );
   const view = await openSettings();
   await fireEvent.press(view.getByTestId('auth-mode-toggle'));
+  sendAccessibilityFocus.mockClear();
   await enterCredentials(view);
 
   await fireEvent.press(view.getByTestId('auth-submit-button'));
@@ -509,6 +560,7 @@ test('zeigt nach einer Registrierung ohne Bestätigungsbedarf keine erneute Vers
   });
   const view = await openSettings();
   await fireEvent.press(view.getByTestId('auth-mode-toggle'));
+  sendAccessibilityFocus.mockClear();
   await enterCredentials(view);
 
   await fireEvent.press(view.getByTestId('auth-submit-button'));
@@ -680,6 +732,7 @@ test('zeigt einen Registrierungsfehler sichtbar an', async () => {
   });
   const view = await openSettings();
   await fireEvent.press(view.getByTestId('auth-mode-toggle'));
+  sendAccessibilityFocus.mockClear();
   await enterCredentials(view);
 
   await fireEvent.press(view.getByTestId('auth-submit-button'));
@@ -726,6 +779,7 @@ test.each([
       } else {
         await enterCredentials(view);
       }
+      sendAccessibilityFocus.mockClear();
 
       let firstErrorText: unknown;
       for (let attempt = 1; attempt <= 2; attempt += 1) {
@@ -920,6 +974,7 @@ test('zeigt einen verständlichen Fehler beim Anfordern des Wiederherstellungsli
   const view = await openSettings();
   await fireEvent.press(view.getByTestId('forgot-password-button'));
   await fireEvent.changeText(view.getByTestId('auth-email-input'), 'test@example.invalid');
+  sendAccessibilityFocus.mockClear();
 
   await fireEvent.press(view.getByTestId('auth-submit-button'));
 
@@ -941,6 +996,7 @@ test('sendet bei Mehrfachklicks während einer laufenden Wiederherstellung nur e
   const view = await openSettings();
   await fireEvent.press(view.getByTestId('forgot-password-button'));
   await fireEvent.changeText(view.getByTestId('auth-email-input'), 'test@example.invalid');
+  sendAccessibilityFocus.mockClear();
 
   await fireEvent.press(view.getByTestId('auth-submit-button'));
   await fireEvent.press(view.getByTestId('auth-submit-button'));
@@ -994,6 +1050,7 @@ test('zeigt den Ladezustand und sperrt die Schaltflächen während der Linkanfra
   const view = await openSettings();
   await fireEvent.press(view.getByTestId('forgot-password-button'));
   await fireEvent.changeText(view.getByTestId('auth-email-input'), 'test@example.invalid');
+  sendAccessibilityFocus.mockClear();
 
   await fireEvent.press(view.getByTestId('auth-submit-button'));
 
@@ -1264,7 +1321,8 @@ test.each([
       const resolvedStatus = await view.findByTestId('account-session-status');
       expect(resolvedStatus.props.children).toBe(finalStatus);
       expect(resolvedStatus.props.accessible).toBe(true);
-      expect(resolvedStatus.props.accessibilityRole).toBe('text');
+      expect(resolvedStatus.props.accessibilityRole)
+        .toBe(finalStatus === 'Bei CupCal anmelden' ? 'header' : 'text');
       expect(resolvedStatus.props.accessibilityLiveRegion).toBe(
         platform === 'android' ? 'polite' : 'none',
       );
@@ -1314,7 +1372,7 @@ test.each(['ios', 'android'] as const)(
       const signedOutStatus = view.getByTestId('account-session-status');
       expect(signedOutStatus.props.children).toBe('Bei CupCal anmelden');
       expect(signedOutStatus.props.accessible).toBe(true);
-      expect(signedOutStatus.props.accessibilityRole).toBe('text');
+      expect(signedOutStatus.props.accessibilityRole).toBe('header');
       expect(signedOutStatus.props.accessibilityLiveRegion).toBe(
         platform === 'android' ? 'polite' : 'none',
       );
