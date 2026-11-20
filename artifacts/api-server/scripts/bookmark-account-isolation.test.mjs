@@ -292,6 +292,64 @@ test("Supabase-RLS trennt Favoriten-Lese- und Schreibzugriffe", async () => {
   });
 });
 
+test("Supabase-RLS verhindert die Übertragung eines Favoriten auf ein anderes Konto", async () => {
+  await withTestAccounts(async (accountA, accountB) => {
+    const eventA = `owner-transfer-a-${randomUUID()}`;
+    const eventB = `owner-transfer-b-${randomUUID()}`;
+
+    const [insertA, insertB] = await Promise.all([
+      accountA.client.from("user_event_bookmarks").insert({
+        user_id: accountA.id,
+        event_id: eventA,
+        is_favorite: true,
+      }),
+      accountB.client.from("user_event_bookmarks").insert({
+        user_id: accountB.id,
+        event_id: eventB,
+        is_favorite: false,
+      }),
+    ]);
+    assert.ifError(insertA.error);
+    assert.ifError(insertB.error);
+
+    const transfer = await accountA.client
+      .from("user_event_bookmarks")
+      .update({ user_id: accountB.id })
+      .eq("user_id", accountA.id)
+      .eq("event_id", eventA)
+      .select("user_id, event_id");
+    assert.ok(
+      transfer.error || transfer.data?.length === 0,
+      "Ein angemeldetes Konto darf den Favoriten nicht einem anderen Konto zuordnen.",
+    );
+
+    const [rowsA, rowsB] = await Promise.all([
+      accountA.client
+        .from("user_event_bookmarks")
+        .select("user_id, event_id, is_favorite, revision")
+        .eq("user_id", accountA.id),
+      accountB.client
+        .from("user_event_bookmarks")
+        .select("user_id, event_id, is_favorite, revision")
+        .eq("user_id", accountB.id),
+    ]);
+    assert.ifError(rowsA.error);
+    assert.ifError(rowsB.error);
+    assert.deepEqual(rowsA.data, [{
+      user_id: accountA.id,
+      event_id: eventA,
+      is_favorite: true,
+      revision: 0,
+    }], "Konto A muss Status und Revision seines Favoriten behalten.");
+    assert.deepEqual(rowsB.data, [{
+      user_id: accountB.id,
+      event_id: eventB,
+      is_favorite: false,
+      revision: 0,
+    }], "Konto B muss Status und Revision seines Favoriten behalten.");
+  });
+});
+
 test("RPC schützt Konten und synchronisiert eine zweite Gerätesitzung", async () => {
   await withTestAccounts(async (accountA, accountB) => {
     const eventA = `rpc-a-${randomUUID()}`;
