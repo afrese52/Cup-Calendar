@@ -124,7 +124,7 @@ function App({ pathname }: AppProps = {}) {
           </div>
           <div className="hero-art" aria-label="CupCal App-Symbol und Vorschauhinweise" data-testid="visual-hero">
             <div className="art-orbit" />
-            <img className="hero-icon" src={appLogo} alt="CupCal-App-Logo mit goldenem Pokal und Kalender auf dunklem Grund" width={640} height={640} />
+            <img className="hero-icon" src={appLogo} alt="CupCal-App-Logo mit goldenem Pokal und Kalender auf dunklem Grund" width={640} height={640} fetchPriority="high" />
             <div className="floating-tag tag-one">
               <CalendarDays aria-hidden="true" />
               <span><strong>Alle Cups</strong><small>an einem Ort</small></span>
