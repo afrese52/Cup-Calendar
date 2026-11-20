@@ -235,18 +235,39 @@ test.each([
   expect(sendAccessibilityFocus).toHaveBeenCalledWith(expect.anything(), 'focus');
 });
 
-test('zeigt den Anmeldestatus und Erfolg nach der Anmeldung', async () => {
-  const view = await openSettings();
-  await enterCredentials(view);
+test.each(['ios', 'android'] as const)(
+  'meldet eine erfolgreiche Anmeldung auf %s nur über den Kontostatus an',
+  async (platform) => {
+    const originalPlatformOS = Platform.OS;
+    Object.defineProperty(Platform, 'OS', { configurable: true, value: platform });
 
-  await fireEvent.press(view.getByTestId('auth-submit-button'));
+    try {
+      const view = await openSettings();
+      await enterCredentials(view);
+      announceForAccessibility.mockClear();
 
-  const successMessage = await view.findByTestId('auth-success-message');
-  expect(successMessage.props.accessibilityRole).toBe('alert');
-  expect(successMessage.props.accessibilityLiveRegion).toBe('polite');
-  expect(successMessage.props.children).toBe('Du bist angemeldet.');
-  expect(view.getByText('Angemeldet')).toBeTruthy();
-});
+      await fireEvent.press(view.getByTestId('auth-submit-button'));
+
+      const successMessage = await view.findByTestId('auth-success-message');
+      expect(successMessage.props.accessibilityRole).toBe('text');
+      expect(successMessage.props.accessibilityLiveRegion).toBe('none');
+      expect(successMessage.props.children).toBe('Du bist angemeldet.');
+      expect(view.getByText('Angemeldet')).toBeTruthy();
+      if (platform === 'ios') {
+        expect(announceForAccessibility).toHaveBeenCalledTimes(1);
+        expect(announceForAccessibility).toHaveBeenCalledWith(
+          'Angemeldet. test@example.invalid',
+        );
+      } else {
+        expect(announceForAccessibility).not.toHaveBeenCalled();
+        expect(view.getByTestId('account-session-status').props.accessibilityLiveRegion)
+          .toBe('polite');
+      }
+    } finally {
+      Object.defineProperty(Platform, 'OS', { configurable: true, value: originalPlatformOS });
+    }
+  },
+);
 
 test('verbirgt den Terminimport für angemeldete Konten ohne Adminfreigabe', async () => {
   auth.getSession.mockResolvedValue({ data: { session: testSession }, error: null });
@@ -1068,16 +1089,40 @@ test('kennzeichnet das erneute Senden des Bestätigungslinks als laufende Anfrag
   });
 });
 
-test('meldet über die Einstellungsseite ab und zeigt den Erfolg', async () => {
-  auth.getSession.mockResolvedValue({ data: { session: testSession }, error: null });
-  const view = await render(<SettingsScreen />);
-  expect(await view.findByText('test@example.invalid')).toBeTruthy();
+test.each(['ios', 'android'] as const)(
+  'meldet über die Einstellungsseite auf %s ab und kündigt den Status nur einmal an',
+  async (platform) => {
+    const originalPlatformOS = Platform.OS;
+    Object.defineProperty(Platform, 'OS', { configurable: true, value: platform });
 
-  await fireEvent.press(view.getByTestId('sign-out-button'));
+    try {
+      auth.getSession.mockResolvedValue({ data: { session: testSession }, error: null });
+      const view = await render(<SettingsScreen />);
+      expect(await view.findByText('test@example.invalid')).toBeTruthy();
+      announceForAccessibility.mockClear();
 
-  expect(await view.findByText('Du bist abgemeldet.')).toBeTruthy();
-  expect(view.getByText('Bei CupCal anmelden')).toBeTruthy();
-});
+      await fireEvent.press(view.getByTestId('sign-out-button'));
+
+      const successMessage = await view.findByTestId('auth-success-message');
+      expect(successMessage.props.children).toBe('Du bist abgemeldet.');
+      expect(successMessage.props.accessibilityRole).toBe('text');
+      expect(successMessage.props.accessibilityLiveRegion).toBe('none');
+      expect(view.getByText('Bei CupCal anmelden')).toBeTruthy();
+      if (platform === 'ios') {
+        expect(announceForAccessibility).toHaveBeenCalledTimes(1);
+        expect(announceForAccessibility).toHaveBeenCalledWith(
+          'Abgemeldet. Bei CupCal anmelden.',
+        );
+      } else {
+        expect(announceForAccessibility).not.toHaveBeenCalled();
+        expect(view.getByTestId('account-session-status').props.accessibilityLiveRegion)
+          .toBe('polite');
+      }
+    } finally {
+      Object.defineProperty(Platform, 'OS', { configurable: true, value: originalPlatformOS });
+    }
+  },
+);
 
 test('zeigt nach Wiederherstellung einer gespeicherten Sitzung das angemeldete Konto', async () => {
   auth.getSession.mockResolvedValue({ data: { session: testSession }, error: null });
@@ -1151,9 +1196,16 @@ test.each([
       const loadingStatus = view.getByTestId('account-session-status');
       expect(loadingStatus.props.accessible).toBe(true);
       expect(loadingStatus.props.accessibilityRole).toBe('text');
-      expect(loadingStatus.props.accessibilityLiveRegion).toBe('polite');
+      expect(loadingStatus.props.accessibilityLiveRegion).toBe(
+        platform === 'android' ? 'polite' : 'none',
+      );
       expect(loadingStatus.props.children).toBe('Sitzung wird geprüft …');
-      expect(announceForAccessibility).toHaveBeenCalledWith('Sitzung wird geprüft …');
+      if (platform === 'ios') {
+        expect(announceForAccessibility).toHaveBeenCalledTimes(1);
+        expect(announceForAccessibility).toHaveBeenCalledWith('Sitzung wird geprüft …');
+      } else {
+        expect(announceForAccessibility).not.toHaveBeenCalled();
+      }
 
       await act(async () => finishSessionCheck({ data: { session }, error: null }));
 
@@ -1161,12 +1213,17 @@ test.each([
       expect(resolvedStatus.props.children).toBe(finalStatus);
       expect(resolvedStatus.props.accessible).toBe(true);
       expect(resolvedStatus.props.accessibilityRole).toBe('text');
-      expect(resolvedStatus.props.accessibilityLiveRegion).toBe('polite');
+      expect(resolvedStatus.props.accessibilityLiveRegion).toBe(
+        platform === 'android' ? 'polite' : 'none',
+      );
       if (session) expect(view.getByText('test@example.invalid')).toBeTruthy();
       if (platform === 'ios') {
+        expect(announceForAccessibility).toHaveBeenCalledTimes(2);
         expect(announceForAccessibility).toHaveBeenLastCalledWith(
           session ? 'Angemeldet. test@example.invalid' : 'Abgemeldet. Bei CupCal anmelden.',
         );
+      } else {
+        expect(announceForAccessibility).not.toHaveBeenCalled();
       }
     } finally {
       Object.defineProperty(Platform, 'OS', { configurable: true, value: originalPlatformOS });
@@ -1174,30 +1231,60 @@ test.each([
   },
 );
 
-test('macht spätere An- und Abmeldungen im zugänglichen Kontostatus sichtbar', async () => {
-  auth.getSession.mockResolvedValue({ data: { session: null }, error: null });
-  const view = await render(<SettingsScreen />);
-  await waitFor(() => {
-    expect(view.getByTestId('account-session-status').props.children).toBe('Bei CupCal anmelden');
-  });
+test.each(['ios', 'android'] as const)(
+  'kündigt spätere An- und Abmeldungen auf %s genau einmal ohne Fokusverschiebung an',
+  async (platform) => {
+    const originalPlatformOS = Platform.OS;
+    Object.defineProperty(Platform, 'OS', { configurable: true, value: platform });
 
-  await act(async () => mockSupabase.__emitAuthStateChange('SIGNED_IN', testSession));
+    try {
+      auth.getSession.mockResolvedValue({ data: { session: null }, error: null });
+      const view = await render(<SettingsScreen />);
+      await waitFor(() => {
+        expect(view.getByTestId('account-session-status').props.children).toBe('Bei CupCal anmelden');
+      });
+      announceForAccessibility.mockClear();
+      sendAccessibilityFocus.mockClear();
 
-  const signedInStatus = view.getByTestId('account-session-status');
-  expect(signedInStatus.props.children).toBe('Angemeldet');
-  expect(signedInStatus.props.accessible).toBe(true);
-  expect(signedInStatus.props.accessibilityRole).toBe('text');
-  expect(signedInStatus.props.accessibilityLiveRegion).toBe('polite');
-  expect(view.getByText('test@example.invalid')).toBeTruthy();
+      await act(async () => mockSupabase.__emitAuthStateChange('SIGNED_IN', testSession));
 
-  await act(async () => mockSupabase.__emitAuthStateChange('SIGNED_OUT', null));
+      const signedInStatus = view.getByTestId('account-session-status');
+      expect(signedInStatus.props.children).toBe('Angemeldet');
+      expect(signedInStatus.props.accessible).toBe(true);
+      expect(signedInStatus.props.accessibilityRole).toBe('text');
+      expect(signedInStatus.props.accessibilityLiveRegion).toBe(
+        platform === 'android' ? 'polite' : 'none',
+      );
+      expect(view.getByText('test@example.invalid')).toBeTruthy();
 
-  const signedOutStatus = view.getByTestId('account-session-status');
-  expect(signedOutStatus.props.children).toBe('Bei CupCal anmelden');
-  expect(signedOutStatus.props.accessible).toBe(true);
-  expect(signedOutStatus.props.accessibilityRole).toBe('text');
-  expect(signedOutStatus.props.accessibilityLiveRegion).toBe('polite');
-});
+      await act(async () => mockSupabase.__emitAuthStateChange('SIGNED_OUT', null));
+
+      const signedOutStatus = view.getByTestId('account-session-status');
+      expect(signedOutStatus.props.children).toBe('Bei CupCal anmelden');
+      expect(signedOutStatus.props.accessible).toBe(true);
+      expect(signedOutStatus.props.accessibilityRole).toBe('text');
+      expect(signedOutStatus.props.accessibilityLiveRegion).toBe(
+        platform === 'android' ? 'polite' : 'none',
+      );
+      expect(sendAccessibilityFocus).not.toHaveBeenCalled();
+      if (platform === 'ios') {
+        expect(announceForAccessibility).toHaveBeenCalledTimes(2);
+        expect(announceForAccessibility).toHaveBeenNthCalledWith(
+          1,
+          'Angemeldet. test@example.invalid',
+        );
+        expect(announceForAccessibility).toHaveBeenNthCalledWith(
+          2,
+          'Abgemeldet. Bei CupCal anmelden.',
+        );
+      } else {
+        expect(announceForAccessibility).not.toHaveBeenCalled();
+      }
+    } finally {
+      Object.defineProperty(Platform, 'OS', { configurable: true, value: originalPlatformOS });
+    }
+  },
+);
 
 test('kündigt auf iOS echte Sitzungswechsel an, aber keine Token-Erneuerung oder doppelte Anmeldung', async () => {
   const originalPlatformOS = Platform.OS;
@@ -1243,7 +1330,7 @@ test('kündigt auf iOS echte Sitzungswechsel an, aber keine Token-Erneuerung ode
     expect(status.props.children).toBe('Angemeldet');
     expect(status.props.accessible).toBe(true);
     expect(status.props.accessibilityRole).toBe('text');
-    expect(status.props.accessibilityLiveRegion).toBe('polite');
+    expect(status.props.accessibilityLiveRegion).toBe('none');
     expect(status.props.accessibilityLabel).toBe('Angemeldet. test@example.invalid');
     expect(view.getByText('test@example.invalid')).toBeTruthy();
     expect(announceForAccessibility).toHaveBeenCalledTimes(2);
@@ -1277,7 +1364,9 @@ test.each(['ios', 'android'] as const)(
       expect(status.props.children).toBe('Angemeldet');
       expect(status.props.accessible).toBe(true);
       expect(status.props.accessibilityRole).toBe('text');
-      expect(status.props.accessibilityLiveRegion).toBe('polite');
+      expect(status.props.accessibilityLiveRegion).toBe(
+        platform === 'android' ? 'polite' : 'none',
+      );
       expect(status.props.accessibilityLabel).toBe('Angemeldet. second@example.invalid');
       expect(view.getByText('second@example.invalid')).toBeTruthy();
       expect(view.queryByText('test@example.invalid')).toBeNull();

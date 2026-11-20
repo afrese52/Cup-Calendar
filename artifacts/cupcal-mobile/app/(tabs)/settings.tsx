@@ -123,6 +123,9 @@ export default function SettingsScreen() {
   const lastAnnouncedAccountStatusRef = useRef<string | null>(null);
   const hasAnnouncedSessionCheckRef = useRef(false);
   const [authMessage, setAuthMessage] = useState<string | null>(null);
+  const isSessionStatusSuccessMessage =
+    (session !== null && authMessage === 'Du bist angemeldet.')
+    || (session === null && authMessage === 'Du bist abgemeldet.');
   const [confirmationResendAvailableAt, setConfirmationResendAvailableAt] = useState<number | null>(null);
   const [confirmationResendClock, setConfirmationResendClock] = useState(() => Date.now());
   const [confirmationResendCooldownLoaded, setConfirmationResendCooldownLoaded] = useState(false);
@@ -276,7 +279,7 @@ export default function SettingsScreen() {
     if (
       !supabase
       || !isCheckingSession
-      || Platform.OS === 'web'
+      || Platform.OS !== 'ios'
       || hasAnnouncedSessionCheckRef.current
     ) return;
 
@@ -520,7 +523,7 @@ export default function SettingsScreen() {
                 ref={accountFocusRef}
                 accessible
                 accessibilityRole="text"
-                accessibilityLiveRegion="polite"
+                accessibilityLiveRegion={Platform.OS === 'android' ? 'polite' : 'none'}
                 testID="account-session-status"
                 style={[styles.accountTitle, { color: colors.foreground }]}
               >
@@ -539,7 +542,7 @@ export default function SettingsScreen() {
                     accessible
                     accessibilityRole="text"
                     accessibilityLabel={`Angemeldet. ${session.user.email ?? 'Deine CupCal-Sitzung ist aktiv.'}`}
-                    accessibilityLiveRegion="polite"
+                    accessibilityLiveRegion={Platform.OS === 'android' ? 'polite' : 'none'}
                     testID="account-session-status"
                     style={[styles.accountTitle, { color: colors.foreground }]}
                   >
@@ -692,7 +695,7 @@ export default function SettingsScreen() {
                 ref={accountFocusRef}
                 accessible
                 accessibilityRole="text"
-                accessibilityLiveRegion="polite"
+                accessibilityLiveRegion={Platform.OS === 'android' ? 'polite' : 'none'}
                 testID="account-session-status"
                 style={[styles.accountTitle, { color: colors.foreground }]}
               >
@@ -894,8 +897,8 @@ export default function SettingsScreen() {
             <View>
               <Text
                 accessible
-                accessibilityRole="alert"
-                accessibilityLiveRegion="polite"
+                accessibilityRole={isSessionStatusSuccessMessage ? 'text' : 'alert'}
+                accessibilityLiveRegion={isSessionStatusSuccessMessage ? 'none' : 'polite'}
                 testID="auth-success-message"
                 style={[styles.authNotice, { color: colors.success }]}
               >
