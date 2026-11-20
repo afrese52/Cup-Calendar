@@ -45,9 +45,10 @@ function extractCanonical(html) {
   return tag ? readAttribute(tag, 'href') : null;
 }
 
-function extractRobotsDirective(html) {
-  const tag = html.match(/<meta\b(?=[^>]*\bname=["']robots["'])[^>]*>/i)?.[0];
-  return tag ? readAttribute(tag, 'content') ?? '' : '';
+function extractRobotsDirectives(html) {
+  return [...html.matchAll(
+    /<meta\b(?=[^>]*\bname=["'](?:robots|googlebot|googlebot-news)["'])[^>]*>/gi,
+  )].map((match) => readAttribute(match[0], 'content') ?? '');
 }
 
 function extractStructuredData(html, pathname) {
@@ -160,6 +161,8 @@ async function runSmokeTest() {
     }
 
     const sitemapOrigin = new URL(sitemapUrls[0]).origin;
+    const homepageUrl = `${sitemapOrigin}/`;
+    assert.ok(sitemapUrls.includes(homepageUrl), 'Die Sitemap muss die Domainwurzel enthalten.');
     for (const sitemapUrl of sitemapUrls) {
       const parsedUrl = new URL(sitemapUrl);
       assert.equal(parsedUrl.origin, sitemapOrigin, `Fremde Domain in der Sitemap: ${sitemapUrl}`);
@@ -170,15 +173,42 @@ async function runSmokeTest() {
       assert.equal(remoteUrl.origin, sitemapOrigin, 'Die Live-Adresse stimmt nicht mit der Sitemap-Domain überein.');
     }
 
+    const homepageResponse = await fetch(`${baseUrl}/`, { redirect: 'manual' });
+    assert.equal(homepageResponse.status, 200, 'Die Startseite muss direkt an der Domainwurzel HTTP 200 liefern.');
+    assert.equal(
+      new URL(homepageResponse.url).pathname,
+      '/',
+      'Die Startseite darf nicht auf einen zusätzlichen Pfad umleiten.',
+    );
+    assertContentType(homepageResponse, 'text/html', 'Die Startseite');
+    const homepageHtml = await homepageResponse.text();
+    assert.equal(extractCanonical(homepageHtml), homepageUrl, 'Die Canonical-URL der Startseite muss der Domainwurzel entsprechen.');
+    assert.doesNotMatch(
+      extractRobotsDirectives(homepageHtml).join(' '),
+      /\b(?:noindex|none)\b/i,
+      'Die Startseite darf nicht über Robots-Meta-Tags gesperrt sein.',
+    );
+    assert.doesNotMatch(
+      homepageResponse.headers.get('x-robots-tag') ?? '',
+      /\b(?:noindex|none)\b/i,
+      'Die Startseite darf nicht über den X-Robots-Tag gesperrt sein.',
+    );
+
     const robotsResponse = await fetch(`${baseUrl}/robots.txt`);
     assert.equal(robotsResponse.status, 200, 'robots.txt muss mit HTTP 200 antworten.');
     assertContentType(robotsResponse, 'text/plain', 'robots.txt');
     const robotsTxt = await robotsResponse.text();
     assert.match(robotsTxt, /^User-agent:\s*\*\s*$/im, 'robots.txt muss allgemeine Crawler-Regeln enthalten.');
     assert.match(robotsTxt, /^Allow:\s*\/\s*$/im, 'robots.txt muss das Crawlen erlauben.');
-    assert.ok(
-      robotsTxt.split(/\r?\n/).some((line) => line.trim() === `Sitemap: ${sitemapOrigin}/sitemap.xml`),
-      'robots.txt muss auf die veröffentlichte Sitemap verweisen.',
+    const sitemapDirectives = robotsTxt
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => /^Sitemap:/i.test(line))
+      .map((line) => line.replace(/^Sitemap:\s*/i, ''));
+    assert.deepEqual(
+      sitemapDirectives,
+      [`${sitemapOrigin}/sitemap.xml`],
+      'robots.txt muss genau eine Sitemap auf derselben veröffentlichten Domain angeben.',
     );
 
     const observedTitles = new Set();
@@ -203,9 +233,14 @@ async function runSmokeTest() {
       assert.ok(!observedDescriptions.has(description), `Doppelte Meta-Beschreibung: ${sitemapPageUrl.pathname}`);
       observedDescriptions.add(description);
       assert.doesNotMatch(
-        extractRobotsDirective(html),
-        /\bnoindex\b/i,
-        `${sitemapPageUrl.pathname} darf nicht auf noindex gesetzt sein.`,
+        extractRobotsDirectives(html).join(' '),
+        /\b(?:noindex|none)\b/i,
+        `${sitemapPageUrl.pathname} darf nicht über Robots-Meta-Tags gesperrt sein.`,
+      );
+      assert.doesNotMatch(
+        response.headers.get('x-robots-tag') ?? '',
+        /\b(?:noindex|none)\b/i,
+        `${sitemapPageUrl.pathname} darf nicht über den X-Robots-Tag gesperrt sein.`,
       );
 
       const canonical = extractCanonical(html);
