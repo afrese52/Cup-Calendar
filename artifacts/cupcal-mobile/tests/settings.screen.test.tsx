@@ -694,42 +694,67 @@ test('zeigt einen Registrierungsfehler sichtbar an', async () => {
 });
 
 test.each([
-  ['Anmeldung', 'sign-in'],
-  ['Registrierung', 'sign-up'],
-  ['Passwortlink', 'forgot-password'],
-] as const)('fokussiert wiederholte Fehler bei %s erneut', async (_name, mode) => {
-  const error = new Error(mode === 'sign-up' ? 'weak password' : 'Invalid login credentials');
-  if (mode === 'sign-in') {
-    auth.signInWithPassword.mockResolvedValue({ error });
-  } else if (mode === 'sign-up') {
-    auth.signUp.mockResolvedValue({ data: { session: null }, error });
-  } else {
-    auth.resetPasswordForEmail.mockResolvedValue({ error });
-  }
+  ['iOS', 'ios', 'Anmeldung', 'sign-in'],
+  ['Android', 'android', 'Anmeldung', 'sign-in'],
+  ['iOS', 'ios', 'Registrierung', 'sign-up'],
+  ['Android', 'android', 'Registrierung', 'sign-up'],
+  ['iOS', 'ios', 'Passwortlink', 'forgot-password'],
+  ['Android', 'android', 'Passwortlink', 'forgot-password'],
+] as const)(
+  '%s fokussiert wiederholte Fehler bei %s erneut, ohne das Ziel zu wechseln',
+  async (_platformName, platform, _flowName, mode) => {
+    const originalPlatformOS = Platform.OS;
+    Object.defineProperty(Platform, 'OS', { configurable: true, value: platform });
 
-  const view = await openSettings();
-  if (mode === 'sign-up') {
-    await fireEvent.press(view.getByTestId('auth-mode-toggle'));
-    await enterCredentials(view);
-  } else if (mode === 'forgot-password') {
-    await fireEvent.press(view.getByTestId('forgot-password-button'));
-    await fireEvent.changeText(view.getByTestId('auth-email-input'), 'test@example.invalid');
-  } else {
-    await enterCredentials(view);
-  }
+    try {
+      const error = new Error(mode === 'sign-up' ? 'weak password' : 'Invalid login credentials');
+      if (mode === 'sign-in') {
+        auth.signInWithPassword.mockResolvedValue({ error });
+      } else if (mode === 'sign-up') {
+        auth.signUp.mockResolvedValue({ data: { session: null }, error });
+      } else {
+        auth.resetPasswordForEmail.mockResolvedValue({ error });
+      }
 
-  for (let attempt = 1; attempt <= 2; attempt += 1) {
-    await fireEvent.press(view.getByTestId('auth-submit-button'));
-    expect(await view.findByTestId('auth-error-message')).toBeTruthy();
-    await waitFor(() => expect(sendAccessibilityFocus).toHaveBeenCalledTimes(1));
-    if (attempt === 1) sendAccessibilityFocus.mockClear();
-  }
+      const view = await openSettings();
+      if (mode === 'sign-up') {
+        await fireEvent.press(view.getByTestId('auth-mode-toggle'));
+        await enterCredentials(view);
+      } else if (mode === 'forgot-password') {
+        await fireEvent.press(view.getByTestId('forgot-password-button'));
+        await fireEvent.changeText(view.getByTestId('auth-email-input'), 'test@example.invalid');
+      } else {
+        await enterCredentials(view);
+      }
 
-  expect(sendAccessibilityFocus).toHaveBeenCalledTimes(1);
-  if (mode === 'sign-in') expect(auth.signInWithPassword).toHaveBeenCalledTimes(2);
-  if (mode === 'sign-up') expect(auth.signUp).toHaveBeenCalledTimes(2);
-  if (mode === 'forgot-password') expect(auth.resetPasswordForEmail).toHaveBeenCalledTimes(2);
-});
+      let firstErrorText: unknown;
+      for (let attempt = 1; attempt <= 2; attempt += 1) {
+        await fireEvent.press(view.getByTestId('auth-submit-button'));
+        const errorMessage = await view.findByTestId('auth-error-message');
+        expect(errorMessage.props.accessible).toBe(true);
+        expect(errorMessage.props.accessibilityRole).toBe('alert');
+        expect(errorMessage.props.accessibilityLiveRegion).toBe('assertive');
+        await waitFor(() => expect(sendAccessibilityFocus).toHaveBeenCalledTimes(attempt));
+        const [focusTarget, focusEvent] = sendAccessibilityFocus.mock.calls[attempt - 1]!;
+        expect(focusEvent).toBe('focus');
+        expect((focusTarget as { props?: { testID?: string } } | null)?.props?.testID)
+          .toBe('auth-error-message');
+        if (attempt === 1) {
+          firstErrorText = errorMessage.props.children;
+        } else {
+          expect(errorMessage.props.children).toBe(firstErrorText);
+        }
+      }
+
+      expect(sendAccessibilityFocus).toHaveBeenCalledTimes(2);
+      if (mode === 'sign-in') expect(auth.signInWithPassword).toHaveBeenCalledTimes(2);
+      if (mode === 'sign-up') expect(auth.signUp).toHaveBeenCalledTimes(2);
+      if (mode === 'forgot-password') expect(auth.resetPasswordForEmail).toHaveBeenCalledTimes(2);
+    } finally {
+      Object.defineProperty(Platform, 'OS', { configurable: true, value: originalPlatformOS });
+    }
+  },
+);
 
 test('öffnet den Passwort-zurücksetzen-Modus und fordert den Link mit einer anonymen Erfolgsmeldung an', async () => {
   const view = await openSettings();
