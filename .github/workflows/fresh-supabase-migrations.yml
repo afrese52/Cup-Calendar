@@ -9,8 +9,12 @@ permissions:
 
 jobs:
   fresh-supabase-migrations:
-    name: Fresh Supabase migrations
+    name: Fresh Supabase migrations (PostgreSQL ${{ matrix.postgres-version }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        postgres-version: ["15", "17"]
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -25,16 +29,37 @@ jobs:
         with:
           version: 10.26.1
 
-      - name: Install PostgreSQL tools
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install --yes postgresql-client
+
+      - name: Start PostgreSQL ${{ matrix.postgres-version }}
         run: |
-          sudo apt-get update
-          sudo apt-get install --yes postgresql postgresql-client
-          find /usr/lib/postgresql -type f -name initdb -exec dirname {} \; \
-            | sort -V \
-            | tail -n 1 >> "$GITHUB_PATH"
+          docker run --detach \
+            --name cupcal-postgres \
+            --publish 5432:5432 \
+            --env POSTGRES_PASSWORD=postgres \
+            postgres:${{ matrix.postgres-version }} \
+            -c wal_level=logical
+          for attempt in {1..30}; do
+            if pg_isready --host 127.0.0.1 --port 5432 --username postgres; then
+              exit 0
+            fi
+            sleep 1
+          done
+          docker logs cupcal-postgres
+          exit 1
 
       - name: Test Supabase migrations on a fresh database
         run: pnpm --filter @workspace/api-server test:supabase-migrations:fresh
+        env:
+          FRESH_MIGRATIONS_DATABASE_URL: postgresql://127.0.0.1:5432/postgres
+          FRESH_MIGRATIONS_EXPECTED_MAJOR: ${{ matrix.postgres-version }}
+          PGPASSWORD: postgres
 
       - name: Test migrations with the full local Supabase stack
+        if: matrix.postgres-version == '17'
         run: pnpm --filter @workspace/api-server test:supabase-migrations:cli
+
+      - name: Stop PostgreSQL container
+        if: always()
+        run: docker rm --force cupcal-postgres || true

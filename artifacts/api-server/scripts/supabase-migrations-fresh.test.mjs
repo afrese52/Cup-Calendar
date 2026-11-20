@@ -20,6 +20,12 @@ let clusterDir;
 let connection;
 let postgresStarted = false;
 
+function databaseUrl(database) {
+  const url = new URL(process.env.FRESH_MIGRATIONS_DATABASE_URL);
+  url.pathname = `/${database}`;
+  return url.toString();
+}
+
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
     encoding: "utf8",
@@ -46,6 +52,30 @@ async function findAvailablePort() {
 }
 
 function psql(sql, database = databaseName) {
+  if (process.env.FRESH_MIGRATIONS_DATABASE_URL) {
+    return run(
+      "psql",
+      [
+        "-X",
+        "-q",
+        "-A",
+        "-t",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-d",
+        databaseUrl(database),
+      ],
+      {
+        env: {
+          ...process.env,
+          PGCONNECT_TIMEOUT: "5",
+          PGUSER: process.env.PGUSER || "postgres",
+        },
+        input: sql,
+      },
+    ).stdout.trim();
+  }
+
   return run(
     "psql",
     [
@@ -76,28 +106,47 @@ function psql(sql, database = databaseName) {
 }
 
 before(async () => {
-  for (const executable of ["initdb", "pg_ctl", "psql"]) {
-    run(executable, ["--version"]);
+  if (process.env.FRESH_MIGRATIONS_DATABASE_URL) {
+    const serverVersion = Number(psql("SHOW server_version_num;", "postgres"));
+    const serverMajor = Math.floor(serverVersion / 10000);
+    const expectedMajor = process.env.FRESH_MIGRATIONS_EXPECTED_MAJOR;
+
+    assert.ok(
+      Number.isInteger(serverVersion) && serverVersion > 0,
+      "Die PostgreSQL-Serverversion konnte nicht ermittelt werden.",
+    );
+    if (expectedMajor) {
+      assert.equal(
+        serverMajor,
+        Number(expectedMajor),
+        `Der Migrationstest sollte PostgreSQL ${expectedMajor} verwenden, ist aber mit PostgreSQL ${serverMajor} verbunden.`,
+      );
+    }
+    console.info(`Verwende PostgreSQL ${serverMajor} (${serverVersion}).`);
+  } else {
+    for (const executable of ["initdb", "pg_ctl", "psql"]) {
+      run(executable, ["--version"]);
+    }
+
+    clusterDir = await mkdtemp(
+      path.join(os.tmpdir(), "cupcal-fresh-migrations-"),
+    );
+    const dataDir = path.join(clusterDir, "data");
+    connection = { port: await findAvailablePort() };
+
+    run("initdb", ["-D", dataDir, "--username=postgres", "--auth=trust"]);
+    run("pg_ctl", [
+      "-D",
+      dataDir,
+      "-o",
+      `-h 127.0.0.1 -p ${connection.port} -k ${clusterDir} -F -c wal_level=logical`,
+      "-w",
+      "start",
+      "-l",
+      path.join(clusterDir, "postgres.log"),
+    ]);
+    postgresStarted = true;
   }
-
-  clusterDir = await mkdtemp(
-    path.join(os.tmpdir(), "cupcal-fresh-migrations-"),
-  );
-  const dataDir = path.join(clusterDir, "data");
-  connection = { port: await findAvailablePort() };
-
-  run("initdb", ["-D", dataDir, "--username=postgres", "--auth=trust"]);
-  run("pg_ctl", [
-    "-D",
-    dataDir,
-    "-o",
-    `-h 127.0.0.1 -p ${connection.port} -k ${clusterDir} -F -c wal_level=logical`,
-    "-w",
-    "start",
-    "-l",
-    path.join(clusterDir, "postgres.log"),
-  ]);
-  postgresStarted = true;
 
   psql(`CREATE DATABASE ${databaseName};`, "postgres");
   psql(`
