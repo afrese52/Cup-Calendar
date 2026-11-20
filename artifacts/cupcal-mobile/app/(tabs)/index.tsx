@@ -288,7 +288,16 @@ export default function CalendarScreen() {
           <Pressable
             accessibilityRole="button"
             accessibilityState={{ expanded: filterOpen }}
-            accessibilityLabel={`Filter, ${filterSummary}`}
+            accessibilityLabel={`Kalenderfilter. ${
+              filtersActive
+                ? [
+                    selectedCategory !== 'Alle Termine' ? `Terminart: ${selectedCategory}` : null,
+                    selectedGameFeature !== 'Alle Spielmerkmale'
+                      ? `Spielmerkmal: ${selectedGameFeature}`
+                      : null,
+                  ].filter(Boolean).join(', ')
+                : 'Alle Terminarten und Spielmerkmale'
+            }`}
             testID="calendar-filter"
             onPress={() => setFilterOpen((open) => !open)}
             style={({ pressed }) => [
@@ -306,7 +315,12 @@ export default function CalendarScreen() {
           </Pressable>
           {filterOpen ? (
             <View style={[styles.filterMenu, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              <Text style={[styles.filterGroupTitle, { color: colors.mutedForeground }]}>TERMINART</Text>
+              <Text
+                accessibilityRole="header"
+                style={[styles.filterGroupTitle, { color: colors.mutedForeground }]}
+              >
+                TERMINART
+              </Text>
               {categoryFilters.map((category) => {
                 const active = selectedCategory === category;
                 const color = category === 'Alle Termine'
@@ -316,6 +330,7 @@ export default function CalendarScreen() {
                   <Pressable
                     key={category}
                     accessibilityRole="button"
+                    accessibilityLabel={`Terminart: ${category}`}
                     accessibilityState={{ selected: active }}
                     testID={`calendar-filter-category-${category}`}
                     onPress={() => setSelectedCategory(category)}
@@ -327,13 +342,19 @@ export default function CalendarScreen() {
                   </Pressable>
                 );
               })}
-              <Text style={[styles.filterGroupTitle, { color: colors.mutedForeground }]}>SPIELMERKMAL</Text>
+              <Text
+                accessibilityRole="header"
+                style={[styles.filterGroupTitle, { color: colors.mutedForeground }]}
+              >
+                SPIELMERKMAL
+              </Text>
               {gameFeatureFilters.map((feature) => {
                 const active = selectedGameFeature === feature;
                 return (
                   <Pressable
                     key={feature}
                     accessibilityRole="button"
+                    accessibilityLabel={`Spielmerkmal: ${feature}`}
                     accessibilityState={{ selected: active }}
                     testID={`calendar-filter-feature-${feature}`}
                     onPress={() => setSelectedGameFeature(feature)}
@@ -345,23 +366,24 @@ export default function CalendarScreen() {
                   </Pressable>
                 );
               })}
-              {filtersActive ? (
-                <Pressable
-                  accessibilityRole="button"
-                  testID="calendar-filter-reset"
-                  onPress={() => {
-                    setSelectedCategory('Alle Termine');
-                    setSelectedGameFeature('Alle Spielmerkmale');
-                  }}
-                  style={({ pressed }) => [
-                    styles.filterReset,
-                    { borderTopColor: colors.border },
-                    pressed && styles.pressed,
-                  ]}
-                >
-                  <Text style={[styles.filterResetText, { color: colors.primary }]}>Filter zurücksetzen</Text>
-                </Pressable>
-              ) : null}
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Filter zurücksetzen"
+                accessibilityState={{ disabled: !filtersActive }}
+                disabled={!filtersActive}
+                testID="calendar-filter-reset"
+                onPress={() => {
+                  setSelectedCategory('Alle Termine');
+                  setSelectedGameFeature('Alle Spielmerkmale');
+                }}
+                style={({ pressed }) => [
+                  styles.filterReset,
+                  { borderTopColor: colors.border, opacity: filtersActive ? 1 : 0.5 },
+                  pressed && styles.pressed,
+                ]}
+              >
+                <Text style={[styles.filterResetText, { color: colors.primary }]}>Filter zurücksetzen</Text>
+              </Pressable>
             </View>
           ) : null}
         </View>

@@ -311,6 +311,64 @@ test('zeigt Reload-Serie und Zero-Build-Regelwerk getrennt auf der Kalenderkarte
   expect(view.getByText('Reload').props.accessibilityLabel).toBe('Turnierserie: Reload');
 });
 
+test.each(['android', 'ios'] as const)(
+  'Kalenderfilter haben auf %s verständliche Screenreader-Bezeichnungen und Zustände',
+  async (platform) => {
+    setPlatformOS(platform);
+    const view = await render(<CalendarScreen />);
+    const filter = view.getByTestId('calendar-filter');
+
+    expect(filter.props.accessibilityLabel).toBe(
+      'Kalenderfilter. Alle Terminarten und Spielmerkmale',
+    );
+    expect(filter.props.accessibilityState).toEqual({ expanded: false });
+
+    await fireEvent.press(filter);
+
+    expect(view.getByText('TERMINART').props.accessibilityRole).toBe('header');
+    expect(view.getByText('SPIELMERKMAL').props.accessibilityRole).toBe('header');
+    expect(view.getByTestId('calendar-filter-category-Alle Termine').props).toMatchObject({
+      accessibilityRole: 'button',
+      accessibilityLabel: 'Terminart: Alle Termine',
+      accessibilityState: { selected: true },
+    });
+    expect(view.getByTestId('calendar-filter-feature-Alle Spielmerkmale').props).toMatchObject({
+      accessibilityRole: 'button',
+      accessibilityLabel: 'Spielmerkmal: Alle Spielmerkmale',
+      accessibilityState: { selected: true },
+    });
+    expect(view.getByTestId('calendar-filter-reset').props).toMatchObject({
+      accessibilityLabel: 'Filter zurücksetzen',
+      accessibilityState: { disabled: true },
+    });
+
+    await fireEvent.press(view.getByTestId('calendar-filter-category-Liga'));
+    expect(view.getByTestId('calendar-filter-category-Liga').props.accessibilityState.selected).toBe(true);
+    expect(view.getByTestId('calendar-filter-category-Alle Termine').props.accessibilityState.selected).toBe(false);
+
+    await fireEvent.press(view.getByTestId('calendar-filter-category-Turnier'));
+    expect(view.getByTestId('calendar-filter-category-Turnier').props.accessibilityState.selected).toBe(true);
+    expect(view.getByTestId('calendar-filter-category-Liga').props.accessibilityState.selected).toBe(false);
+
+    await fireEvent.press(view.getByTestId('calendar-filter-feature-Reload'));
+    const resetButton = view.getByTestId('calendar-filter-reset');
+    expect(resetButton.props.accessibilityState.disabled).toBe(false);
+    expect(view.getByTestId('calendar-filter').props.accessibilityLabel).toBe(
+      'Kalenderfilter. Terminart: Turnier, Spielmerkmal: Reload',
+    );
+
+    await fireEvent.press(resetButton);
+
+    expect(view.getByTestId('calendar-filter-category-Alle Termine').props.accessibilityState.selected).toBe(true);
+    expect(view.getByTestId('calendar-filter-feature-Alle Spielmerkmale').props.accessibilityState.selected).toBe(true);
+    expect(view.getByTestId('calendar-filter-reset').props.accessibilityState.disabled).toBe(true);
+    expect(view.getByTestId('calendar-filter').props.accessibilityLabel).toBe(
+      'Kalenderfilter. Alle Terminarten und Spielmerkmale',
+    );
+    expect(view.getByTestId('calendar-filter').props.accessibilityState.expanded).toBe(true);
+  },
+);
+
 test.each([
   ['Reload', 'Reload Liga', 'Reload Turnier', 'Zero-Build-Liga'],
   ['Zero Build', 'Zero-Build-Liga', 'Reload Liga', 'Reload Turnier'],
@@ -362,7 +420,9 @@ test.each([
     expect(view.queryByText(otherFeatureTitle)).toBeNull();
     expect(view.queryByText('Battle-Royale-Turnier')).toBeNull();
     expect(view.getByText(new RegExp(`· 1 Termin$`))).toBeTruthy();
-    expect(view.getByTestId('calendar-filter').props.accessibilityLabel).toBe(`Filter, Liga · ${feature}`);
+    expect(view.getByTestId('calendar-filter').props.accessibilityLabel).toBe(
+      `Kalenderfilter. Terminart: Liga, Spielmerkmal: ${feature}`,
+    );
 
     await fireEvent.press(view.getByTestId('calendar-filter-reset'));
 
@@ -374,7 +434,9 @@ test.each([
     expect(view.getByText('Zero-Build-Liga')).toBeTruthy();
     expect(view.getByText('Battle-Royale-Turnier')).toBeTruthy();
     expect(view.getByText(new RegExp(`· 4 Termine$`))).toBeTruthy();
-    expect(view.getByTestId('calendar-filter').props.accessibilityLabel).toBe('Filter, Alle Termine');
+    expect(view.getByTestId('calendar-filter').props.accessibilityLabel).toBe(
+      'Kalenderfilter. Alle Terminarten und Spielmerkmale',
+    );
   },
 );
 
