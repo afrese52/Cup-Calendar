@@ -129,6 +129,7 @@ function cacheControlFor(pathname, isHtml) {
 export function createStaticServer({
   root = publicRoot,
   basePath = process.env.BASE_PATH || '/',
+  getCompressedRepresentation = getRepresentation,
 } = {}) {
   const normalizedBasePath =
     basePath === '/' ? '' : `/${basePath.replace(/^\/+|\/+$/g, '')}`;
@@ -223,7 +224,7 @@ export function createStaticServer({
     const canCompress =
       COMPRESSIBLE_TYPES.has(baseContentType) &&
       (original.length >= MINIMUM_COMPRESS_BYTES || !identityAcceptable);
-    const encoding = canCompress
+    let encoding = canCompress
       ? chooseContentEncoding(acceptEncoding)
       : null;
 
@@ -239,13 +240,12 @@ export function createStaticServer({
     let body;
     try {
       body = encoding
-        ? await getRepresentation(filePath, encoding, original)
+        ? await getCompressedRepresentation(filePath, encoding, original)
         : original;
     } catch (error) {
       console.error('Static file compression failed:', error.message);
-      response.writeHead(500);
-      response.end('Internal Server Error');
-      return;
+      body = original;
+      encoding = null;
     }
 
     const headers = {

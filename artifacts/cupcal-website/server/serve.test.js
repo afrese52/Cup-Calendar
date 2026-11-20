@@ -16,10 +16,10 @@ let temporaryRoot;
 let server;
 let origin;
 
-function getResponse(pathname, headers = {}) {
+function getResponse(pathname, headers = {}, requestOrigin = origin) {
   return new Promise((resolve, reject) => {
     const request = httpRequest(
-      `${origin}${pathname}`,
+      `${requestOrigin}${pathname}`,
       { headers },
       (response) => {
         const chunks = [];
@@ -146,6 +146,53 @@ test('serves compressed content, generated pages, and real 404 responses', async
 
   const missingAsset = await getResponse('/assets/missing.js');
   assert.equal(missingAsset.status, 404);
+});
+
+test('falls back to the original page and asset when compression fails', async () => {
+  const originalPage = `<main>${'CupCal calendar '.repeat(100)}</main>`;
+  const originalScript = `window.cupcal = '${'events '.repeat(200)}';`;
+  const fallbackRoot = await mkdtemp(join(tmpdir(), 'cupcal-static-fallback-'));
+  await mkdir(join(fallbackRoot, 'assets'));
+  await writeFile(join(fallbackRoot, 'index.html'), originalPage);
+  await writeFile(join(fallbackRoot, 'assets', 'app.js'), originalScript);
+
+  const fallbackServer = createStaticServer({
+    root: fallbackRoot,
+    basePath: '/',
+    getCompressedRepresentation: async (_filePath, encoding) => {
+      throw new Error(`simulated ${encoding} compression failure`);
+    },
+  });
+  await new Promise((resolve, reject) => {
+    fallbackServer.once('error', reject);
+    fallbackServer.listen(0, '127.0.0.1', resolve);
+  });
+  const fallbackOrigin = `http://127.0.0.1:${fallbackServer.address().port}`;
+
+  try {
+    const pageResponse = await getResponse(
+      '/',
+      { 'accept-encoding': 'br, gzip' },
+      fallbackOrigin,
+    );
+    assert.equal(pageResponse.status, 200);
+    assert.equal(pageResponse.headers['content-encoding'], undefined);
+    assert.equal(pageResponse.headers['content-length'], String(Buffer.byteLength(originalPage)));
+    assert.equal(pageResponse.body.toString(), originalPage);
+
+    const assetResponse = await getResponse(
+      '/assets/app.js',
+      { 'accept-encoding': 'gzip' },
+      fallbackOrigin,
+    );
+    assert.equal(assetResponse.status, 200);
+    assert.equal(assetResponse.headers['content-encoding'], undefined);
+    assert.equal(assetResponse.headers['content-length'], String(Buffer.byteLength(originalScript)));
+    assert.equal(assetResponse.body.toString(), originalScript);
+  } finally {
+    await new Promise((resolve) => fallbackServer.close(resolve));
+    await rm(fallbackRoot, { recursive: true, force: true });
+  }
 });
 
 test('rejects paths that escape the public directory', () => {
