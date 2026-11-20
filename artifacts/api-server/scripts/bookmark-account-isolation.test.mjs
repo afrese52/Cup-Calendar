@@ -292,6 +292,89 @@ test("Supabase-RLS trennt Favoriten-Lese- und Schreibzugriffe", async () => {
   });
 });
 
+test("Supabase verweigert angemeldeten Konten direkte Favoritenlöschungen", async () => {
+  await withTestAccounts(async (accountA, accountB) => {
+    const admin = createClient(supabaseUrl, serviceRoleKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+    const eventA = `direct-delete-a-${randomUUID()}`;
+    const eventB = `direct-delete-b-${randomUUID()}`;
+
+    const [insertA, insertB] = await Promise.all([
+      accountA.client.from("user_event_bookmarks").insert({
+        user_id: accountA.id,
+        event_id: eventA,
+        is_favorite: true,
+      }),
+      accountB.client.from("user_event_bookmarks").insert({
+        user_id: accountB.id,
+        event_id: eventB,
+        is_favorite: false,
+      }),
+    ]);
+    assert.ifError(insertA.error);
+    assert.ifError(insertB.error);
+
+    const [revisionA, revisionB] = await Promise.all([
+      accountA.client.rpc("sync_user_event_bookmark", {
+        p_event_id: eventA,
+        p_is_favorite: true,
+        p_updated_at: new Date(0).toISOString(),
+      }),
+      accountB.client.rpc("sync_user_event_bookmark", {
+        p_event_id: eventB,
+        p_is_favorite: false,
+        p_updated_at: new Date(0).toISOString(),
+      }),
+    ]);
+    assert.ifError(revisionA.error);
+    assert.ifError(revisionB.error);
+
+    const readState = () => admin
+      .from("user_event_bookmarks")
+      .select("user_id, event_id, is_favorite, revision")
+      .in("event_id", [eventA, eventB])
+      .order("event_id");
+    const before = await readState();
+    assert.ifError(before.error);
+    assert.deepEqual(before.data, [
+      { user_id: accountA.id, event_id: eventA, is_favorite: true, revision: 1 },
+      { user_id: accountB.id, event_id: eventB, is_favorite: false, revision: 1 },
+    ]);
+
+    const [deleteA, deleteB] = await Promise.all([
+      accountA.client
+        .from("user_event_bookmarks")
+        .delete()
+        .eq("user_id", accountA.id)
+        .eq("event_id", eventA)
+        .select("event_id"),
+      accountB.client
+        .from("user_event_bookmarks")
+        .delete()
+        .eq("user_id", accountB.id)
+        .eq("event_id", eventB)
+        .select("event_id"),
+    ]);
+    assert.ok(
+      deleteA.error || deleteA.data?.length === 0,
+      "Supabase darf Konto A beim direkten Löschversuch keine Favoritenzeile löschen lassen.",
+    );
+    assert.ok(
+      deleteB.error || deleteB.data?.length === 0,
+      "Supabase darf Konto B beim direkten Löschversuch keine Favoritenzeile löschen lassen.",
+    );
+
+    const after = await readState();
+    assert.ifError(after.error);
+    assert.deepEqual(
+      after.data,
+      before.data,
+      "Beide Favoriten müssen mit unverändertem Status und unveränderter Revision erhalten bleiben.",
+    );
+  });
+});
+
 test("Supabase-RLS verhindert die Übertragung eines Favoriten auf ein anderes Konto", async () => {
   await withTestAccounts(async (accountA, accountB) => {
     const eventA = `owner-transfer-a-${randomUUID()}`;

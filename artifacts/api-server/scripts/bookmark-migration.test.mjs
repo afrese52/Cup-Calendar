@@ -259,6 +259,10 @@ test("0002 übernimmt Favoriten aus Profil- und Event-gebundenen Tabellen", asyn
     return;
   }
 
+  psql(
+    "GRANT DELETE ON TABLE public.user_event_bookmarks TO authenticated;",
+    legacyDatabase,
+  );
   const migration = await readFile(legacyMigrationPath, "utf8");
   psql(migration, legacyDatabase);
 
