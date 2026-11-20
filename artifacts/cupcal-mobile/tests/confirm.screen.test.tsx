@@ -4,6 +4,7 @@ import { act, render, waitFor } from '@testing-library/react-native';
 
 const mockRouteParams: { current: Record<string, string | string[]> } = { current: {} };
 const mockInitialUrl: { current: string | null } = { current: null };
+const mockInitialUrlPromise: { current: Promise<string | null> | null } = { current: null };
 const mockUrlListener: {
   current: ((event: { url: string }) => void) | null;
 } = { current: null };
@@ -34,7 +35,9 @@ jest.mock('@workspace/api-client-react', () => ({
   useConfirmAccountDeletion: () => ({ mutateAsync: mockDeletionConfirm }),
 }));
 jest.mock('expo-linking', () => ({
-  getInitialURL: jest.fn(async () => mockInitialUrl.current),
+  getInitialURL: jest.fn(
+    () => mockInitialUrlPromise.current ?? Promise.resolve(mockInitialUrl.current),
+  ),
   addEventListener: (_event: string, listener: (event: { url: string }) => void) => {
     mockUrlListener.current = listener;
     return { remove: jest.fn() };
@@ -92,6 +95,7 @@ const { removeBookmarksForDeletedUser } = jest.requireMock('@/services/localBook
 beforeEach(() => {
   mockRouteParams.current = {};
   mockInitialUrl.current = null;
+  mockInitialUrlPromise.current = null;
   mockUrlListener.current = null;
   mockDeletionConfirm.mockReset().mockResolvedValue(undefined);
   removeBookmarksForDeletedUser.mockReset().mockResolvedValue(undefined);
@@ -151,6 +155,50 @@ test('verarbeitet nacheinander Bestätigungslinks verschiedener Konten mit ihren
       'account-b-code',
       { flowId: 'account-b-flow' },
     );
+    expect(view.getByText(
+      'Deine E-Mail-Adresse ist bestätigt. Du kannst CupCal jetzt verwenden.',
+    )).toBeTruthy();
+  });
+});
+
+test('verarbeitet einen wartenden neuen Link nach der verspäteten Kaltstart-URL', async () => {
+  const initialUrl = deferred<string | null>();
+  mockInitialUrlPromise.current = initialUrl.promise;
+  supabase.auth.exchangeCodeForSession.mockImplementation(async (code: string) => {
+    const userId = code === 'account-a-code' ? 'account-a' : 'account-b';
+    const session = { user: { id: userId } };
+    mockPersistedSession = session;
+    return { data: { session }, error: null };
+  });
+  const view = await render(<ConfirmEmailScreen />);
+
+  await act(async () => {
+    mockUrlListener.current?.({
+      url: 'cupcal-android://auth/confirm?code=account-b-code&sb_flow_id=account-b-flow',
+    });
+    await Promise.resolve();
+  });
+  expect(supabase.auth.exchangeCodeForSession).not.toHaveBeenCalled();
+
+  await act(async () => {
+    initialUrl.resolve(
+      'cupcal-android://auth/confirm?code=account-a-code&flow_id=account-a-flow',
+    );
+    await initialUrl.promise;
+  });
+
+  await waitFor(() => {
+    expect(supabase.auth.exchangeCodeForSession).toHaveBeenNthCalledWith(
+      1,
+      'account-a-code',
+      { flowId: 'account-a-flow' },
+    );
+    expect(supabase.auth.exchangeCodeForSession).toHaveBeenNthCalledWith(
+      2,
+      'account-b-code',
+      { flowId: 'account-b-flow' },
+    );
+    expect(mockPersistedSession?.user.id).toBe('account-b');
     expect(view.getByText(
       'Deine E-Mail-Adresse ist bestätigt. Du kannst CupCal jetzt verwenden.',
     )).toBeTruthy();
