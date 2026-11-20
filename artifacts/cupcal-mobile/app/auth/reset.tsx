@@ -28,6 +28,25 @@ import {
   supabase,
 } from '@/services/supabase';
 
+const getPasswordValidationError = (password: string, confirmPassword: string) => {
+  if (!password && !confirmPassword) {
+    return 'Bitte gib dein neues Passwort ein und bestätige es.';
+  }
+  if (!password) return 'Bitte gib dein neues Passwort ein.';
+  if (!confirmPassword) return 'Bitte bestätige dein neues Passwort.';
+  if (password !== confirmPassword) return 'Die Passwörter stimmen nicht überein.';
+  return null;
+};
+
+const isPasswordValidationError = (message: string | null) =>
+  message === 'Bitte gib dein neues Passwort ein und bestätige es.' ||
+  message === 'Bitte gib dein neues Passwort ein.' ||
+  message === 'Bitte bestätige dein neues Passwort.' ||
+  message === 'Die Passwörter stimmen nicht überein.';
+
+const isWeakPasswordError = (message: string | null) =>
+  message === 'Das Passwort ist zu kurz oder zu unsicher. Bitte wähle ein stärkeres Passwort.';
+
 export default function ResetPasswordScreen() {
   const colors = useColors();
   const [isCheckingLink, setIsCheckingLink] = useState(true);
@@ -176,18 +195,9 @@ export default function ResetPasswordScreen() {
   const submitNewPassword = async () => {
     if (isSavingRef.current) return;
 
-    if (!password || !confirmPassword) {
-      const missingPasswordMessage =
-        !password && !confirmPassword
-          ? 'Bitte gib dein neues Passwort ein und bestätige es.'
-          : !password
-            ? 'Bitte gib dein neues Passwort ein.'
-            : 'Bitte bestätige dein neues Passwort.';
-      setErrorMessage(missingPasswordMessage);
-      return;
-    }
-    if (password !== confirmPassword) {
-      setErrorMessage('Die Passwörter stimmen nicht überein.');
+    const validationError = getPasswordValidationError(password, confirmPassword);
+    if (validationError) {
+      setErrorMessage(validationError);
       return;
     }
 
@@ -226,6 +236,24 @@ export default function ResetPasswordScreen() {
       isSavingRef.current = false;
       setIsSaving(false);
     }
+  };
+
+  const updatePassword = (nextPassword: string) => {
+    setPassword(nextPassword);
+    setErrorMessage((currentMessage) =>
+      isPasswordValidationError(currentMessage) || isWeakPasswordError(currentMessage)
+        ? getPasswordValidationError(nextPassword, confirmPassword)
+        : currentMessage,
+    );
+  };
+
+  const updateConfirmPassword = (nextConfirmPassword: string) => {
+    setConfirmPassword(nextConfirmPassword);
+    setErrorMessage((currentMessage) =>
+      isPasswordValidationError(currentMessage)
+        ? getPasswordValidationError(password, nextConfirmPassword)
+        : currentMessage,
+    );
   };
 
   return (
@@ -283,7 +311,7 @@ export default function ResetPasswordScreen() {
                 selectionColor={colors.primary}
                 textContentType="newPassword"
                 value={password}
-                onChangeText={setPassword}
+                onChangeText={updatePassword}
                 style={[styles.input, { color: colors.foreground }]}
               />
               <Pressable
@@ -310,7 +338,7 @@ export default function ResetPasswordScreen() {
                 selectionColor={colors.primary}
                 textContentType="newPassword"
                 value={confirmPassword}
-                onChangeText={setConfirmPassword}
+                onChangeText={updateConfirmPassword}
                 onSubmitEditing={() => void submitNewPassword()}
                 style={[styles.input, { color: colors.foreground }]}
               />

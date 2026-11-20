@@ -323,6 +323,24 @@ test.each([
   },
 );
 
+test('aktualisiert den Fehler bei einem leeren Passwort während der Eingabe', async () => {
+  const view = await render(<ResetPasswordScreen />);
+
+  await waitFor(() => expect(view.getByTestId('reset-password-submit-button')).toBeTruthy());
+  await fireEvent.press(view.getByTestId('reset-password-submit-button'));
+  expect(await view.findByText('Bitte gib dein neues Passwort ein und bestätige es.')).toBeTruthy();
+
+  await fireEvent.changeText(view.getByTestId('reset-password-input'), 'Mein-neues-Passwort-123');
+  expect(view.queryByText('Bitte gib dein neues Passwort ein und bestätige es.')).toBeNull();
+  expect(view.getByText('Bitte bestätige dein neues Passwort.')).toBeTruthy();
+
+  await fireEvent.changeText(
+    view.getByTestId('reset-password-confirm-input'),
+    'Mein-neues-Passwort-123',
+  );
+  expect(view.queryByText('Bitte bestätige dein neues Passwort.')).toBeNull();
+});
+
 test.each(['ios', 'android'] as const)(
   'verhindert das Speichern unterschiedlicher Passwörter mit zugänglicher Fehlermeldung auf %s',
   async (platform) => {
@@ -346,6 +364,22 @@ test.each(['ios', 'android'] as const)(
     }
   },
 );
+
+test('blendet den Fehler unterschiedlicher Passwörter nach dem Korrigieren aus', async () => {
+  const view = await render(<ResetPasswordScreen />);
+
+  await waitFor(() => expect(view.getByTestId('reset-password-submit-button')).toBeTruthy());
+  await fireEvent.changeText(view.getByTestId('reset-password-input'), 'Mein-neues-Passwort-123');
+  await fireEvent.changeText(view.getByTestId('reset-password-confirm-input'), 'Ein-anderes-Passwort-456');
+  await fireEvent.press(view.getByTestId('reset-password-submit-button'));
+  expect(await view.findByText('Die Passwörter stimmen nicht überein.')).toBeTruthy();
+
+  await fireEvent.changeText(
+    view.getByTestId('reset-password-confirm-input'),
+    'Mein-neues-Passwort-123',
+  );
+  expect(view.queryByText('Die Passwörter stimmen nicht überein.')).toBeNull();
+});
 
 test.each(['ios', 'android'] as const)(
   'meldet die erfolgreiche Passwortänderung unter %s als Screenreader-Status und lässt die Rückkehr zu',
@@ -613,7 +647,12 @@ test('speichert nach einer Passwort-Ablehnung beide korrigierten Eingaben erfolg
   expect(errorMessage.props.accessibilityRole).toBe(Platform.OS === 'ios' ? 'alert' : 'text');
 
   await fireEvent.changeText(view.getByTestId('reset-password-input'), 'Mein-neues-Passwort-123');
+  expect(
+    view.queryByText('Das Passwort ist zu kurz oder zu unsicher. Bitte wähle ein stärkeres Passwort.'),
+  ).toBeNull();
+  expect(view.getByText('Die Passwörter stimmen nicht überein.')).toBeTruthy();
   await fireEvent.changeText(view.getByTestId('reset-password-confirm-input'), 'Mein-neues-Passwort-123');
+  expect(view.queryByText('Die Passwörter stimmen nicht überein.')).toBeNull();
   expect(view.getByTestId('reset-password-input').props.value).toBe('Mein-neues-Passwort-123');
   expect(view.getByTestId('reset-password-confirm-input').props.value).toBe('Mein-neues-Passwort-123');
 
