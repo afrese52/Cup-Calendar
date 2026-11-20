@@ -610,6 +610,69 @@ test("spätere RPC-Aufrufe ändern beim gemeinsamen Termin nur das eigene Konto"
   });
 });
 
+test("gleichzeitige RPC-Aufrufe ändern bestehende gemeinsame Favoriten getrennt", async () => {
+  await withTestAccounts(async (accountA, accountB) => {
+    const admin = createClient(supabaseUrl, serviceRoleKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+    const eventId = `parallel-shared-update-${randomUUID()}`;
+    const updatedAt = new Date(0).toISOString();
+    const sync = (account, isFavorite) => account.client.rpc(
+      "sync_user_event_bookmark",
+      {
+        p_event_id: eventId,
+        p_is_favorite: isFavorite,
+        p_updated_at: updatedAt,
+      },
+    );
+
+    const [initialA, initialB] = await Promise.all([
+      sync(accountA, true),
+      sync(accountB, false),
+    ]);
+    assert.ifError(initialA.error);
+    assert.ifError(initialB.error);
+
+    const [updateA, updateB] = await Promise.all([
+      sync(accountA, false),
+      sync(accountB, true),
+    ]);
+    assert.ifError(updateA.error);
+    assert.ifError(updateB.error);
+
+    const savedRows = await admin
+      .from("user_event_bookmarks")
+      .select("user_id, event_id, is_favorite, revision")
+      .eq("event_id", eventId)
+      .order("user_id");
+    assert.ifError(savedRows.error);
+    assert.equal(savedRows.data?.length, 2, "Für den Termin müssen zwei Kontenzeilen bestehen bleiben.");
+    const savedByAccount = new Map(
+      savedRows.data?.map((row) => [row.user_id, row]) ?? [],
+    );
+    assert.deepEqual(
+      savedByAccount.get(accountA.id),
+      {
+        user_id: accountA.id,
+        event_id: eventId,
+        is_favorite: false,
+        revision: 2,
+      },
+      "Konto A muss seinen zuletzt gesetzten Status und eine eigene neue Revision behalten.",
+    );
+    assert.deepEqual(
+      savedByAccount.get(accountB.id),
+      {
+        user_id: accountB.id,
+        event_id: eventId,
+        is_favorite: true,
+        revision: 2,
+      },
+      "Beide Konten müssen ihren zuletzt gesetzten Status und eine eigene neue Revision behalten.",
+    );
+  });
+});
+
 test("Kontolöschung entfernt beim gemeinsamen Termin nur die eigene Favoritenzeile", async () => {
   await withTestAccounts(async (accountA, accountB) => {
     const admin = createClient(supabaseUrl, serviceRoleKey, {
