@@ -6,6 +6,7 @@
       "pnpm": "10.26.1",
       "credentialsSource": "remote",
       "android": {
+        "image": "ubuntu-26.04-jdk-17-ndk-r27b-sdk-58",
         "buildType": "apk"
       }
     }
