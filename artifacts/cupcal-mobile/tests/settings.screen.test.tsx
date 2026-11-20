@@ -872,13 +872,17 @@ test('ermöglicht nach einem fehlgeschlagenen Wiederherstellungsversand einen ne
     busy: false,
   });
 
+  await fireEvent.changeText(view.getByTestId('auth-email-input'), 'corrected@example.invalid');
   await fireEvent.press(view.getByTestId('auth-submit-button'));
 
   expect(await view.findByText(
     'Wenn zu dieser E-Mail ein CupCal-Konto besteht, erhältst du in Kürze einen Wiederherstellungslink. Der Versand kann etwas dauern. Prüfe auch deinen Spam-Ordner.',
   )).toBeTruthy();
   expect(auth.resetPasswordForEmail).toHaveBeenCalledTimes(2);
-  expect(auth.resetPasswordForEmail).toHaveBeenNthCalledWith(2, 'test@example.invalid', {
+  expect(auth.resetPasswordForEmail).toHaveBeenNthCalledWith(1, 'test@example.invalid', {
+    redirectTo: 'cupcal-test://auth/reset?flow=cupcal-password-reset',
+  });
+  expect(auth.resetPasswordForEmail).toHaveBeenNthCalledWith(2, 'corrected@example.invalid', {
     redirectTo: 'cupcal-test://auth/reset?flow=cupcal-password-reset',
   });
 });
