@@ -862,17 +862,16 @@ test('ermöglicht nach einem fehlgeschlagenen Wiederherstellungsversand einen ne
     .mockResolvedValueOnce({ error: null });
   const view = await openSettings();
   await fireEvent.press(view.getByTestId('forgot-password-button'));
-  await fireEvent.changeText(view.getByTestId('auth-email-input'), 'test@example.invalid');
+  await fireEvent.changeText(view.getByTestId('auth-email-input'), '  test@example.invalid  ');
 
   await fireEvent.press(view.getByTestId('auth-submit-button'));
   expect(await view.findByTestId('auth-error-message')).toBeTruthy();
-  expect(view.getByTestId('auth-email-input').props.value).toBe('test@example.invalid');
+  expect(view.getByTestId('auth-email-input').props.value).toBe('  test@example.invalid  ');
   expect(view.getByTestId('auth-submit-button').props.accessibilityState).toEqual({
     disabled: false,
     busy: false,
   });
 
-  await fireEvent.changeText(view.getByTestId('auth-email-input'), 'corrected@example.invalid');
   await fireEvent.press(view.getByTestId('auth-submit-button'));
 
   expect(await view.findByText(
@@ -882,7 +881,7 @@ test('ermöglicht nach einem fehlgeschlagenen Wiederherstellungsversand einen ne
   expect(auth.resetPasswordForEmail).toHaveBeenNthCalledWith(1, 'test@example.invalid', {
     redirectTo: 'cupcal-test://auth/reset?flow=cupcal-password-reset',
   });
-  expect(auth.resetPasswordForEmail).toHaveBeenNthCalledWith(2, 'corrected@example.invalid', {
+  expect(auth.resetPasswordForEmail).toHaveBeenNthCalledWith(2, 'test@example.invalid', {
     redirectTo: 'cupcal-test://auth/reset?flow=cupcal-password-reset',
   });
 });
