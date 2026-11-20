@@ -174,6 +174,39 @@ Supabase-Projekts gespeichert ist. Die Konfiguration im Repository bestätigt
 nur das App-Schema und die Route; sie bestätigt nicht den Inhalt des
 Supabase-Dashboards.
 
+### Prüfung von `sb_flow_id`
+
+**Ergebnis vom 16. November 2026:** Laut Rückmeldung steht im verwendeten
+Supabase-Projekt bereits die Redirect-Regel
+`cupcal-android://auth/confirm**`. Sie wurde deshalb nicht geändert.
+Supabases Redirect-Dokumentation beschreibt `**` als Platzhalter für eine
+beliebige Zeichenfolge. Die Regel lässt damit auch Query-Parameter wie
+`flow=cupcal-email-confirmation` und `sb_flow_id=<Flow-ID>` am
+Bestätigungsziel zu.
+
+CupCal liest `sb_flow_id` (mit Rückwärtskompatibilität für `flow_id`) aus der
+Bestätigungsroute und übergibt den Wert beim PKCE-Codeaustausch an Supabase.
+Automatisierte Tests prüfen diese Übergabe. Der gemeldete Linktest wurde in
+Expo Go angefordert und führte zur Site URL. Dieser Test bestätigt nicht, ob
+Supabase das native CupCal-Schema akzeptiert: Expo dokumentiert, dass
+`Linking.createURL` in Expo Go eine `exp://.../--/...`-Adresse erzeugt. Diese
+Adresse wird von `cupcal-android://auth/confirm**` nicht abgedeckt; der
+Site-URL-Fallback ist in diesem Modus daher zu erwarten.
+
+Für den vollständigen Nachweis muss die Bestätigung aus einem installierten
+nativen Entwicklungs- oder Release-Build angefordert werden. Dort verwendet
+`Linking.createURL` das konfigurierte Schema `cupcal-android`. Falls auch dann
+die Site URL erscheint, müssen der tatsächlich angeforderte Redirect und die
+Bestätigungs-E-Mailvorlage geprüft werden. Laut Supabase enthält
+`{{ .ConfirmationURL }}` den angeforderten `redirect_to`; ein festes
+Site-URL-Ziel in der Vorlage kann den App-Rücksprung umgehen.
+
+Quelle für das Redirect-Muster:
+[Supabase Auth – Redirect URLs](https://supabase.com/docs/guides/auth/redirect-urls)
+
+Quelle für App-Schemas und Expo Go:
+[Expo Linking – `createURL`](https://docs.expo.dev/versions/v58.0.0/sdk/linking/)
+
 ### Geräte-Prüfung
 
 Die Bestätigung benötigt installierte native Builds und ein echtes
