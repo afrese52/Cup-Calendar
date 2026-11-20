@@ -1,9 +1,15 @@
 import { useEffect, useRef } from 'react';
 import { ArrowDown, ArrowRight, Bookmark, CalendarDays, Check, Clock3, Download, Filter, WifiOff } from 'lucide-react';
 import { trackEvent } from './lib/analytics';
+import { normalizeWebsitePath, seoTopicPages } from './content/seo-pages';
+import { SeoTopicPageView } from './pages/seo-topic-page';
 
 const websiteLogo = `${import.meta.env.BASE_URL}cupcal-website-logo-transparent.webp`;
 const appLogo = `${import.meta.env.BASE_URL}cupcal-app-logo.webp`;
+
+interface AppProps {
+  pathname?: string;
+}
 
 const features = [
   {
@@ -26,8 +32,12 @@ const features = [
   },
 ];
 
-function App() {
+function App({ pathname }: AppProps = {}) {
   const viewedSections = useRef(new Set<string>());
+  const currentPath = normalizeWebsitePath(
+    pathname ?? (typeof window === 'undefined' ? '/' : window.location.pathname),
+  );
+  const topicPage = seoTopicPages.find((page) => page.path === currentPath);
 
   useEffect(() => {
     if (typeof IntersectionObserver === 'undefined') return;
@@ -53,12 +63,14 @@ function App() {
     return () => observer.disconnect();
   }, []);
 
+  if (topicPage) return <SeoTopicPageView page={topicPage} />;
+
   return (
     <main className="site-shell">
       <header className="container topbar">
         <a
           className="brand"
-          href="#start"
+          href="/"
           aria-label="CupCal – zum Anfang"
           data-testid="link-home"
           onClick={() => trackEvent('site_navigation_click', { destination: 'home', placement: 'brand' })}
@@ -68,6 +80,7 @@ function App() {
         <nav className="nav-links" aria-label="Hauptnavigation">
           <a href="#funktionen" data-testid="link-funktionen" onClick={() => trackEvent('site_navigation_click', { destination: 'features', placement: 'main_nav' })}>Funktionen</a>
           <a href="#vorschau" data-testid="link-vorschau" onClick={() => trackEvent('site_navigation_click', { destination: 'preview', placement: 'main_nav' })}>Ein Blick hinein</a>
+          <a href="/turnierkalender-app/" data-testid="link-turnierkalender-app" onClick={() => trackEvent('site_navigation_click', { destination: 'turnierkalender-app', placement: 'main_nav' })}>Kalender-App</a>
           <a href="#verfuegbarkeit" data-testid="link-verfuegbarkeit" onClick={() => trackEvent('site_navigation_click', { destination: 'availability', placement: 'main_nav' })}>Verfügbarkeit</a>
         </nav>
         <a
@@ -286,9 +299,51 @@ function App() {
         <div className="disclaimer">Inoffizielles Fanprojekt · Nicht mit Epic Games verbunden oder von Epic Games unterstützt</div>
       </section>
 
+      <section className="container topic-directory" aria-labelledby="topic-directory-heading">
+        <div className="section-label">CupCal-Wissen</div>
+        <h2 className="section-title" id="topic-directory-heading">Mehr zum <span>Kalender.</span></h2>
+        <p className="section-intro">
+          Erfahre, wie du Turniertermine findest, speicherst und in deiner Gerätezeit ansiehst.
+        </p>
+        <div className="topic-card-grid">
+          {seoTopicPages.map((page) => (
+            <a
+              className="topic-card"
+              href={page.path}
+              key={page.slug}
+              data-testid={`link-topic-${page.slug}`}
+              onClick={() => trackEvent('site_navigation_click', {
+                destination: page.slug,
+                placement: 'home_topic_directory',
+              })}
+            >
+              <span className="topic-card-label">{page.eyebrow}</span>
+              <strong>{page.h1}</strong>
+              <span className="topic-card-description">{page.cardDescription}</span>
+              <span className="topic-card-link">Mehr erfahren <ArrowRight aria-hidden="true" /></span>
+            </a>
+          ))}
+        </div>
+      </section>
+
       <footer className="footer">
         <div className="container footer-inner">
           <div className="footer-copy">© CupCal · Der Kalender für deinen Wettkampf-Alltag</div>
+          <nav className="topic-footer-links" aria-label="Weitere CupCal-Themen">
+            {seoTopicPages.map((page) => (
+              <a
+                href={page.path}
+                key={page.slug}
+                data-testid={`link-footer-${page.slug}`}
+                onClick={() => trackEvent('site_navigation_click', {
+                  destination: page.slug,
+                  placement: 'footer',
+                })}
+              >
+                {page.eyebrow}
+              </a>
+            ))}
+          </nav>
           <div className="footer-note">Community-Projekt · Keine offizielle Verbindung zu Epic Games</div>
         </div>
       </footer>

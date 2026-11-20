@@ -45,13 +45,18 @@ test('selects an accepted compression format by quality', () => {
   assert.equal(chooseContentEncoding('identity'), null);
 });
 
-test('serves compressed content and preserves SPA and static-file behavior', async () => {
+test('serves compressed content, generated pages, and real 404 responses', async () => {
   temporaryRoot = await mkdtemp(join(tmpdir(), 'cupcal-static-'));
   await mkdir(join(temporaryRoot, 'assets'));
+  await mkdir(join(temporaryRoot, 'turnierzeiten'));
   const page = `<main>${'CupCal tournament calendar '.repeat(100)}</main>`;
   const script = `window.cupcal = '${'calendar '.repeat(200)}';`;
+  const topicPage = '<main><h1>Turnierzeiten in deiner Gerätezeitzone</h1></main>';
+  const notFoundPage = '<main><h1>Diese Seite gibt es nicht.</h1></main>';
   await writeFile(join(temporaryRoot, 'index.html'), page);
+  await writeFile(join(temporaryRoot, '404.html'), notFoundPage);
   await writeFile(join(temporaryRoot, 'assets', 'app.js'), script);
+  await writeFile(join(temporaryRoot, 'turnierzeiten', 'index.html'), topicPage);
 
   server = createStaticServer({ root: temporaryRoot, basePath: '/' });
   await new Promise((resolve, reject) => {
@@ -75,10 +80,18 @@ test('serves compressed content and preserves SPA and static-file behavior', asy
   assert.equal(gzipScript.headers['content-encoding'], 'gzip');
   assert.equal(gunzipSync(gzipScript.body).toString(), script);
 
-  const spaRoute = await getResponse('/kalender/');
-  assert.equal(spaRoute.status, 200);
-  assert.equal(spaRoute.body.toString(), page);
-  assert.equal(spaRoute.headers['cache-control'], 'no-cache');
+  const unknownRoute = await getResponse('/kalender/');
+  assert.equal(unknownRoute.status, 404);
+  assert.equal(unknownRoute.body.toString(), notFoundPage);
+  assert.equal(unknownRoute.headers['cache-control'], 'no-cache');
+
+  const topicRoute = await getResponse('/turnierzeiten/');
+  assert.equal(topicRoute.status, 200);
+  assert.equal(topicRoute.body.toString(), topicPage);
+
+  const topicRouteWithoutSlash = await getResponse('/turnierzeiten');
+  assert.equal(topicRouteWithoutSlash.status, 200);
+  assert.equal(topicRouteWithoutSlash.body.toString(), topicPage);
 
   const missingAsset = await getResponse('/assets/missing.js');
   assert.equal(missingAsset.status, 404);

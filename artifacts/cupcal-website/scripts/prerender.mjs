@@ -7,7 +7,96 @@ import { createServer } from 'vite';
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const builtHtmlPath = path.join(projectRoot, 'dist/public/index.html');
+const sourceSitemapPath = path.join(projectRoot, 'public/sitemap.xml');
 const rootMarker = '<div id="root"></div>';
+
+function escapeHtml(value) {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('"', '&quot;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;');
+}
+
+function replaceRequired(html, pattern, replacement, description) {
+  if (!pattern.test(html)) {
+    throw new Error(`HTML-Vorlage enthält kein ${description}.`);
+  }
+  return html.replace(pattern, replacement);
+}
+
+function withTopicMetadata(html, page, siteOrigin) {
+  const canonical = `${siteOrigin}${page.path}`;
+  const metadata = [
+    [/<title>[\s\S]*?<\/title>/i, `<title>${escapeHtml(page.title)}</title>`, 'title'],
+    [
+      /<meta name="description"[^>]*\/?>/i,
+      `<meta name="description" content="${escapeHtml(page.description)}" />`,
+      'Meta-Beschreibung',
+    ],
+    [
+      /<link rel="canonical"[^>]*\/?>/i,
+      `<link rel="canonical" href="${canonical}" />`,
+      'Canonical-URL',
+    ],
+    [
+      /<meta property="og:title"[^>]*\/?>/i,
+      `<meta property="og:title" content="${escapeHtml(page.title)}" />`,
+      'Open-Graph-Titel',
+    ],
+    [
+      /<meta property="og:description"[^>]*\/?>/i,
+      `<meta property="og:description" content="${escapeHtml(page.description)}" />`,
+      'Open-Graph-Beschreibung',
+    ],
+    [
+      /<meta property="og:url"[^>]*\/?>/i,
+      `<meta property="og:url" content="${canonical}" />`,
+      'Open-Graph-URL',
+    ],
+    [
+      /<meta name="twitter:title"[^>]*\/?>/i,
+      `<meta name="twitter:title" content="${escapeHtml(page.title)}" />`,
+      'Twitter-Titel',
+    ],
+    [
+      /<meta name="twitter:description"[^>]*\/?>/i,
+      `<meta name="twitter:description" content="${escapeHtml(page.description)}" />`,
+      'Twitter-Beschreibung',
+    ],
+  ];
+
+  let updatedHtml = html;
+  for (const [pattern, replacement, description] of metadata) {
+    updatedHtml = replaceRequired(updatedHtml, pattern, replacement, description);
+  }
+
+  const pageStructuredData = {
+    '@context': 'https://schema.org',
+    '@graph': [
+      {
+        '@type': 'WebPage',
+        '@id': `${canonical}#webpage`,
+        url: canonical,
+        name: page.title,
+        description: page.description,
+        inLanguage: 'de-DE',
+        isPartOf: { '@id': `${siteOrigin}/#website` },
+        breadcrumb: { '@id': `${canonical}#breadcrumb` },
+      },
+      {
+        '@type': 'BreadcrumbList',
+        '@id': `${canonical}#breadcrumb`,
+        itemListElement: [
+          { '@type': 'ListItem', position: 1, name: 'Startseite', item: `${siteOrigin}/` },
+          { '@type': 'ListItem', position: 2, name: page.eyebrow, item: canonical },
+        ],
+      },
+    ],
+  };
+  const structuredDataTag = `<script type="application/ld+json">${JSON.stringify(pageStructuredData).replaceAll('<', '\\u003c')}</script>`;
+  return replaceRequired(updatedHtml, /<\/head>/i, `${structuredDataTag}</head>`, 'Head-Ende');
+}
 
 const vite = await createServer({
   configFile: path.join(projectRoot, 'vite.config.ts'),
@@ -19,31 +108,74 @@ const vite = await createServer({
 });
 
 try {
-  const [{ default: App }, { ErrorBoundary }] = await Promise.all([
+  const [{ default: App }, { ErrorBoundary }, { seoTopicPages, SITE_ORIGIN }] = await Promise.all([
     vite.ssrLoadModule('/src/App.tsx'),
     vite.ssrLoadModule('/src/components/error-boundary.tsx'),
+    vite.ssrLoadModule('/src/content/seo-pages.ts'),
   ]);
-  const renderedApp = renderToString(
-    React.createElement(ErrorBoundary, null, React.createElement(App)),
-  );
-
-  if (!renderedApp.includes('<h1')) {
-    throw new Error('Vorab-Rendering erzeugte keine H1-Überschrift.');
+  const sitemap = await fs.readFile(sourceSitemapPath, 'utf8');
+  const pageUrls = [`${SITE_ORIGIN}/`, ...seoTopicPages.map((page) => `${SITE_ORIGIN}${page.path}`)];
+  if (new Set(pageUrls).size !== pageUrls.length) {
+    throw new Error('Die Website enthält doppelte Canonical-URLs.');
   }
-  if ((renderedApp.match(/<h1\b/g) || []).length !== 1) {
-    throw new Error('Die gerenderte Startseite muss genau eine H1-Überschrift enthalten.');
+  for (const pageUrl of pageUrls) {
+    if (!sitemap.includes(`<loc>${pageUrl}</loc>`)) {
+      throw new Error(`Die Sitemap enthält keine URL für ${pageUrl}.`);
+    }
   }
 
-  const builtHtml = await fs.readFile(builtHtmlPath, 'utf8');
-  if (!builtHtml.includes(rootMarker)) {
+  const shellHtml = await fs.readFile(builtHtmlPath, 'utf8');
+  if (!shellHtml.includes(rootMarker)) {
     throw new Error('Der Root-Platzhalter für das Vorab-Rendering fehlt im Build.');
   }
 
-  await fs.writeFile(
-    builtHtmlPath,
-    builtHtml.replace(rootMarker, `<div id="root">${renderedApp}</div>`),
-  );
-  console.log(`Startseite vorab gerendert: ${renderedApp.length} Zeichen.`);
+  function renderPage(pathname, expectedHeading, page) {
+    const renderedApp = renderToString(
+      React.createElement(
+        ErrorBoundary,
+        null,
+        React.createElement(App, { pathname }),
+      ),
+    );
+    if (!renderedApp.includes('<h1')) {
+      throw new Error(`Vorab-Rendering für ${pathname} erzeugte keine H1-Überschrift.`);
+    }
+    if ((renderedApp.match(/<h1\b/g) || []).length !== 1) {
+      throw new Error(`Die Seite ${pathname} muss genau eine H1-Überschrift enthalten.`);
+    }
+    if (!renderedApp.includes(expectedHeading)) {
+      throw new Error(`Die Seite ${pathname} enthält nicht ihre erwartete H1-Überschrift.`);
+    }
+
+    let pageHtml = page
+      ? withTopicMetadata(shellHtml, page, SITE_ORIGIN)
+      : shellHtml;
+    pageHtml = pageHtml.replace(rootMarker, `<div id="root">${renderedApp}</div>`);
+    return { html: pageHtml, renderedLength: renderedApp.length };
+  }
+
+  const home = renderPage('/', 'Dein ', null);
+  await fs.writeFile(builtHtmlPath, home.html);
+  console.log(`Startseite vorab gerendert: ${home.renderedLength} Zeichen.`);
+
+  for (const page of seoTopicPages) {
+    if (page.title.length < 45 || page.title.length > 65) {
+      throw new Error(`Der Seitentitel für ${page.path} ist zu kurz oder zu lang.`);
+    }
+    if (page.description.length < 145 || page.description.length > 165) {
+      throw new Error(`Die Meta-Beschreibung für ${page.path} ist zu kurz oder zu lang.`);
+    }
+    const { html, renderedLength } = renderPage(page.path, page.h1, page);
+    const outputPath = path.join(
+      projectRoot,
+      'dist/public',
+      page.slug,
+      'index.html',
+    );
+    await fs.mkdir(path.dirname(outputPath), { recursive: true });
+    await fs.writeFile(outputPath, html);
+    console.log(`Themenseite vorab gerendert: ${page.path} (${renderedLength} Zeichen).`);
+  }
 } finally {
   await vite.close();
 }

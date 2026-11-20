@@ -157,6 +157,7 @@ export function createStaticServer({
     }
 
     let original;
+    let responseStatus = 200;
     try {
       original = await readFile(filePath);
     } catch (error) {
@@ -167,19 +168,40 @@ export function createStaticServer({
         return;
       }
 
-      if (extname(pathname) || pathname.startsWith('/assets/')) {
-        response.writeHead(404);
-        response.end('Not Found');
-        return;
+      if (!extname(pathname) && pathname !== '/') {
+        const directoryIndex = resolvePublicFile(
+          root,
+          `${pathname.replace(/\/+$/, '')}/index.html`,
+        );
+        try {
+          original = await readFile(directoryIndex);
+          filePath = directoryIndex;
+        } catch (indexError) {
+          if (indexError.code !== 'ENOENT' && indexError.code !== 'EISDIR') {
+            console.error('Static page read failed:', indexError.message);
+            response.writeHead(500);
+            response.end('Internal Server Error');
+            return;
+          }
+        }
       }
 
-      filePath = resolvePublicFile(root, '/index.html');
-      try {
-        original = await readFile(filePath);
-      } catch {
-        response.writeHead(500);
-        response.end('Website build is unavailable');
-        return;
+      if (!original) {
+        if (extname(pathname) || pathname.startsWith('/assets/')) {
+          response.writeHead(404);
+          response.end('Not Found');
+          return;
+        }
+
+        filePath = resolvePublicFile(root, '/404.html');
+        responseStatus = 404;
+        try {
+          original = await readFile(filePath);
+        } catch {
+          response.writeHead(404);
+          response.end('Not Found');
+          return;
+        }
       }
     }
 
@@ -215,7 +237,7 @@ export function createStaticServer({
     };
     if (encoding) headers['content-encoding'] = encoding;
 
-    response.writeHead(200, headers);
+    response.writeHead(responseStatus, headers);
     response.end(request.method === 'HEAD' ? undefined : body);
   });
 }
