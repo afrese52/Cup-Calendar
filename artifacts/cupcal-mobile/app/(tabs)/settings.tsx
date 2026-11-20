@@ -123,9 +123,12 @@ export default function SettingsScreen() {
   const lastAnnouncedAccountStatusRef = useRef<string | null>(null);
   const hasAnnouncedSessionCheckRef = useRef(false);
   const [authMessage, setAuthMessage] = useState<string | null>(null);
+  const [confirmationResendCooldownStatus, setConfirmationResendCooldownStatus] = useState<string | null>(null);
   const isSessionStatusSuccessMessage =
     (session !== null && authMessage === 'Du bist angemeldet.')
     || (session === null && authMessage === 'Du bist abgemeldet.');
+  const isConfirmationResendSuccessMessage =
+    authMessage === 'Wenn dein Konto noch nicht bestätigt ist, erhältst du in Kürze einen neuen Bestätigungslink.';
   const [confirmationResendAvailableAt, setConfirmationResendAvailableAt] = useState<number | null>(null);
   const [confirmationResendClock, setConfirmationResendClock] = useState(() => Date.now());
   const [confirmationResendCooldownLoaded, setConfirmationResendCooldownLoaded] = useState(false);
@@ -187,7 +190,10 @@ export default function SettingsScreen() {
         setConfirmationResendAvailableAt(null);
         if (announcedResendCooldownCompletionRef.current !== confirmationResendAvailableAt) {
           announcedResendCooldownCompletionRef.current = confirmationResendAvailableAt;
-          if (Platform.OS !== 'web') {
+          setConfirmationResendCooldownStatus(
+            'Die Wartezeit ist vorbei. Du kannst jetzt einen neuen Bestätigungslink anfordern.',
+          );
+          if (Platform.OS === 'ios') {
             AccessibilityInfo.announceForAccessibility(
               'Die Wartezeit ist vorbei. Du kannst jetzt einen neuen Bestätigungslink anfordern.',
             );
@@ -391,6 +397,7 @@ export default function SettingsScreen() {
     setSubmittingAction('resend-confirmation');
     setAuthError(null);
     setAuthMessage(null);
+    setConfirmationResendCooldownStatus(null);
     try {
       const result = await resendAccountConfirmation({
         email: confirmationResendEmail,
@@ -402,7 +409,7 @@ export default function SettingsScreen() {
         const availableAt = Date.now() + result.resendCooldownSeconds * 1000;
         setConfirmationResendAvailableAt(availableAt);
         setConfirmationResendClock(Date.now());
-        if (Platform.OS !== 'web') {
+        if (Platform.OS === 'ios') {
           const duration = result.resendCooldownSeconds === 1
             ? '1 Sekunde'
             : `${result.resendCooldownSeconds} Sekunden`;
@@ -897,8 +904,15 @@ export default function SettingsScreen() {
             <View>
               <Text
                 accessible
-                accessibilityRole={isSessionStatusSuccessMessage ? 'text' : 'alert'}
-                accessibilityLiveRegion={isSessionStatusSuccessMessage ? 'none' : 'polite'}
+                accessibilityRole={
+                  isSessionStatusSuccessMessage || isConfirmationResendSuccessMessage ? 'text' : 'alert'
+                }
+                accessibilityLiveRegion={
+                  isSessionStatusSuccessMessage
+                    || (isConfirmationResendSuccessMessage && Platform.OS === 'ios')
+                    ? 'none'
+                    : 'polite'
+                }
                 testID="auth-success-message"
                 style={[styles.authNotice, { color: colors.success }]}
               >
@@ -942,6 +956,17 @@ export default function SettingsScreen() {
                 </>
               ) : null}
             </View>
+          ) : null}
+          {confirmationResendCooldownStatus ? (
+            <Text
+              accessible
+              accessibilityRole="text"
+              accessibilityLiveRegion={Platform.OS === 'android' ? 'polite' : 'none'}
+              testID="confirmation-resend-cooldown-status"
+              style={[styles.authNotice, { color: colors.mutedForeground }]}
+            >
+              {confirmationResendCooldownStatus}
+            </Text>
           ) : null}
           {authError && session ? (
             <Text

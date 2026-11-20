@@ -552,75 +552,102 @@ test('sendet nach geänderter E-Mail-Adresse weiter an die registrierte Adresse'
   });
 });
 
-test('sperrt erneute Bestätigungsanfragen mit Countdown und gibt sie danach frei', async () => {
-  const mockedSupabase = jest.requireMock('@/services/supabase') as {
-    requestEmailConfirmation: jest.Mock;
-  };
-  const storageMock = jest.requireMock('@react-native-async-storage/async-storage') as {
-    __values: Map<string, string>;
-  };
-  const view = await openSettings();
-  await fireEvent.changeText(view.getByTestId('auth-email-input'), 'test@example.invalid');
-  const button = view.getByTestId('resend-confirmation-button');
-  announceForAccessibility.mockClear();
-  jest.useFakeTimers();
+test.each(['ios', 'android'] as const)(
+  'sperrt erneute Bestätigungsanfragen auf %s mit Countdown und gibt sie danach frei',
+  async (platform) => {
+    const originalPlatformOS = Platform.OS;
+    Object.defineProperty(Platform, 'OS', { configurable: true, value: platform });
+    const mockedSupabase = jest.requireMock('@/services/supabase') as {
+      requestEmailConfirmation: jest.Mock;
+    };
+    const storageMock = jest.requireMock('@react-native-async-storage/async-storage') as {
+      __values: Map<string, string>;
+    };
+    const view = await openSettings();
+    await fireEvent.changeText(view.getByTestId('auth-email-input'), 'test@example.invalid');
+    const button = view.getByTestId('resend-confirmation-button');
+    announceForAccessibility.mockClear();
+    sendAccessibilityFocus.mockClear();
+    jest.useFakeTimers();
 
-  try {
-    await fireEvent.press(button);
-    await waitFor(() => expect(button.props.accessibilityState).toEqual({
-      disabled: true,
-      busy: false,
-    }));
+    try {
+      await fireEvent.press(button);
+      await waitFor(() => expect(button.props.accessibilityState).toEqual({
+        disabled: true,
+        busy: false,
+      }));
 
-    expect(view.getByText(
-      `Erneut senden in ${ACCOUNT_CONFIRMATION_RESEND_COOLDOWN_SECONDS} Sekunden`,
-    )).toBeTruthy();
-    expect(storageMock.__values.get(ACCOUNT_CONFIRMATION_RESEND_AVAILABLE_AT_KEY))
-      .toBe(String(Date.now() + ACCOUNT_CONFIRMATION_RESEND_COOLDOWN_SECONDS * 1000));
-    expect(button.props.accessibilityLabel).toBe(
-      `Bestätigungslink erneut senden. Gesperrt. Noch ${ACCOUNT_CONFIRMATION_RESEND_COOLDOWN_SECONDS} Sekunden Wartezeit.`,
-    );
-    expect(button.props.accessibilityLiveRegion).toBe('none');
-    expect(announceForAccessibility).toHaveBeenCalledTimes(1);
-    expect(announceForAccessibility).toHaveBeenNthCalledWith(
-      1,
-      `Der Bestätigungslink wurde gesendet. Du kannst in ${ACCOUNT_CONFIRMATION_RESEND_COOLDOWN_SECONDS} Sekunden erneut einen anfordern.`,
-    );
+      expect(view.getByText(
+        `Erneut senden in ${ACCOUNT_CONFIRMATION_RESEND_COOLDOWN_SECONDS} Sekunden`,
+      )).toBeTruthy();
+      expect(storageMock.__values.get(ACCOUNT_CONFIRMATION_RESEND_AVAILABLE_AT_KEY))
+        .toBe(String(Date.now() + ACCOUNT_CONFIRMATION_RESEND_COOLDOWN_SECONDS * 1000));
+      expect(button.props.accessibilityLabel).toBe(
+        `Bestätigungslink erneut senden. Gesperrt. Noch ${ACCOUNT_CONFIRMATION_RESEND_COOLDOWN_SECONDS} Sekunden Wartezeit.`,
+      );
+      expect(button.props.accessibilityLiveRegion).toBe('none');
+      if (platform === 'ios') {
+        expect(announceForAccessibility).toHaveBeenCalledTimes(1);
+        expect(announceForAccessibility).toHaveBeenNthCalledWith(
+          1,
+          `Der Bestätigungslink wurde gesendet. Du kannst in ${ACCOUNT_CONFIRMATION_RESEND_COOLDOWN_SECONDS} Sekunden erneut einen anfordern.`,
+        );
+        expect(view.getByTestId('auth-success-message').props.accessibilityLiveRegion).toBe('none');
+      } else {
+        expect(announceForAccessibility).not.toHaveBeenCalled();
+        expect(view.getByTestId('auth-success-message').props.accessibilityLiveRegion).toBe('polite');
+      }
 
-    await act(async () => {
-      await jest.advanceTimersByTimeAsync(5000);
-    });
-    expect(button.props.accessibilityLabel).toBe(
-      `Bestätigungslink erneut senden. Gesperrt. Noch ${ACCOUNT_CONFIRMATION_RESEND_COOLDOWN_SECONDS - 5} Sekunden Wartezeit.`,
-    );
-    expect(announceForAccessibility).toHaveBeenCalledTimes(1);
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(5000);
+      });
+      expect(button.props.accessibilityLabel).toBe(
+        `Bestätigungslink erneut senden. Gesperrt. Noch ${ACCOUNT_CONFIRMATION_RESEND_COOLDOWN_SECONDS - 5} Sekunden Wartezeit.`,
+      );
+      if (platform === 'ios') expect(announceForAccessibility).toHaveBeenCalledTimes(1);
+      else expect(announceForAccessibility).not.toHaveBeenCalled();
+      expect(sendAccessibilityFocus).not.toHaveBeenCalled();
 
-    await fireEvent.press(button);
-    expect(mockedSupabase.requestEmailConfirmation).toHaveBeenCalledTimes(1);
+      await fireEvent.press(button);
+      expect(mockedSupabase.requestEmailConfirmation).toHaveBeenCalledTimes(1);
 
-    await act(async () => {
-      await jest.advanceTimersByTimeAsync(ACCOUNT_CONFIRMATION_RESEND_COOLDOWN_SECONDS * 1000);
-    });
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(ACCOUNT_CONFIRMATION_RESEND_COOLDOWN_SECONDS * 1000);
+      });
 
-    expect(button.props.accessibilityState).toMatchObject({ disabled: false, busy: false });
-    expect(button.props.accessibilityLabel).toBe('Bestätigungslink erneut senden');
-    expect(view.getByText('Bestätigungslink erneut senden')).toBeTruthy();
-    expect(announceForAccessibility).toHaveBeenCalledTimes(2);
-    expect(announceForAccessibility).toHaveBeenNthCalledWith(
-      2,
-      'Die Wartezeit ist vorbei. Du kannst jetzt einen neuen Bestätigungslink anfordern.',
-    );
-    await act(async () => {
-      await jest.advanceTimersByTimeAsync(5000);
-    });
-    expect(announceForAccessibility).toHaveBeenCalledTimes(2);
-  } finally {
-    await act(async () => {
-      view.unmount();
-    });
-    jest.useRealTimers();
-  }
-});
+      expect(button.props.accessibilityState).toMatchObject({ disabled: false, busy: false });
+      expect(button.props.accessibilityLabel).toBe('Bestätigungslink erneut senden');
+      expect(view.getByText('Bestätigungslink erneut senden')).toBeTruthy();
+      const completionStatus = view.getByTestId('confirmation-resend-cooldown-status');
+      expect(completionStatus.props.children)
+        .toBe('Die Wartezeit ist vorbei. Du kannst jetzt einen neuen Bestätigungslink anfordern.');
+      if (platform === 'ios') {
+        expect(announceForAccessibility).toHaveBeenCalledTimes(2);
+        expect(announceForAccessibility).toHaveBeenNthCalledWith(
+          2,
+          'Die Wartezeit ist vorbei. Du kannst jetzt einen neuen Bestätigungslink anfordern.',
+        );
+        expect(completionStatus.props.accessibilityLiveRegion).toBe('none');
+      } else {
+        expect(announceForAccessibility).not.toHaveBeenCalled();
+        expect(completionStatus.props.accessibilityLiveRegion).toBe('polite');
+      }
+      expect(sendAccessibilityFocus).not.toHaveBeenCalled();
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(5000);
+      });
+      if (platform === 'ios') expect(announceForAccessibility).toHaveBeenCalledTimes(2);
+      else expect(announceForAccessibility).not.toHaveBeenCalled();
+      expect(sendAccessibilityFocus).not.toHaveBeenCalled();
+    } finally {
+      await act(async () => {
+        view.unmount();
+      });
+      jest.useRealTimers();
+      Object.defineProperty(Platform, 'OS', { configurable: true, value: originalPlatformOS });
+    }
+  },
+);
 
 test('zeigt einen Fehler beim erneuten Senden direkt nach der Registrierung', async () => {
   const mockedSupabase = jest.requireMock('@/services/supabase') as {
