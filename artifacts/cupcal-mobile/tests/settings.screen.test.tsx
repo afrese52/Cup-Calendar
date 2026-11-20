@@ -1447,8 +1447,15 @@ test.each(['ios', 'android'] as const)(
       expect(errorMessage.props.accessibilityLiveRegion).toBe('assertive');
       expect(errorMessage.props.children).toContain('Mailversand nicht verfügbar');
 
-      await fireEvent.press(view.getByTestId('delete-account-confirm-button'));
+      expect(view.getByTestId('delete-account-confirmation-title')).toBeTruthy();
+      const retryButton = view.getByTestId('delete-account-confirm-button');
+      expect(retryButton.props.accessibilityState).toMatchObject({
+        disabled: false,
+        busy: false,
+      });
+      await fireEvent.press(retryButton);
       expect(await view.findByText(/Bestätigungslink an test@example\.invalid gesendet/)).toBeTruthy();
+      expect(view.queryByTestId('delete-account-confirmation-title')).toBeNull();
       expect(auth.signInWithOtp).toHaveBeenCalledTimes(2);
       const mockedApi = jest.requireMock('@workspace/api-client-react') as {
         __requestAccountDeletion: jest.Mock;
