@@ -259,7 +259,7 @@ test('zeigt ohne gespeicherte Sitzung weiterhin nur lokale Gastfavoriten', async
   expect(announce).not.toHaveBeenCalled();
 });
 
-test('sagt extern synchronisierte Speichern- und Entfernen-Änderungen genau einmal an', async () => {
+test('sagt externe Merkliste-Änderungen einmal an, ohne den Accessibility-Fokus zu verschieben', async () => {
   AppState.currentState = 'active';
   let remoteFavorite = false;
   mockedSupabase.fetchRemoteBookmarks.mockImplementation(async () => remoteFavorite ? [{
@@ -269,6 +269,9 @@ test('sagt extern synchronisierte Speichern- und Entfernen-Änderungen genau ein
     revision: 1,
   }] : []);
   const announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility').mockImplementation(() => {});
+  const sendAccessibilityEvent = jest
+    .spyOn(AccessibilityInfo, 'sendAccessibilityEvent')
+    .mockImplementation(() => {});
   const view = await renderProvider();
   await emitUser('konto-a');
   await waitFor(() => expect(mockedSupabase.fetchRemoteBookmarks).toHaveBeenCalledWith('konto-a'));
@@ -295,6 +298,7 @@ test('sagt extern synchronisierte Speichern- und Entfernen-Änderungen genau ein
   expect(announce).toHaveBeenLastCalledWith(
     'Merkliste aktualisiert: FNCS Challenger Cup aus der Merkliste entfernt.',
   );
+  expect(sendAccessibilityEvent).not.toHaveBeenCalled();
 });
 
 test('nimmt den Realtime-Kanal nach einem Verbindungsausfall wieder auf und gleicht Favoriten ab', async () => {
