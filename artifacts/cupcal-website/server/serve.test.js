@@ -41,8 +41,14 @@ function getResponse(pathname, headers = {}) {
 test('selects an accepted compression format by quality', () => {
   assert.equal(chooseContentEncoding('gzip, br'), 'br');
   assert.equal(chooseContentEncoding('br;q=0.2, gzip;q=0.8'), 'gzip');
+  assert.equal(chooseContentEncoding('*'), 'br');
+  assert.equal(chooseContentEncoding('gzip;q=0, *;q=1'), 'br');
+  assert.equal(chooseContentEncoding('br;q=0, gzip;q=0.5, *;q=1'), 'gzip');
+  assert.equal(chooseContentEncoding('*;q=0'), null);
   assert.equal(chooseContentEncoding('gzip;q=0, br;q=0'), null);
   assert.equal(chooseContentEncoding('identity'), null);
+  assert.equal(chooseContentEncoding(undefined), null);
+  assert.equal(chooseContentEncoding(''), null);
 });
 
 test('serves compressed content, generated pages, and real 404 responses', async () => {
@@ -56,6 +62,7 @@ test('serves compressed content, generated pages, and real 404 responses', async
   await writeFile(join(temporaryRoot, 'index.html'), page);
   await writeFile(join(temporaryRoot, '404.html'), notFoundPage);
   await writeFile(join(temporaryRoot, 'assets', 'app.js'), script);
+  await writeFile(join(temporaryRoot, 'assets', 'tiny.txt'), 'CupCal');
   await writeFile(join(temporaryRoot, 'turnierzeiten', 'index.html'), topicPage);
 
   server = createStaticServer({ root: temporaryRoot, basePath: '/' });
@@ -79,6 +86,50 @@ test('serves compressed content, generated pages, and real 404 responses', async
   assert.equal(gzipScript.status, 200);
   assert.equal(gzipScript.headers['content-encoding'], 'gzip');
   assert.equal(gunzipSync(gzipScript.body).toString(), script);
+
+  const identityOnly = await getResponse('/', {
+    'accept-encoding': 'identity',
+  });
+  assert.equal(identityOnly.status, 200);
+  assert.equal(identityOnly.headers['content-encoding'], undefined);
+  assert.equal(identityOnly.body.toString(), page);
+
+  const noCompressionHeader = await getResponse('/');
+  assert.equal(noCompressionHeader.status, 200);
+  assert.equal(noCompressionHeader.headers['content-encoding'], undefined);
+  assert.equal(noCompressionHeader.body.toString(), page);
+
+  const gzipExcluded = await getResponse('/', {
+    'accept-encoding': 'gzip;q=0, br;q=1',
+  });
+  assert.equal(gzipExcluded.status, 200);
+  assert.equal(gzipExcluded.headers['content-encoding'], 'br');
+  assert.equal(brotliDecompressSync(gzipExcluded.body).toString(), page);
+
+  const identityExplicitlyExcluded = await getResponse('/', {
+    'accept-encoding': 'identity;q=0, gzip;q=0, br;q=0',
+  });
+  assert.equal(identityExplicitlyExcluded.status, 406);
+  assert.equal(identityExplicitlyExcluded.headers['content-encoding'], undefined);
+  assert.equal(identityExplicitlyExcluded.headers.vary, 'Accept-Encoding');
+
+  const tinyResourceRequiresCompression = await getResponse('/assets/tiny.txt', {
+    'accept-encoding': 'gzip, identity;q=0',
+  });
+  assert.equal(tinyResourceRequiresCompression.status, 200);
+  assert.equal(tinyResourceRequiresCompression.headers['content-encoding'], 'gzip');
+  assert.equal(gunzipSync(tinyResourceRequiresCompression.body).toString(), 'CupCal');
+
+  const wildcardExcludesAll = await getResponse('/', {
+    'accept-encoding': '*;q=0',
+  });
+  assert.equal(wildcardExcludesAll.status, 406);
+
+  const wildcardExcludesCompressionOnly = await getResponse('/', {
+    'accept-encoding': '*;q=0, identity;q=1',
+  });
+  assert.equal(wildcardExcludesCompressionOnly.status, 200);
+  assert.equal(wildcardExcludesCompressionOnly.headers['content-encoding'], undefined);
 
   const unknownRoute = await getResponse('/kalender/');
   assert.equal(unknownRoute.status, 404);

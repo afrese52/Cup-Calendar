@@ -70,6 +70,15 @@ export function chooseContentEncoding(header) {
   return brotliQuality >= gzipQuality ? 'br' : 'gzip';
 }
 
+function isIdentityAcceptable(header) {
+  if (header === undefined) return true;
+
+  const encodings = parseAcceptEncoding(header);
+  if (encodings.has('identity')) return encodings.get('identity') > 0;
+  if (encodings.has('*')) return encodings.get('*') > 0;
+  return true;
+}
+
 export function resolvePublicFile(root, pathname) {
   let decodedPath;
   try {
@@ -209,12 +218,23 @@ export function createStaticServer({
     const contentType =
       MIME_TYPES[extension] || 'application/octet-stream';
     const baseContentType = contentType.split(';', 1)[0];
+    const acceptEncoding = request.headers['accept-encoding'];
+    const identityAcceptable = isIdentityAcceptable(acceptEncoding);
     const canCompress =
-      original.length >= MINIMUM_COMPRESS_BYTES &&
-      COMPRESSIBLE_TYPES.has(baseContentType);
+      COMPRESSIBLE_TYPES.has(baseContentType) &&
+      (original.length >= MINIMUM_COMPRESS_BYTES || !identityAcceptable);
     const encoding = canCompress
-      ? chooseContentEncoding(request.headers['accept-encoding'])
+      ? chooseContentEncoding(acceptEncoding)
       : null;
+
+    if (!encoding && !identityAcceptable) {
+      response.writeHead(406, {
+        'content-type': 'text/plain; charset=utf-8',
+        'vary': 'Accept-Encoding',
+      });
+      response.end(request.method === 'HEAD' ? undefined : 'Not Acceptable');
+      return;
+    }
 
     let body;
     try {
