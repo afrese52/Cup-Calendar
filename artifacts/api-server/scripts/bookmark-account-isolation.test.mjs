@@ -65,7 +65,7 @@ async function createTestAccount(admin, label, accounts) {
   assert.ifError(error);
   assert.ok(data.user, `Testkonto ${label} wurde nicht angelegt.`);
 
-  const account = { id: data.user.id, client: null, email, password };
+  const account = { id: data.user.id, client: null, email, password, deleted: false };
   accounts.push(account);
   const client = createClient(supabaseUrl, anonKey, {
     auth: { persistSession: false, autoRefreshToken: false },
@@ -100,7 +100,9 @@ async function withTestAccounts(run) {
     await run(accounts[0], accounts[1]);
   } finally {
     const cleanupResults = await Promise.all(
-      accounts.map(({ id }) => admin.auth.admin.deleteUser(id)),
+      accounts
+        .filter(({ deleted }) => !deleted)
+        .map(({ id }) => admin.auth.admin.deleteUser(id)),
     );
     for (const result of cleanupResults) assert.ifError(result.error);
   }
@@ -605,6 +607,51 @@ test("spätere RPC-Aufrufe ändern beim gemeinsamen Termin nur das eigene Konto"
     assert.ifError(afterUpdateB.error);
     assert.deepEqual(unchangedA.data, { ...initialStateA, is_favorite: false, revision: 2 });
     assert.deepEqual(afterUpdateB.data, { ...initialStateB, is_favorite: true, revision: 2 });
+  });
+});
+
+test("Kontolöschung entfernt beim gemeinsamen Termin nur die eigene Favoritenzeile", async () => {
+  await withTestAccounts(async (accountA, accountB) => {
+    const admin = createClient(supabaseUrl, serviceRoleKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+    const eventId = `shared-delete-event-${randomUUID()}`;
+    const updatedAt = new Date(0).toISOString();
+    const [syncA, syncB] = await Promise.all([
+      accountA.client.rpc("sync_user_event_bookmark", {
+        p_event_id: eventId,
+        p_is_favorite: true,
+        p_updated_at: updatedAt,
+      }),
+      accountB.client.rpc("sync_user_event_bookmark", {
+        p_event_id: eventId,
+        p_is_favorite: false,
+        p_updated_at: updatedAt,
+      }),
+    ]);
+    assert.ifError(syncA.error);
+    assert.ifError(syncB.error);
+
+    const deletion = await admin.auth.admin.deleteUser(accountA.id);
+    assert.ifError(deletion.error);
+    accountA.deleted = true;
+
+    const remainingRows = await admin
+      .from("user_event_bookmarks")
+      .select("user_id, event_id, is_favorite, revision")
+      .eq("event_id", eventId)
+      .order("user_id");
+    assert.ifError(remainingRows.error);
+    assert.deepEqual(
+      remainingRows.data,
+      [{
+        user_id: accountB.id,
+        event_id: eventId,
+        is_favorite: false,
+        revision: 1,
+      }],
+      "Beim Löschen eines Kontos muss die Zeile des anderen Kontos unverändert bleiben.",
+    );
   });
 });
 
