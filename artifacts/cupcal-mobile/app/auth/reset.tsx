@@ -426,7 +426,13 @@ export default function ResetPasswordScreen() {
           <Pressable
             accessibilityRole="button"
             testID="reset-password-return-button"
-            onPress={() => router.replace('/(tabs)/settings')}
+            onPress={() =>
+              router.replace(
+                isSaved
+                  ? '/(tabs)/settings'
+                  : '/(tabs)/settings?authMode=forgot-password&focusAccount=true',
+              )
+            }
             style={[styles.secondaryButton, { borderColor: colors.border }]}
           >
             <Text style={[styles.secondaryButtonText, { color: colors.foreground }]}>

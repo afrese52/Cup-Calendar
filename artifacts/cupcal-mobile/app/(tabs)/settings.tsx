@@ -93,7 +93,10 @@ function SettingRow({
 export default function SettingsScreen() {
   const colors = useColors();
   const router = useRouter();
-  const { focusAccount } = useLocalSearchParams<{ focusAccount?: string }>();
+  const { focusAccount, authMode: requestedAuthMode } = useLocalSearchParams<{
+    focusAccount?: string;
+    authMode?: string;
+  }>();
   const { storageError } = useCupCal();
   const { width, height } = useWindowDimensions();
   const isCompactWidth = width < 360;
@@ -107,7 +110,9 @@ export default function SettingsScreen() {
       retry: false,
     },
   });
-  const [authMode, setAuthMode] = useState<AuthMode>('sign-in');
+  const [authMode, setAuthMode] = useState<AuthMode>(
+    requestedAuthMode === 'forgot-password' ? 'forgot-password' : 'sign-in',
+  );
   const previousAuthModeRef = useRef(authMode);
   const [email, setEmail] = useState('');
   const [registrationConfirmationEmail, setRegistrationConfirmationEmail] = useState<string | null>(null);
@@ -228,6 +233,15 @@ export default function SettingsScreen() {
     if (Platform.OS === 'web' || !accountFocusRef.current) return;
     AccessibilityInfo.sendAccessibilityEvent(accountFocusRef.current, 'focus');
   }, [authMode]);
+
+  useEffect(() => {
+    if (requestedAuthMode !== 'forgot-password') return;
+    setAuthMode('forgot-password');
+    setAuthError(null);
+    setAuthMessage(null);
+    setPassword('');
+    setRegistrationConfirmationEmail(null);
+  }, [requestedAuthMode]);
 
   useEffect(() => {
     if (focusAccount !== 'true' || isCheckingSession || Platform.OS === 'web') return;

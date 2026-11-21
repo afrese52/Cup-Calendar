@@ -14,7 +14,7 @@ import {
 type AuthListener = (event: string, session: unknown) => void;
 type MockAuth = Record<string, any>;
 type RenderedSettings = Awaited<ReturnType<typeof render>>;
-const mockRouteParams: { focusAccount?: string } = {};
+const mockRouteParams: { focusAccount?: string; authMode?: string } = {};
 let mockAdminImportAuthorized = false;
 
 jest.mock('@expo/vector-icons', () => ({ Feather: () => null }));
@@ -177,11 +177,16 @@ function restoreAuthMocks() {
 
 async function openSettings() {
   const view = await render(<SettingsScreen />);
-  await waitFor(() => expect(view.getByText('Bei CupCal anmelden')).toBeTruthy());
-  await waitFor(() => {
-    expect(view.getByTestId('resend-confirmation-button').props.accessibilityLabel)
-      .not.toBe('Bestätigungswartezeit wird geladen');
-  });
+  const expectedHeading = mockRouteParams.authMode === 'forgot-password'
+    ? 'Passwort zurücksetzen'
+    : 'Bei CupCal anmelden';
+  await waitFor(() => expect(view.getByText(expectedHeading)).toBeTruthy());
+  if (mockRouteParams.authMode !== 'forgot-password') {
+    await waitFor(() => {
+      expect(view.getByTestId('resend-confirmation-button').props.accessibilityLabel)
+        .not.toBe('Bestätigungswartezeit wird geladen');
+    });
+  }
   return view;
 }
 
@@ -193,6 +198,7 @@ async function enterCredentials(view: RenderedSettings) {
 beforeEach(() => {
   restoreAuthMocks();
   mockRouteParams.focusAccount = undefined;
+  mockRouteParams.authMode = undefined;
   mockAdminImportAuthorized = false;
   const storageMock = jest.requireMock('@react-native-async-storage/async-storage') as {
     __values: Map<string, string>;
@@ -828,6 +834,39 @@ test('öffnet den Passwort-zurücksetzen-Modus und fordert den Link mit einer an
   expect(auth.resetPasswordForEmail).toHaveBeenCalledWith('test@example.invalid', {
     redirectTo: 'cupcal-test://auth/reset?flow=cupcal-password-reset',
   });
+});
+
+test('öffnet nach einem abgelaufenen Reset direkt die Linkanfrage und sendet an die Reset-Rücksprungadresse', async () => {
+  mockRouteParams.authMode = 'forgot-password';
+  mockRouteParams.focusAccount = 'true';
+  const view = await openSettings();
+
+  expect(view.getByText('Passwort zurücksetzen')).toBeTruthy();
+  expect(view.queryByTestId('auth-password-input')).toBeNull();
+  await fireEvent.changeText(view.getByTestId('auth-email-input'), 'test@example.invalid');
+  await fireEvent.press(view.getByTestId('auth-submit-button'));
+
+  expect(await view.findByTestId('auth-success-message')).toBeTruthy();
+  expect(auth.resetPasswordForEmail).toHaveBeenCalledWith('test@example.invalid', {
+    redirectTo: 'cupcal-test://auth/reset?flow=cupcal-password-reset',
+  });
+});
+
+test('zeigt im direkt geöffneten Wiederherstellungsmodus den Fehler einer neuen Linkanfrage verständlich an', async () => {
+  mockRouteParams.authMode = 'forgot-password';
+  auth.resetPasswordForEmail.mockResolvedValue({
+    error: new Error('Email rate limit exceeded'),
+  });
+  const view = await openSettings();
+  await fireEvent.changeText(view.getByTestId('auth-email-input'), 'test@example.invalid');
+
+  await fireEvent.press(view.getByTestId('auth-submit-button'));
+
+  const errorMessage = await view.findByTestId('auth-error-message');
+  expect(errorMessage.props.accessibilityRole).toBe('alert');
+  expect(errorMessage.props.children).toBe(
+    'Zu viele Versuche in kurzer Zeit. Warte bitte einige Minuten und versuche es dann erneut.',
+  );
 });
 
 test('hält Eingabe, Rückmeldung und Zurück-Aktion auf kleinem Display erreichbar', async () => {

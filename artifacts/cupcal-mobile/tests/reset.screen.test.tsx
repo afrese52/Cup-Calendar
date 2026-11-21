@@ -5,6 +5,7 @@ import * as ReactNative from 'react-native';
 import { AccessibilityInfo, Alert, Platform } from 'react-native';
 
 const mockSaveNewPassword = jest.fn(async (_password: string) => {});
+const mockRouterReplace = jest.fn();
 let mockRecoveryPending = true;
 let mockPreventRemoveEnabled = false;
 let mockPreventRemoveCallback: ((options: { data: { action: unknown }; repeat: () => void }) => void) | undefined;
@@ -22,7 +23,7 @@ jest.mock('expo-linking', () => ({
   addEventListener: () => ({ remove: jest.fn() }),
 }));
 jest.mock('expo-router', () => ({
-  router: { replace: jest.fn() },
+  router: { replace: mockRouterReplace },
   usePreventRemove: mockUsePreventRemove,
 }));
 jest.mock('react-native-safe-area-context', () => {
@@ -119,6 +120,7 @@ const { default: ResetPasswordScreen } = require('../app/auth/reset') as {
 
 beforeEach(() => {
   mockSaveNewPassword.mockReset().mockRejectedValue(new Error('Network request failed'));
+  mockRouterReplace.mockClear();
   mockRecoveryPending = true;
   mockUsePreventRemove.mockClear();
   mockPreventRemoveEnabled = false;
@@ -465,6 +467,8 @@ test.each(['ios', 'android'] as const)(
       const returnButton = view.getByTestId('reset-password-return-button');
       expect(returnButton.props.accessibilityRole).toBe('button');
       expect(view.getByText('Zu CupCal')).toBeTruthy();
+      await fireEvent.press(returnButton);
+      expect(mockRouterReplace).toHaveBeenCalledWith('/(tabs)/settings');
       expect(findNodeHandleSpy).toHaveBeenCalledWith(expect.anything());
       await waitFor(() => expect(focusSpy).toHaveBeenCalledWith(expect.any(Number)));
       if (platform === 'ios') expect(announceSpy).not.toHaveBeenCalledWith(successMessage.props.children);
@@ -658,6 +662,10 @@ test.each(['ios', 'android'] as const)(
       expect(view.queryByTestId('reset-password-confirm-input')).toBeNull();
       expect(view.queryByTestId('reset-password-submit-button')).toBeNull();
       expect(view.getByTestId('reset-password-return-button').props.accessibilityRole).toBe('button');
+      await fireEvent.press(view.getByTestId('reset-password-return-button'));
+      expect(mockRouterReplace).toHaveBeenCalledWith(
+        '/(tabs)/settings?authMode=forgot-password&focusAccount=true',
+      );
       expect(mockSaveNewPassword).toHaveBeenCalledTimes(1);
     } finally {
       Object.defineProperty(Platform, 'OS', { configurable: true, value: originalPlatformOS });
