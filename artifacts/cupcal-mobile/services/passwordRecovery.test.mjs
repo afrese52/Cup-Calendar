@@ -938,3 +938,129 @@ test(
     }
   },
 );
+
+const livePasswordRecoveryTestEnabled =
+  process.env.CUPCAL_RUN_SUPABASE_PASSWORD_RECOVERY_LIVE_TEST === '1';
+
+test(
+  'prüft die Passwortgrenze in einer echten Supabase-Wiederherstellungssitzung',
+  { skip: !livePasswordRecoveryTestEnabled },
+  async () => {
+    const supabaseUrl = (
+      process.env.SUPABASE_URL ??
+      process.env.EXPO_PUBLIC_SUPABASE_URL ??
+      ''
+    ).trim();
+    const publishableKey =
+      process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
+      process.env.SUPABASE_PUBLISHABLE_KEY ??
+      process.env.SUPABASE_ANON_KEY;
+    const recoveryLink = process.env.CUPCAL_SUPABASE_PASSWORD_RECOVERY_TEST_LINK?.trim();
+    const missingEnv = [
+      !supabaseUrl && 'SUPABASE_URL or EXPO_PUBLIC_SUPABASE_URL',
+      !process.env.CUPCAL_SUPABASE_PASSWORD_TEST_EMAIL?.trim() &&
+        'CUPCAL_SUPABASE_PASSWORD_TEST_EMAIL',
+      !process.env.CUPCAL_SUPABASE_PASSWORD_TEST_PASSWORD &&
+        'CUPCAL_SUPABASE_PASSWORD_TEST_PASSWORD',
+      !recoveryLink && 'CUPCAL_SUPABASE_PASSWORD_RECOVERY_TEST_LINK',
+      !publishableKey?.trim() && 'EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY or SUPABASE_ANON_KEY',
+    ].filter(Boolean);
+    assert.deepEqual(
+      missingEnv,
+      [],
+      `Für den opt-in Wiederherstellungs-Live-Test fehlen: ${missingEnv.join(', ')}`,
+    );
+    assert.equal(
+      isPrivilegedSupabaseKey(publishableKey.trim()),
+      false,
+      'Der Live-Test akzeptiert ausschließlich einen öffentlichen Publishable- oder Anon-Key, keinen Service-Role- oder Secret-Key.',
+    );
+
+    const testClient = createClient(
+      supabaseUrl,
+      publishableKey.trim(),
+      { auth: { autoRefreshToken: false, persistSession: false } },
+    );
+    const recovery = createPasswordRecovery(testClient.auth);
+    const email = process.env.CUPCAL_SUPABASE_PASSWORD_TEST_EMAIL.trim();
+    const initialPassword = process.env.CUPCAL_SUPABASE_PASSWORD_TEST_PASSWORD;
+    let disposableUserId = null;
+    let verifiedRecoveryUserId = null;
+
+    try {
+      const { data: signedIn, error: signInError } = await testClient.auth.signInWithPassword({
+        email,
+        password: initialPassword,
+      });
+      assert.ifError(signInError);
+      assert.equal(
+        signedIn.user?.user_metadata?.cupcal_disposable_password_test,
+        true,
+        'Das angemeldete Konto ist nicht als cupcal_disposable_password_test markiert. Verwende ausschließlich ein eigens dafür angelegtes Wegwerf-Konto.',
+      );
+      disposableUserId = signedIn.user.id;
+
+      const parsedLink = new URL(recoveryLink);
+      const query = parsedLink.searchParams;
+      const fragment = new URLSearchParams(parsedLink.hash.replace(/^#/, ''));
+      const getParameter = (name) => query.get(name) ?? fragment.get(name);
+      const token = getParameter('token_hash') ?? getParameter('token');
+      const linkType = getParameter('type');
+
+      await testClient.auth.signOut();
+
+      if (token && linkType === 'recovery') {
+        const { error } = await testClient.auth.verifyOtp({
+          token_hash: token,
+          type: 'recovery',
+        });
+        assert.ifError(error);
+        recovery.markRecoverySession(true);
+      } else {
+        assert.equal(
+          await recovery.handlePasswordResetUrl(recoveryLink),
+          true,
+          'Der Link muss ein echter Recovery-Link aus Supabase oder eine CupCal-Wiederherstellungsadresse mit Sitzungscode sein.',
+        );
+      }
+
+      const { data: recoverySession, error: sessionError } = await testClient.auth.getSession();
+      assert.ifError(sessionError);
+      assert.ok(recoverySession.session, 'Der Wiederherstellungslink hat keine Sitzung erzeugt.');
+      assert.equal(
+        recoverySession.session.user.id,
+        disposableUserId,
+        'Der Wiederherstellungslink gehört nicht zum markierten Wegwerf-Konto.',
+      );
+      verifiedRecoveryUserId = recoverySession.session.user.id;
+      assert.equal(recovery.isPending(), true);
+
+      await assert.rejects(
+        recovery.saveNewPassword('a'.repeat(PASSWORD_MIN_LENGTH - 1)),
+        new RegExp(`mindestens ${PASSWORD_MIN_LENGTH} Zeichen lang sein`, 'i'),
+      );
+      assert.equal(
+        recovery.isPending(),
+        true,
+        'Die Ablehnung des zu kurzen Passworts darf die echte Wiederherstellungssitzung nicht verbrauchen.',
+      );
+
+      await recovery.saveNewPassword('a'.repeat(PASSWORD_MIN_LENGTH));
+      assert.equal(recovery.isPending(), false);
+    } finally {
+      try {
+        if (verifiedRecoveryUserId && verifiedRecoveryUserId === disposableUserId) {
+          const { error } = await testClient.auth.updateUser({ password: initialPassword });
+          assert.equal(
+            error,
+            null,
+            `Das ursprüngliche Passwort des Wegwerf-Kontos konnte nicht wiederhergestellt werden${error?.message ? `: ${error.message}` : '.'}`,
+          );
+        }
+      } finally {
+        await testClient.auth.signOut();
+        await testClient.auth.dispose();
+      }
+    }
+  },
+);

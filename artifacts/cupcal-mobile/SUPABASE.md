@@ -250,6 +250,29 @@ gesetzte Passwort wieder her. Er akzeptiert keine Service-Role- oder Secret-
 Keys, erstellt und löscht keine Konten und läuft nicht mit dem normalen
 Testsammelbefehl.
 
+### Passwortgrenze in einer echten Wiederherstellungssitzung
+
+Für den separaten Recovery-Live-Test wird dasselbe ausschließlich dafür
+vorgesehene und markierte Wegwerf-Konto verwendet. Fordere über CupCal einen
+Passwortlink für dieses Konto an. Kopiere den noch nicht geöffneten Link aus
+der E-Mail (oder die von Supabase zurückgeleitete CupCal-Adresse mit dem
+Sitzungscode) und setze ihn ausschließlich als geschützte
+Umgebungsvariable `CUPCAL_SUPABASE_PASSWORD_RECOVERY_TEST_LINK`. Setze außerdem
+die oben genannten E-Mail-, Passwort- und öffentlichen Supabase-Variablen.
+
+Starte den isolierten Test mit:
+
+```sh
+pnpm --filter @workspace/cupcal-mobile run test:supabase-password-recovery-live
+```
+
+Der Test tauscht den echten Recovery-Link gegen eine Supabase-Sitzung,
+verifiziert, dass sie zum markierten Wegwerf-Konto gehört, weist fünf Zeichen
+zurück und setzt anschließend genau sechs Zeichen. Im `finally`-Aufräumpfad
+stellt er das Ausgangspasswort wieder her. Ein verbrauchter, abgelaufener oder
+zu einem anderen Konto gehörender Link schlägt fehl; reguläre Konten werden
+nicht verändert.
+
 Für die kontobasierte Merkliste müssen die Migrationen `0002`, `0003` und
 `0004` in dieser Reihenfolge aus `artifacts/api-server/supabase/migrations/`
 auf dem Supabase-Projekt ausgeführt werden. Sie richten die Favoritentabelle
