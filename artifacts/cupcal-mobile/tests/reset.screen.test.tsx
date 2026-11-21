@@ -629,32 +629,41 @@ test('gibt bei einem unerwarteten Speicherfehler eine zugängliche nächste Akti
   expect(mockSaveNewPassword).toHaveBeenCalledTimes(1);
 });
 
-test('erklärt eine abgelaufene Sitzung und entfernt das Passwortformular', async () => {
-  mockSaveNewPassword.mockImplementation(async () => {
-    mockRecoveryPending = false;
-    throw Object.assign(new Error('Invalid token: expired'), {
-      code: 'otp_expired',
-    });
-  });
-  const view = await render(<ResetPasswordScreen />);
+test.each(['ios', 'android'] as const)(
+  'kündigt eine abgelaufene Sitzung unter %s an und entfernt das Passwortformular',
+  async (platform) => {
+    const originalPlatformOS = Platform.OS;
+    Object.defineProperty(Platform, 'OS', { configurable: true, value: platform });
+    try {
+      mockSaveNewPassword.mockImplementation(async () => {
+        mockRecoveryPending = false;
+        throw Object.assign(new Error('Invalid token: expired'), {
+          code: 'otp_expired',
+        });
+      });
+      const view = await render(<ResetPasswordScreen />);
 
-  await waitFor(() => expect(view.getByTestId('reset-password-submit-button')).toBeTruthy());
-  await fireEvent.changeText(view.getByTestId('reset-password-input'), 'Mein-neues-Passwort-123');
-  await fireEvent.changeText(view.getByTestId('reset-password-confirm-input'), 'Mein-neues-Passwort-123');
-  await fireEvent.press(view.getByTestId('reset-password-submit-button'));
+      await waitFor(() => expect(view.getByTestId('reset-password-submit-button')).toBeTruthy());
+      await fireEvent.changeText(view.getByTestId('reset-password-input'), 'Mein-neues-Passwort-123');
+      await fireEvent.changeText(view.getByTestId('reset-password-confirm-input'), 'Mein-neues-Passwort-123');
+      await fireEvent.press(view.getByTestId('reset-password-submit-button'));
 
-  const errorMessage = await view.findByText(
-    'Die Wiederherstellungssitzung ist abgelaufen oder ungültig. Bitte fordere in den Einstellungen einen neuen Wiederherstellungslink an.',
-  );
-  expect(errorMessage.props.accessible).toBe(true);
-  expect(errorMessage.props.accessibilityRole).toBe(Platform.OS === 'ios' ? 'alert' : 'text');
-  expect(errorMessage.props.accessibilityLiveRegion).toBe(Platform.OS === 'android' ? 'assertive' : undefined);
-  expect(view.queryByTestId('reset-password-input')).toBeNull();
-  expect(view.queryByTestId('reset-password-confirm-input')).toBeNull();
-  expect(view.queryByTestId('reset-password-submit-button')).toBeNull();
-  expect(view.getByTestId('reset-password-return-button')).toBeTruthy();
-  expect(mockSaveNewPassword).toHaveBeenCalledTimes(1);
-});
+      const errorMessage = await view.findByText(
+        'Die Wiederherstellungssitzung ist abgelaufen oder ungültig. Bitte fordere in den Einstellungen einen neuen Wiederherstellungslink an.',
+      );
+      expect(errorMessage.props.accessible).toBe(true);
+      expect(errorMessage.props.accessibilityRole).toBe(platform === 'ios' ? 'alert' : 'text');
+      expect(errorMessage.props.accessibilityLiveRegion).toBe(platform === 'android' ? 'assertive' : undefined);
+      expect(view.queryByTestId('reset-password-input')).toBeNull();
+      expect(view.queryByTestId('reset-password-confirm-input')).toBeNull();
+      expect(view.queryByTestId('reset-password-submit-button')).toBeNull();
+      expect(view.getByTestId('reset-password-return-button').props.accessibilityRole).toBe('button');
+      expect(mockSaveNewPassword).toHaveBeenCalledTimes(1);
+    } finally {
+      Object.defineProperty(Platform, 'OS', { configurable: true, value: originalPlatformOS });
+    }
+  },
+);
 
 test('behält Formular und Eingaben nach einer Passwort-Ablehnung für eine Korrektur', async () => {
   mockSaveNewPassword.mockRejectedValue(Object.assign(new Error('Password is too weak'), { code: 'weak_password' }));
