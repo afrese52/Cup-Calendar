@@ -106,7 +106,7 @@ function createAuth(overrides = {}) {
   };
 }
 
-test('meldet mit bereinigter E-Mail erfolgreich an', async () => {
+test('bereinigt die E-Mail und lässt Passwort-Leerzeichen unverändert', async () => {
   let receivedCredentials;
   const result = await submitAccountAuth(createAuth({
     signInWithPassword: async (credentials) => {
@@ -116,13 +116,13 @@ test('meldet mit bereinigter E-Mail erfolgreich an', async () => {
   }), {
     mode: 'sign-in',
     email: '  test@example.invalid ',
-    password: 'test-password',
+    password: '  test-password  ',
     requestPasswordReset: async () => {},
   });
 
   assert.deepEqual(receivedCredentials, {
     email: 'test@example.invalid',
-    password: 'test-password',
+    password: '  test-password  ',
   });
   assert.deepEqual(result, { ok: true, message: 'Du bist angemeldet.' });
 });
