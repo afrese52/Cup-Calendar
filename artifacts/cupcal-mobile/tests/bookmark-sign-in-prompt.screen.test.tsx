@@ -142,7 +142,7 @@ test('zeigt im Kalender keinen Hinweis auf manuellen Import', async () => {
   const view = await render(<CalendarScreen />);
 
   expect(view.queryByText('MANUELLER IMPORT')).toBeNull();
-  expect(view.getByText('CAP-CALENDAR')).toBeTruthy();
+  expect(view.getByText('CUPCAL')).toBeTruthy();
 });
 
 test('zeigt den nativen Favoritenspeicherfehler im Kalender', async () => {

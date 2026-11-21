@@ -166,7 +166,7 @@ export default function CalendarScreen() {
         <View style={styles.brandRow}>
           <View style={styles.brand}>
             <View style={[styles.brandMark, { backgroundColor: colors.primary }]} />
-            <Text style={[styles.brandName, { color: colors.mutedForeground }]}>CAP-CALENDAR</Text>
+            <Text style={[styles.brandName, { color: colors.mutedForeground }]}>CUPCAL</Text>
           </View>
           {eventError ? (
             <View
