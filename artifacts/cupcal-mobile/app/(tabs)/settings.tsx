@@ -1015,6 +1015,12 @@ export default function SettingsScreen() {
                 subtitle="MHT-, MHTML- und ICS-Dateien prüfen und Termine importieren."
                 onPress={() => router.push('/admin/import')}
               />
+              <SettingRow
+                icon="bar-chart-2"
+                title="Google-Suchdaten"
+                subtitle="Indexierung und Suchleistung der CupCal-Website prüfen."
+                onPress={() => router.push('/admin/search-console')}
+              />
             </View>
           </>
         ) : null}

@@ -44,6 +44,7 @@ function RootLayoutNav() {
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="event/[id]" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="admin/import" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="admin/search-console" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="auth/reset" options={{ animation: 'fade' }} />
         <Stack.Screen name="auth/confirm" options={{ animation: 'fade' }} />
         <Stack.Screen name="+not-found" />

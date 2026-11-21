@@ -62,7 +62,7 @@ type ParsedSchedule = {
   issues: { id?: string | null; title?: string | null; errors: string[] }[];
 };
 
-type ImportAdminRequest = Request & {
+export type ImportAdminRequest = Request & {
   importAdminUser?: { id: string; email: string | null };
 };
 
@@ -102,7 +102,7 @@ async function resolveSignedInUser(req: Request): Promise<
   }
 }
 
-async function requireImportAdmin(
+export async function requireImportAdmin(
   req: Request,
   res: Response,
   next: NextFunction,

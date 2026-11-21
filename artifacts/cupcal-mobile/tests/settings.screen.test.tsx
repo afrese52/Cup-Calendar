@@ -345,6 +345,7 @@ test('zeigt den Terminimport für freigegebene Admin-Konten', async () => {
 
   expect(await view.findByText('Angemeldet')).toBeTruthy();
   expect(await view.findByText('Turniertermine importieren')).toBeTruthy();
+  expect(await view.findByText('Google-Suchdaten')).toBeTruthy();
 });
 
 test('beschriftet E-Mail- und Passwortfelder passend zu Anmeldung und Registrierung', async () => {
