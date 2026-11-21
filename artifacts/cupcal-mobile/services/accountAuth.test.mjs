@@ -174,6 +174,39 @@ test('lässt bestehende Konten mit einem kurzen Passwort anmelden', async () => 
   assert.deepEqual(result, { ok: true, message: 'Du bist angemeldet.' });
 });
 
+test('übersetzt Supabase-Fehler für kurze Bestandskennwörter als Anmeldefehler', async (t) => {
+  const expectedError =
+    'E-Mail-Adresse oder Passwort stimmen nicht. Prüfe deine Eingaben oder fordere einen neuen Passwort-Link an.';
+  const cases = [
+    ['Mindestlängenmeldung', new Error('Password should be at least 6 characters')],
+    ['Supabase-Fehlercode', Object.assign(new Error('Invalid request'), { code: 'weak_password' })],
+    ['älterer Supabase-Fehlercode', Object.assign(new Error('Invalid request'), { code: 'password_too_short' })],
+  ];
+
+  for (const [name, authError] of cases) {
+    await t.test(name, async () => {
+      let receivedCredentials;
+      const result = await submitAccountAuth(createAuth({
+        signInWithPassword: async (credentials) => {
+          receivedCredentials = credentials;
+          return { error: authError };
+        },
+      }), {
+        mode: 'sign-in',
+        email: 'test@example.invalid',
+        password: '12345',
+        requestPasswordReset: async () => {},
+      });
+
+      assert.deepEqual(receivedCredentials, {
+        email: 'test@example.invalid',
+        password: '12345',
+      });
+      assert.deepEqual(result, { ok: false, error: expectedError });
+    });
+  }
+});
+
 test('zeigt einen verständlichen Fehler bei abgelehnter Anmeldung', async () => {
   const result = await submitAccountAuth(createAuth({
     signInWithPassword: async () => ({

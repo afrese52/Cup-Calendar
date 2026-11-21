@@ -92,6 +92,29 @@ function formatRetryWait(seconds: number): string {
   return `${minutes} ${minutes === 1 ? 'Minute' : 'Minuten'}`;
 }
 
+function isWeakPasswordError(error: unknown): boolean {
+  const errorDetails =
+    typeof error === 'object' && error !== null
+      ? (error as { message?: unknown; code?: unknown })
+      : {};
+  const rawMessage =
+    error instanceof Error
+      ? error.message
+      : typeof errorDetails.message === 'string'
+        ? errorDetails.message
+        : '';
+  const message = rawMessage.toLowerCase();
+  const code = typeof errorDetails.code === 'string' ? errorDetails.code.toLowerCase() : '';
+
+  return (
+    code === 'weak_password'
+    || code === 'password_too_short'
+    || message.includes('password should be at least')
+    || message.includes('password is too short')
+    || message.includes('weak password')
+  );
+}
+
 export function friendlyAuthError(
   error: unknown,
   fallback = 'Das hat nicht geklappt. Bitte versuche es erneut.',
@@ -205,13 +228,7 @@ export function friendlyAuthError(
   ) {
     return 'Der Wiederherstellungslink ist ungültig, abgelaufen oder wurde bereits verwendet. Fordere bitte einen neuen Link an.';
   }
-  if (
-    code === 'weak_password'
-    || code === 'password_too_short'
-    || message.includes('password should be at least')
-    || message.includes('password is too short')
-    || message.includes('weak password')
-  ) {
+  if (isWeakPasswordError(error)) {
     const minimumLength = rawMessage.match(/(?:at least|minimum(?: of)?)\s+(\d+)\s+characters?/i)?.[1];
     return minimumLength
       ? `Das Passwort muss mindestens ${minimumLength} Zeichen lang sein.`
@@ -475,15 +492,17 @@ export async function submitAccountAuth(
   } catch (error) {
     return {
       ok: false,
-      error: friendlyAuthError(
-        error,
-        mode === 'forgot-password'
-          ? 'Die E-Mail konnte nicht angefordert werden. Bitte versuche es erneut.'
-          : mode === 'sign-up'
-            ? 'Die Registrierung ist fehlgeschlagen. Bitte versuche es erneut.'
-            : 'Die Anmeldung ist fehlgeschlagen. Bitte versuche es erneut.',
-        { includeUnknownDetails: mode === 'forgot-password' },
-      ),
+      error: mode === 'sign-in' && isWeakPasswordError(error)
+        ? 'E-Mail-Adresse oder Passwort stimmen nicht. Prüfe deine Eingaben oder fordere einen neuen Passwort-Link an.'
+        : friendlyAuthError(
+            error,
+            mode === 'forgot-password'
+              ? 'Die E-Mail konnte nicht angefordert werden. Bitte versuche es erneut.'
+              : mode === 'sign-up'
+                ? 'Die Registrierung ist fehlgeschlagen. Bitte versuche es erneut.'
+                : 'Die Anmeldung ist fehlgeschlagen. Bitte versuche es erneut.',
+            { includeUnknownDetails: mode === 'forgot-password' },
+          ),
     };
   }
 }
