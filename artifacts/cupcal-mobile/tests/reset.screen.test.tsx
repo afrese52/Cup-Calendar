@@ -138,6 +138,34 @@ test('zeigt die geltende Passwortlänge vor dem Speichern', async () => {
   expect(view.getByTestId('reset-password-submit-button')).toBeTruthy();
 });
 
+test('weist beim Zurücksetzen fünf Emojis sichtbar ab und akzeptiert sechs', async () => {
+  mockSaveNewPassword.mockImplementation(async (password: string) => {
+    if ([...password].length < 6) {
+      throw Object.assign(new Error('Password is too weak'), { code: 'weak_password' });
+    }
+  });
+
+  const view = await render(<ResetPasswordScreen />);
+  await waitFor(() => expect(view.getByTestId('reset-password-submit-button')).toBeTruthy());
+  await fireEvent.changeText(view.getByTestId('reset-password-input'), '😀'.repeat(5));
+  await fireEvent.changeText(view.getByTestId('reset-password-confirm-input'), '😀'.repeat(5));
+  await fireEvent.press(view.getByTestId('reset-password-submit-button'));
+
+  expect(await view.findByText(
+    'Das Passwort ist zu kurz oder zu unsicher. Bitte wähle ein stärkeres Passwort.',
+  )).toBeTruthy();
+  expect(view.getByTestId('reset-password-submit-button')).toBeTruthy();
+  expect(mockSaveNewPassword).toHaveBeenCalledTimes(1);
+  expect(mockSaveNewPassword).toHaveBeenCalledWith('😀'.repeat(5));
+
+  await fireEvent.changeText(view.getByTestId('reset-password-input'), '😀'.repeat(6));
+  await fireEvent.changeText(view.getByTestId('reset-password-confirm-input'), '😀'.repeat(6));
+  await fireEvent.press(view.getByTestId('reset-password-submit-button'));
+
+  expect(await view.findByText('Passwort geändert')).toBeTruthy();
+  expect(mockSaveNewPassword).toHaveBeenNthCalledWith(2, '😀'.repeat(6));
+});
+
 test.each([
   { field: 'Neues Passwort', testID: 'reset-password-input' },
   { field: 'Passwortbestätigung', testID: 'reset-password-confirm-input' },

@@ -368,6 +368,32 @@ test('beschriftet E-Mail- und Passwortfelder passend zu Anmeldung und Registrier
   )).toBeTruthy();
 });
 
+test('weist bei der Registrierung fünf Emojis sichtbar ab und akzeptiert sechs', async () => {
+  const view = await openSettings();
+  await fireEvent.press(view.getByTestId('auth-mode-toggle'));
+  await fireEvent.changeText(view.getByTestId('auth-email-input'), 'test@example.invalid');
+  await fireEvent.changeText(view.getByTestId('auth-password-input'), '😀'.repeat(5));
+
+  await fireEvent.press(view.getByTestId('auth-submit-button'));
+
+  expect(await view.findByText(
+    'Das Passwort muss mindestens 6 Zeichen lang sein. CupCal zählt einzelne Unicode-Zeichen: Manche Emojis bestehen aus mehreren Zeichen; Akzentbuchstaben zählen je nach Schreibweise als ein oder zwei Zeichen.',
+  )).toBeTruthy();
+  expect(auth.signUp).not.toHaveBeenCalled();
+
+  await fireEvent.changeText(view.getByTestId('auth-password-input'), '😀'.repeat(6));
+  await fireEvent.press(view.getByTestId('auth-submit-button'));
+
+  expect(await view.findByText(
+    'Dein Konto ist erstellt. Bitte bestätige deine E-Mail-Adresse über den Link in deinem Postfach.',
+  )).toBeTruthy();
+  expect(auth.signUp).toHaveBeenCalledWith({
+    email: 'test@example.invalid',
+    password: '😀'.repeat(6),
+    options: { emailRedirectTo: 'cupcal-test://auth/confirm' },
+  });
+});
+
 test('zeigt einen Anmeldefehler sichtbar an', async () => {
   auth.signInWithPassword.mockResolvedValue({
     error: new Error('Invalid login credentials'),
