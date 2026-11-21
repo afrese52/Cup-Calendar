@@ -17,13 +17,13 @@ import * as ReactNative from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
 import { useColors } from '@/hooks/useColors';
+import { PASSWORD_LENGTH_POLICY_MESSAGE } from '@/services/passwordRecovery';
 import {
   friendlyAuthError,
   getRateLimitRetryAfterSeconds,
   handlePasswordResetUrl,
   isPasswordRecoveryPending,
   markPasswordRecoverySession,
-  PASSWORD_MIN_LENGTH,
   saveNewPassword,
   supabase,
 } from '@/services/supabase';
@@ -296,7 +296,7 @@ export default function ResetPasswordScreen() {
         {!isCheckingLink && isRecoveryReady && !isSaved ? (
           <>
             <Text testID="reset-password-policy" style={[styles.passwordPolicy, { color: colors.mutedForeground }]}>
-              Mindestens {PASSWORD_MIN_LENGTH} Zeichen. Es sind keine weiteren Zeichenregeln erforderlich.
+              {PASSWORD_LENGTH_POLICY_MESSAGE}
             </Text>
             <View style={[styles.inputRow, { backgroundColor: colors.input, borderColor: colors.border }]}>
               <TextInput

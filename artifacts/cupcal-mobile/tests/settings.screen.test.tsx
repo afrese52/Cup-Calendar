@@ -363,7 +363,9 @@ test('beschriftet E-Mail- und Passwortfelder passend zu Anmeldung und Registrier
   expect(view.getByTestId('auth-password-input').props.accessibilityHint).toBe(
     'Wähle das Passwort für dein CupCal-Konto.',
   );
-  expect(view.getByText('Mindestens 6 Zeichen. Es sind keine weiteren Zeichenregeln erforderlich.')).toBeTruthy();
+  expect(view.getByText(
+    'Mindestens 6 Zeichen. CupCal zählt einzelne Unicode-Zeichen: Manche Emojis bestehen aus mehreren Zeichen; Akzentbuchstaben zählen je nach Schreibweise als ein oder zwei Zeichen.',
+  )).toBeTruthy();
 });
 
 test('zeigt einen Anmeldefehler sichtbar an', async () => {

@@ -7,11 +7,16 @@ type PasswordRecoveryAuth = Pick<
 
 export const PASSWORD_MIN_LENGTH = 6;
 
+export const PASSWORD_LENGTH_POLICY_NOTE =
+  'CupCal zählt einzelne Unicode-Zeichen: Manche Emojis bestehen aus mehreren Zeichen; Akzentbuchstaben zählen je nach Schreibweise als ein oder zwei Zeichen.';
+export const PASSWORD_LENGTH_POLICY_MESSAGE =
+  `Mindestens ${PASSWORD_MIN_LENGTH} Zeichen. ${PASSWORD_LENGTH_POLICY_NOTE}`;
+
 const passwordResetFlowMarker = 'cupcal-password-reset';
 
 export function passwordLengthRequirementError(password: string): string | null {
   return [...password].length < PASSWORD_MIN_LENGTH
-    ? `Das Passwort muss mindestens ${PASSWORD_MIN_LENGTH} Zeichen lang sein.`
+    ? `Das Passwort muss mindestens ${PASSWORD_MIN_LENGTH} Zeichen lang sein. ${PASSWORD_LENGTH_POLICY_NOTE}`
     : null;
 }
 

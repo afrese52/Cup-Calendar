@@ -131,7 +131,9 @@ test('zeigt die geltende Passwortlänge vor dem Speichern', async () => {
   const view = await render(<ResetPasswordScreen />);
 
   expect(
-    await view.findByText('Mindestens 6 Zeichen. Es sind keine weiteren Zeichenregeln erforderlich.'),
+    await view.findByText(
+      'Mindestens 6 Zeichen. CupCal zählt einzelne Unicode-Zeichen: Manche Emojis bestehen aus mehreren Zeichen; Akzentbuchstaben zählen je nach Schreibweise als ein oder zwei Zeichen.',
+    ),
   ).toBeTruthy();
   expect(view.getByTestId('reset-password-submit-button')).toBeTruthy();
 });

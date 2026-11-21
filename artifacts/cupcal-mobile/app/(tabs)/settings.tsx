@@ -35,7 +35,7 @@ import {
   submitAccountAuth,
   watchAuthSession,
 } from '@/services/accountAuth';
-import { PASSWORD_MIN_LENGTH } from '@/services/passwordRecovery';
+import { PASSWORD_LENGTH_POLICY_MESSAGE } from '@/services/passwordRecovery';
 import {
   getAccountDeletionRedirectUrl,
   getEmailConfirmationRedirectUrl,
@@ -800,7 +800,7 @@ export default function SettingsScreen() {
                   testID="auth-password-requirement"
                   style={[styles.accountSubtitle, { color: colors.mutedForeground }]}
                 >
-                  Mindestens {PASSWORD_MIN_LENGTH} Zeichen. Es sind keine weiteren Zeichenregeln erforderlich.
+                  {PASSWORD_LENGTH_POLICY_MESSAGE}
                 </Text>
               ) : null}
               {authError ? (

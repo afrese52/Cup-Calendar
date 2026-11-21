@@ -259,7 +259,7 @@ test('prüft die Unicode-Mindestlänge vor der Registrierung', async (t) => {
 
     assert.deepEqual(result, {
       ok: false,
-      error: 'Das Passwort muss mindestens 6 Zeichen lang sein.',
+      error: 'Das Passwort muss mindestens 6 Zeichen lang sein. CupCal zählt einzelne Unicode-Zeichen: Manche Emojis bestehen aus mehreren Zeichen; Akzentbuchstaben zählen je nach Schreibweise als ein oder zwei Zeichen.',
     });
     assert.equal(called, false);
   });
@@ -302,7 +302,7 @@ test('weist dasselbe kurze Passwort vor der Registrierungsanfrage ab', async () 
 
   assert.deepEqual(result, {
     ok: false,
-    error: 'Das Passwort muss mindestens 6 Zeichen lang sein.',
+    error: 'Das Passwort muss mindestens 6 Zeichen lang sein. CupCal zählt einzelne Unicode-Zeichen: Manche Emojis bestehen aus mehreren Zeichen; Akzentbuchstaben zählen je nach Schreibweise als ein oder zwei Zeichen.',
   });
   assert.equal(called, false);
 });

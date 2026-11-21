@@ -305,6 +305,18 @@ test('weist fünf Emoji-Codepoints vor der Serveranfrage ab', async () => {
   assert.equal(recovery.isPending(), true);
 });
 
+for (const [kind, password] of [
+  ['Emoji', '😀'.repeat(PASSWORD_MIN_LENGTH - 1)],
+  ['Akzentbuchstaben', 'é'.repeat(PASSWORD_MIN_LENGTH - 1)],
+]) {
+  test(`erklärt die lokale Unicode-Grenze für ${kind} verständlich`, () => {
+    assert.equal(
+      passwordLengthRequirementError(password),
+      'Das Passwort muss mindestens 6 Zeichen lang sein. CupCal zählt einzelne Unicode-Zeichen: Manche Emojis bestehen aus mehreren Zeichen; Akzentbuchstaben zählen je nach Schreibweise als ein oder zwei Zeichen.',
+    );
+  });
+}
+
 test('zählt Unicode-Passwörter lokal nach Unicode-Codepoints', () => {
   const passwords = [
     { value: '😀'.repeat(5), accepted: false },
