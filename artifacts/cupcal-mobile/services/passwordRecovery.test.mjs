@@ -305,6 +305,57 @@ test('weist fünf Emoji-Codepoints vor der Serveranfrage ab', async () => {
   assert.equal(recovery.isPending(), true);
 });
 
+test('zählt zusammengesetzte Emojis bei der Passwortwiederherstellung nach Codepoints', async (t) => {
+  const cases = [
+    {
+      name: 'Hautfarbton-Emojis unter der Grenze',
+      password: '👍🏽👍🏽',
+      accepted: false,
+    },
+    {
+      name: 'Hautfarbton-Emojis genau an der Grenze',
+      password: '👍🏽'.repeat(PASSWORD_MIN_LENGTH / 2),
+      accepted: true,
+    },
+    {
+      name: 'ZWJ-Emoji unter der Grenze',
+      password: '👩‍💻',
+      accepted: false,
+    },
+    {
+      name: 'ZWJ-Emojis genau an der Grenze',
+      password: '👩‍💻'.repeat(PASSWORD_MIN_LENGTH / 3),
+      accepted: true,
+    },
+  ];
+
+  for (const { name, password, accepted } of cases) {
+    await t.test(name, async () => {
+      assert.equal(Array.from(password).length < PASSWORD_MIN_LENGTH, !accepted);
+      let updatedPassword;
+      const recovery = createPasswordRecovery(createAuth({
+        updateUser: async ({ password: submittedPassword }) => {
+          updatedPassword = submittedPassword;
+          return { error: null };
+        },
+      }));
+      recovery.markRecoverySession(true);
+
+      if (accepted) {
+        await recovery.saveNewPassword(password);
+      } else {
+        await assert.rejects(
+          recovery.saveNewPassword(password),
+          new RegExp(`mindestens ${PASSWORD_MIN_LENGTH} Zeichen lang sein`, 'i'),
+        );
+      }
+
+      assert.equal(updatedPassword, accepted ? password : undefined);
+      assert.equal(recovery.isPending(), accepted ? false : true);
+    });
+  }
+});
+
 for (const [kind, password] of [
   ['Emoji', '😀'.repeat(PASSWORD_MIN_LENGTH - 1)],
   ['Akzentbuchstaben', 'é'.repeat(PASSWORD_MIN_LENGTH - 1)],

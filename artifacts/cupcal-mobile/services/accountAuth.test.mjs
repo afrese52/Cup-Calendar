@@ -285,6 +285,53 @@ test('prüft die Unicode-Mindestlänge vor der Registrierung', async (t) => {
   });
 });
 
+test('zählt zusammengesetzte Emojis bei der Registrierung nach Codepoints', async (t) => {
+  const cases = [
+    {
+      name: 'Hautfarbton-Emojis unter der Grenze',
+      password: '👍🏽👍🏽',
+      accepted: false,
+    },
+    {
+      name: 'Hautfarbton-Emojis genau an der Grenze',
+      password: '👍🏽'.repeat(3),
+      accepted: true,
+    },
+    {
+      name: 'ZWJ-Emoji unter der Grenze',
+      password: '👩‍💻',
+      accepted: false,
+    },
+    {
+      name: 'ZWJ-Emojis genau an der Grenze',
+      password: '👩‍💻'.repeat(2),
+      accepted: true,
+    },
+  ];
+
+  for (const { name, password, accepted } of cases) {
+    await t.test(name, async () => {
+      assert.equal(Array.from(password).length < 6, !accepted);
+      let receivedPassword;
+      const result = await submitAccountAuth(createAuth({
+        signUp: async ({ password: submittedPassword }) => {
+          receivedPassword = submittedPassword;
+          return { data: { session: savedSession }, error: null };
+        },
+      }), {
+        mode: 'sign-up',
+        email: 'test@example.invalid',
+        password,
+        emailConfirmationRedirectTo: 'cupcal-android://auth/confirm',
+        requestPasswordReset: async () => {},
+      });
+
+      assert.equal(result.ok, accepted);
+      assert.equal(receivedPassword, accepted ? password : undefined);
+    });
+  }
+});
+
 test('weist dasselbe kurze Passwort vor der Registrierungsanfrage ab', async () => {
   let called = false;
   const result = await submitAccountAuth(createAuth({
