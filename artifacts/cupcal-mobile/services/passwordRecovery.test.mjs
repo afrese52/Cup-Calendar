@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict';
-import { randomUUID } from 'node:crypto';
 import test from 'node:test';
 import { createClient } from '@supabase/supabase-js';
 import {
@@ -762,20 +761,38 @@ test('verarbeitet ältere Wiederherstellungslinks mit Token im URL-Fragment', as
 const livePasswordTestEnabled =
   process.env.CUPCAL_RUN_SUPABASE_PASSWORD_LIVE_TEST === '1';
 
+function isPrivilegedSupabaseKey(key) {
+  if (key.startsWith('sb_secret_')) return true;
+
+  const [, payload] = key.split('.');
+  if (!payload) return false;
+
+  try {
+    return JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')).role === 'service_role';
+  } catch {
+    return false;
+  }
+}
+
 test(
   'vergleicht die Unicode-Mindestlänge mit Supabase über ein entbehrliches Testkonto',
   { skip: !livePasswordTestEnabled },
   async () => {
+    const supabaseUrl = (
+      process.env.SUPABASE_URL ??
+      process.env.EXPO_PUBLIC_SUPABASE_URL ??
+      ''
+    ).trim();
     const publishableKey =
       process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
       process.env.SUPABASE_PUBLISHABLE_KEY ??
       process.env.SUPABASE_ANON_KEY;
-    const requiredEnv = [
-      'SUPABASE_URL',
-      'SUPABASE_SERVICE_ROLE_KEY',
-    ];
     const missingEnv = [
-      ...requiredEnv.filter((name) => !process.env[name]?.trim()),
+      !supabaseUrl && 'SUPABASE_URL or EXPO_PUBLIC_SUPABASE_URL',
+      !process.env.CUPCAL_SUPABASE_PASSWORD_TEST_EMAIL?.trim() &&
+        'CUPCAL_SUPABASE_PASSWORD_TEST_EMAIL',
+      !process.env.CUPCAL_SUPABASE_PASSWORD_TEST_PASSWORD &&
+        'CUPCAL_SUPABASE_PASSWORD_TEST_PASSWORD',
       !publishableKey?.trim() && 'EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY or SUPABASE_ANON_KEY',
     ].filter(Boolean);
     assert.deepEqual(
@@ -783,39 +800,33 @@ test(
       [],
       `Für den opt-in Live-Test fehlen: ${missingEnv.join(', ')}`,
     );
-
-    const supabaseUrl = process.env.SUPABASE_URL.trim();
-    const admin = createClient(
-      supabaseUrl,
-      process.env.SUPABASE_SERVICE_ROLE_KEY,
-      { auth: { autoRefreshToken: false, persistSession: false } },
+    assert.equal(
+      isPrivilegedSupabaseKey(publishableKey.trim()),
+      false,
+      'Der Live-Test akzeptiert ausschließlich einen öffentlichen Publishable- oder Anon-Key, keinen Service-Role- oder Secret-Key.',
     );
+
     const testClient = createClient(
       supabaseUrl,
-      publishableKey,
+      publishableKey.trim(),
       { auth: { autoRefreshToken: false, persistSession: false } },
     );
-    const email = `cupcal-unicode-password-${randomUUID()}@example.com`;
-    const initialPassword = `CupCal-${randomUUID()}-test`;
-    let testUserId;
+    const email = process.env.CUPCAL_SUPABASE_PASSWORD_TEST_EMAIL.trim();
+    const initialPassword = process.env.CUPCAL_SUPABASE_PASSWORD_TEST_PASSWORD;
+    let signedInDisposableAccount = false;
 
     try {
-      const { data: created, error: createError } = await admin.auth.admin.createUser({
-        email,
-        password: initialPassword,
-        email_confirm: true,
-        user_metadata: { cupcal_unicode_password_test: true },
-      });
-      assert.ifError(createError);
-      assert.ok(created.user, 'Das entbehrliche Supabase-Testkonto wurde nicht angelegt.');
-      testUserId = created.user.id;
-
       const { data: signedIn, error: signInError } = await testClient.auth.signInWithPassword({
         email,
         password: initialPassword,
       });
       assert.ifError(signInError);
-      assert.equal(signedIn.user?.id, testUserId);
+      assert.equal(
+        signedIn.user?.user_metadata?.cupcal_disposable_password_test,
+        true,
+        'Das angemeldete Konto ist nicht als cupcal_disposable_password_test markiert. Verwende ausschließlich ein eigens dafür angelegtes Wegwerf-Konto.',
+      );
+      signedInDisposableAccount = true;
 
       // Supabase counts UTF-8 bytes; CupCal intentionally keeps its six-codepoint
       // UI rule, which is stricter for multibyte passwords but cannot pass a
@@ -911,11 +922,19 @@ test(
         );
       }
     } finally {
-      if (testUserId) {
-        const { error } = await admin.auth.admin.deleteUser(testUserId);
-        assert.ifError(error);
+      try {
+        if (signedInDisposableAccount) {
+          const { error } = await testClient.auth.updateUser({ password: initialPassword });
+          assert.equal(
+            error,
+            null,
+            `Das ursprüngliche Passwort des Wegwerf-Kontos konnte nicht wiederhergestellt werden${error?.message ? `: ${error.message}` : '.'}`,
+          );
+          await testClient.auth.signOut();
+        }
+      } finally {
+        await testClient.auth.dispose();
       }
-      await Promise.all([admin.auth.dispose(), testClient.auth.dispose()]);
     }
   },
 );
