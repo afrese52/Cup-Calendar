@@ -59,6 +59,7 @@ export default function ResetPasswordScreen() {
   const isSavingRef = useRef(false);
   const [isSaved, setIsSaved] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isSaveErrorAnnounced, setIsSaveErrorAnnounced] = useState(false);
   const [retryAvailableAt, setRetryAvailableAt] = useState<number | null>(null);
   const [retryWaitSeconds, setRetryWaitSeconds] = useState(0);
   const [retryWaitFinished, setRetryWaitFinished] = useState(false);
@@ -197,12 +198,14 @@ export default function ResetPasswordScreen() {
 
     const validationError = getPasswordValidationError(password, confirmPassword);
     if (validationError) {
+      setIsSaveErrorAnnounced(false);
       setErrorMessage(validationError);
       return;
     }
 
     isSavingRef.current = true;
     setIsSaving(true);
+    setIsSaveErrorAnnounced(false);
     setErrorMessage(null);
     setRetryAvailableAt(null);
     setRetryWaitSeconds(0);
@@ -230,6 +233,10 @@ export default function ResetPasswordScreen() {
         setRetryAvailableAt(Date.now() + retryAfterSeconds * 1_000);
         setRetryWaitSeconds(retryAfterSeconds);
         setRetryWaitFinished(false);
+      }
+      if (Platform.OS === 'ios') {
+        setIsSaveErrorAnnounced(true);
+        AccessibilityInfo.announceForAccessibility(message);
       }
       setErrorMessage(message);
     } finally {
@@ -359,7 +366,7 @@ export default function ResetPasswordScreen() {
         {errorMessage ? (
           <Text
             accessible
-            accessibilityRole={Platform.OS === 'ios' ? 'alert' : 'text'}
+            accessibilityRole={Platform.OS === 'ios' && !isSaveErrorAnnounced ? 'alert' : 'text'}
             accessibilityLiveRegion={Platform.OS === 'android' ? 'assertive' : undefined}
             style={[styles.notice, { color: colors.destructive }]}
           >

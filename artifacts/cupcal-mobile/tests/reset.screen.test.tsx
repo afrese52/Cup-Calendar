@@ -536,13 +536,12 @@ test.each(['ios', 'android'] as const)(
         'Keine Verbindung möglich. Prüfe deine Internetverbindung und versuche es erneut.',
       );
       expect(errorMessage.props.accessible).toBe(true);
-      expect(errorMessage.props.accessibilityRole).toBe(platform === 'ios' ? 'alert' : 'text');
+      expect(errorMessage.props.accessibilityRole).toBe('text');
       expect(errorMessage.props.accessibilityLiveRegion).toBe(platform === 'android' ? 'assertive' : undefined);
       expect(errorMessage.props.children).toContain('versuche es erneut');
-      expect(announceSpy).toHaveBeenCalledTimes(platform === 'ios' ? 1 : 0);
-      expect(announceSpy).not.toHaveBeenCalledWith(
-        'Keine Verbindung möglich. Prüfe deine Internetverbindung und versuche es erneut.',
-      );
+      const failureMessage = 'Keine Verbindung möglich. Prüfe deine Internetverbindung und versuche es erneut.';
+      expect(announceSpy).toHaveBeenCalledTimes(platform === 'ios' ? 2 : 0);
+      if (platform === 'ios') expect(announceSpy).toHaveBeenCalledWith(failureMessage);
       expect(view.getByTestId('reset-password-input').props.value).toBe('Mein-neues-Passwort-123');
       expect(view.getByTestId('reset-password-confirm-input').props.value).toBe('Mein-neues-Passwort-123');
       expect(view.getByTestId('reset-password-submit-button')).toBeTruthy();
@@ -552,6 +551,11 @@ test.each(['ios', 'android'] as const)(
       await fireEvent.press(view.getByTestId('reset-password-submit-button'));
 
       await waitFor(() => expect(view.getByText('Passwort geändert')).toBeTruthy());
+      expect(view.queryByText(failureMessage)).toBeNull();
+      expect(view.getByTestId('reset-password-success-message').props.children).toContain('Passwort ist gespeichert');
+      if (platform === 'ios') {
+        expect(announceSpy.mock.calls.filter(([announcement]) => announcement === failureMessage)).toHaveLength(1);
+      }
       expect(mockSaveNewPassword).toHaveBeenCalledTimes(2);
     } finally {
       announceSpy.mockRestore();
@@ -583,7 +587,8 @@ test('behält Eingaben und ermöglicht nach vorübergehender Passwort-Drosselung
   const errorMessage = await view.findByText(
     'Zu viele Versuche in kurzer Zeit. Warte bitte einige Minuten und versuche es dann erneut.',
   );
-  expect(errorMessage.props.accessibilityRole).toBe(Platform.OS === 'ios' ? 'alert' : 'text');
+  expect(errorMessage.props.accessibilityRole).toBe('text');
+  expect(errorMessage.props.accessibilityLiveRegion).toBe(Platform.OS === 'android' ? 'assertive' : undefined);
   expect(view.getByTestId('reset-password-input').props.value).toBe('Mein-neues-Passwort-123');
   expect(view.getByTestId('reset-password-confirm-input').props.value).toBe('Mein-neues-Passwort-123');
   expect(view.getByTestId('reset-password-submit-button').props.accessibilityState).toEqual({
@@ -658,7 +663,8 @@ test('gibt bei einem unerwarteten Speicherfehler eine zugängliche nächste Akti
   await fireEvent.press(view.getByTestId('reset-password-submit-button'));
 
   const errorMessage = await view.findByText('Das Passwort konnte nicht gespeichert werden. Bitte versuche es erneut.');
-  expect(errorMessage.props.accessibilityRole).toBe(Platform.OS === 'ios' ? 'alert' : 'text');
+  expect(errorMessage.props.accessibilityRole).toBe('text');
+  expect(errorMessage.props.accessibilityLiveRegion).toBe(Platform.OS === 'android' ? 'assertive' : undefined);
   expect(view.getByTestId('reset-password-submit-button')).toBeTruthy();
   expect(mockSaveNewPassword).toHaveBeenCalledTimes(1);
 });
@@ -686,7 +692,7 @@ test.each(['ios', 'android'] as const)(
         'Die Wiederherstellungssitzung ist abgelaufen oder ungültig. Bitte fordere in den Einstellungen einen neuen Wiederherstellungslink an.',
       );
       expect(errorMessage.props.accessible).toBe(true);
-      expect(errorMessage.props.accessibilityRole).toBe(platform === 'ios' ? 'alert' : 'text');
+      expect(errorMessage.props.accessibilityRole).toBe('text');
       expect(errorMessage.props.accessibilityLiveRegion).toBe(platform === 'android' ? 'assertive' : undefined);
       expect(view.queryByTestId('reset-password-input')).toBeNull();
       expect(view.queryByTestId('reset-password-confirm-input')).toBeNull();
@@ -743,7 +749,7 @@ test('speichert nach einer Passwort-Ablehnung beide korrigierten Eingaben erfolg
   const errorMessage = await view.findByText(
     'Das Passwort ist zu kurz oder zu unsicher. Bitte wähle ein stärkeres Passwort.',
   );
-  expect(errorMessage.props.accessibilityRole).toBe(Platform.OS === 'ios' ? 'alert' : 'text');
+  expect(errorMessage.props.accessibilityRole).toBe('text');
 
   await fireEvent.changeText(view.getByTestId('reset-password-input'), 'Mein-neues-Passwort-123');
   expect(
@@ -795,7 +801,7 @@ test('behält korrigierte Eingaben nach einer zweiten Passwort-Ablehnung für ei
     'Das Passwort konnte nicht gespeichert werden. Bitte versuche es erneut.',
   );
   expect(secondErrorMessage.props.accessible).toBe(true);
-  expect(secondErrorMessage.props.accessibilityRole).toBe(Platform.OS === 'ios' ? 'alert' : 'text');
+  expect(secondErrorMessage.props.accessibilityRole).toBe('text');
   expect(secondErrorMessage.props.accessibilityLiveRegion).toBe(Platform.OS === 'android' ? 'assertive' : undefined);
   expect(view.getByTestId('reset-password-input').props.value).toBe('Mein-neues-Passwort-123');
   expect(view.getByTestId('reset-password-confirm-input').props.value).toBe('Mein-neues-Passwort-123');
