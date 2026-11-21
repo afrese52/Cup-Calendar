@@ -127,6 +127,32 @@ test('meldet mit bereinigter E-Mail erfolgreich an', async () => {
   assert.deepEqual(result, { ok: true, message: 'Du bist angemeldet.' });
 });
 
+test('übergibt NFC- und NFD-Passwörter bei der Anmeldung unverändert', async () => {
+  const receivedPasswords = [];
+  const passwordNfc = 'é'.repeat(6);
+  const passwordNfd = 'e\u0301'.repeat(6);
+  const auth = createAuth({
+    signInWithPassword: async ({ password }) => {
+      receivedPasswords.push(password);
+      return { error: null };
+    },
+  });
+
+  for (const password of [passwordNfc, passwordNfd]) {
+    const result = await submitAccountAuth(auth, {
+      mode: 'sign-in',
+      email: 'test@example.invalid',
+      password,
+      requestPasswordReset: async () => {},
+    });
+    assert.equal(result.ok, true);
+  }
+
+  assert.notEqual(passwordNfc, passwordNfd);
+  assert.equal(passwordNfc.normalize('NFD'), passwordNfd);
+  assert.deepEqual(receivedPasswords, [passwordNfc, passwordNfd]);
+});
+
 test('lässt bestehende Konten mit einem kurzen Passwort anmelden', async () => {
   let receivedCredentials;
   const result = await submitAccountAuth(createAuth({

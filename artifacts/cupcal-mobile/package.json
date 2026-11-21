@@ -8,7 +8,7 @@
     "build": "node scripts/build.js",
     "serve": "node server/serve.js",
     "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test services/*.test.mjs && pnpm run test:screen",
-    "test:supabase-password-live": "CUPCAL_RUN_SUPABASE_PASSWORD_LIVE_TEST=1 node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test --test-name-pattern='Unicode-Mindestlänge mit Supabase' services/passwordRecovery.test.mjs",
+    "test:supabase-password-live": "CUPCAL_RUN_SUPABASE_PASSWORD_LIVE_TEST=1 node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test --test-name-pattern='Unicode-Mindestlänge mit Supabase|Unterscheidung von NFC- und NFD-Passwörtern' services/passwordRecovery.test.mjs",
     "test:supabase-password-recovery-live": "CUPCAL_RUN_SUPABASE_PASSWORD_RECOVERY_LIVE_TEST=1 node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test --test-name-pattern='Passwortgrenze in einer echten Supabase-Wiederherstellungssitzung' services/passwordRecovery.test.mjs",
     "test:screen": "jest --config jest.config.cjs --runInBand",
     "typecheck": "tsc -p tsconfig.json --noEmit"

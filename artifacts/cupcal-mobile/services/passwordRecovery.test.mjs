@@ -356,6 +356,26 @@ test('akzeptiert genau sechs Emoji-Codepoints beim Passwortwechsel', async () =>
   assert.equal(recovery.isPending(), false);
 });
 
+test('übergibt NFC- und NFD-Passwörter beim Passwortwechsel unverändert', async () => {
+  const updatedPasswords = [];
+  const passwords = ['é'.repeat(PASSWORD_MIN_LENGTH), 'e\u0301'.repeat(PASSWORD_MIN_LENGTH)];
+
+  for (const password of passwords) {
+    const recovery = createPasswordRecovery(createAuth({
+      updateUser: async ({ password: receivedPassword }) => {
+        updatedPasswords.push(receivedPassword);
+        return { error: null };
+      },
+    }));
+    recovery.markRecoverySession(true);
+    await recovery.saveNewPassword(password);
+  }
+
+  assert.notEqual(passwords[0], passwords[1]);
+  assert.equal(passwords[0].normalize('NFD'), passwords[1]);
+  assert.deepEqual(updatedPasswords, passwords);
+});
+
 test('erlaubt nur den einmaligen Passwortwechsel mit aktueller Sitzung', async () => {
   let updatedPassword;
   const recovery = createPasswordRecovery(createAuth({
@@ -929,6 +949,124 @@ test(
             error,
             null,
             `Das ursprüngliche Passwort des Wegwerf-Kontos konnte nicht wiederhergestellt werden${error?.message ? `: ${error.message}` : '.'}`,
+          );
+          await testClient.auth.signOut();
+        }
+      } finally {
+        await testClient.auth.dispose();
+      }
+    }
+  },
+);
+
+test(
+  'prüft die Unterscheidung von NFC- und NFD-Passwörtern mit einem entbehrlichen Supabase-Konto',
+  { skip: !livePasswordTestEnabled },
+  async () => {
+    const supabaseUrl = (
+      process.env.SUPABASE_URL ??
+      process.env.EXPO_PUBLIC_SUPABASE_URL ??
+      ''
+    ).trim();
+    const publishableKey =
+      process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
+      process.env.SUPABASE_PUBLISHABLE_KEY ??
+      process.env.SUPABASE_ANON_KEY;
+    const email = process.env.CUPCAL_SUPABASE_PASSWORD_TEST_EMAIL?.trim();
+    const initialPassword = process.env.CUPCAL_SUPABASE_PASSWORD_TEST_PASSWORD;
+    const missingEnv = [
+      !supabaseUrl && 'SUPABASE_URL or EXPO_PUBLIC_SUPABASE_URL',
+      !email && 'CUPCAL_SUPABASE_PASSWORD_TEST_EMAIL',
+      !initialPassword && 'CUPCAL_SUPABASE_PASSWORD_TEST_PASSWORD',
+      !publishableKey?.trim() && 'EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY or SUPABASE_ANON_KEY',
+    ].filter(Boolean);
+    assert.deepEqual(
+      missingEnv,
+      [],
+      `Für den opt-in Live-Test fehlen: ${missingEnv.join(', ')}`,
+    );
+    assert.equal(
+      isPrivilegedSupabaseKey(publishableKey.trim()),
+      false,
+      'Der Live-Test akzeptiert ausschließlich einen öffentlichen Publishable- oder Anon-Key, keinen Service-Role- oder Secret-Key.',
+    );
+
+    const testClient = createClient(
+      supabaseUrl,
+      publishableKey.trim(),
+      { auth: { autoRefreshToken: false, persistSession: false } },
+    );
+    const passwordNfc = 'é'.repeat(PASSWORD_MIN_LENGTH);
+    const passwordNfd = 'e\u0301'.repeat(PASSWORD_MIN_LENGTH);
+    let disposableUserId = null;
+    let currentPassword = initialPassword;
+
+    const signInAsDisposableAccount = async (password) => {
+      const { data, error } = await testClient.auth.signInWithPassword({ email, password });
+      assert.ifError(error);
+      assert.equal(data.user?.id, disposableUserId);
+      assert.equal(data.user?.user_metadata?.cupcal_disposable_password_test, true);
+      return data;
+    };
+
+    try {
+      const { data: initialSignIn, error: initialSignInError } =
+        await testClient.auth.signInWithPassword({ email, password: initialPassword });
+      assert.ifError(initialSignInError);
+      assert.equal(
+        initialSignIn.user?.user_metadata?.cupcal_disposable_password_test,
+        true,
+        'Das angemeldete Konto ist nicht als cupcal_disposable_password_test markiert. Verwende ausschließlich ein eigens dafür angelegtes Wegwerf-Konto.',
+      );
+      disposableUserId = initialSignIn.user.id;
+
+      assert.notEqual(passwordNfc, passwordNfd);
+      assert.equal(passwordNfc.normalize('NFD'), passwordNfd);
+
+      const { error: setNfcError } = await testClient.auth.updateUser({ password: passwordNfc });
+      assert.ifError(setNfcError);
+      currentPassword = passwordNfc;
+
+      await testClient.auth.signOut();
+      await signInAsDisposableAccount(passwordNfc);
+      await testClient.auth.signOut();
+
+      const { data: nfdWithNfcPassword, error: nfdWithNfcError } =
+        await testClient.auth.signInWithPassword({ email, password: passwordNfd });
+      assert.ok(
+        nfdWithNfcError,
+        'Supabase hat NFD als Anmeldepasswort akzeptiert, obwohl das Wegwerf-Konto mit dem unterscheidbaren NFC-Wert aktualisiert wurde.',
+      );
+      assert.equal(nfdWithNfcPassword.session, null);
+
+      await signInAsDisposableAccount(passwordNfc);
+      const { error: setNfdError } = await testClient.auth.updateUser({ password: passwordNfd });
+      assert.ifError(setNfdError);
+      currentPassword = passwordNfd;
+
+      await testClient.auth.signOut();
+      await signInAsDisposableAccount(passwordNfd);
+      await testClient.auth.signOut();
+
+      const { data: nfcWithNfdPassword, error: nfcWithNfdError } =
+        await testClient.auth.signInWithPassword({ email, password: passwordNfc });
+      assert.ok(
+        nfcWithNfdError,
+        'Supabase hat NFC als Anmeldepasswort akzeptiert, obwohl das Wegwerf-Konto mit dem unterscheidbaren NFD-Wert aktualisiert wurde.',
+      );
+      assert.equal(nfcWithNfdPassword.session, null);
+    } finally {
+      try {
+        if (disposableUserId) {
+          await testClient.auth.signOut();
+          await signInAsDisposableAccount(currentPassword);
+          const { error: restoreError } = await testClient.auth.updateUser({
+            password: initialPassword,
+          });
+          assert.equal(
+            restoreError,
+            null,
+            `Das ursprüngliche Passwort des Wegwerf-Kontos konnte nicht wiederhergestellt werden${restoreError?.message ? `: ${restoreError.message}` : '.'}`,
           );
           await testClient.auth.signOut();
         }
