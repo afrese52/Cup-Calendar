@@ -204,7 +204,7 @@ function App({ pathname }: AppProps = {}) {
           </article>
           <article className="faq-card">
             <h3>Wann kann ich CupCal herunterladen?</h3>
-            <p>CupCal ist derzeit noch nicht im Google Play Store oder Apple App Store verfügbar. Sobald offizielle Store-Links bereitstehen, veröffentlichen wir sie hier.</p>
+            <p>Die Android-Veröffentlichung ist für den 30. November 2026 geplant. Für iOS steht noch kein Termin fest. Offizielle Store-Links ergänzen wir, sobald sie verfügbar sind.</p>
           </article>
         </div>
       </section>
@@ -294,16 +294,23 @@ function App({ pathname }: AppProps = {}) {
         data-analytics-section="availability"
       >
         <div className="section-label">Ehrlich gesagt</div>
-        <h2 className="section-title">Noch nicht im Store.<br /><span>Aber auf dem Radar.</span></h2>
+        <h2 className="section-title">Android ab 30. November.<br /><span>iOS-Termin offen.</span></h2>
         <p className="section-intro">
-          CupCal ist aktuell noch nicht zum Download verfügbar. Sobald es einen offiziellen Store-Link gibt,
-          wird er hier ergänzt – bis dahin gibt es keinen Fake-Button und keinen falschen Umweg.
+          Die Veröffentlichung von CupCal für Android ist für den 30. November 2026 geplant.
+          Für iOS steht noch kein Termin fest. Offizielle Store-Links ergänzen wir, sobald sie verfügbar sind.
         </p>
         <div className="availability-panel" role="status" data-testid="status-download">
+          <CalendarDays className="availability-icon" aria-hidden="true" />
+          <div>
+            <strong>Android · 30. November 2026</strong>
+            <p>Geplante Veröffentlichung im Google Play Store.</p>
+          </div>
+        </div>
+        <div className="availability-panel" role="status" data-testid="status-ios">
           <Clock3 className="availability-icon" aria-hidden="true" />
           <div>
-            <strong>Download derzeit nicht verfügbar</strong>
-            <p>Es wurden noch keine verifizierten Download-Links gefunden. Schau später wieder vorbei.</p>
+            <strong>iOS · Termin noch offen</strong>
+            <p>Ein Veröffentlichungstermin für den Apple App Store steht noch nicht fest.</p>
           </div>
         </div>
         <div className="disclaimer">Inoffizielles Fanprojekt · Nicht mit Epic Games verbunden oder von Epic Games unterstützt</div>

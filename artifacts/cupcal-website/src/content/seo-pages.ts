@@ -50,7 +50,7 @@ export const seoTopicPages: SeoTopicPage[] = [
       {
         heading: 'Verfügbarkeit der App',
         paragraphs: [
-          'CupCal ist ein unabhängiges Community-Projekt. Die App ist derzeit noch nicht im Google Play Store oder Apple App Store verfügbar. Auf der Verfügbarkeitsseite stehen nur bestätigte Download-Informationen.',
+          'CupCal ist ein unabhängiges Community-Projekt. Die Android-Veröffentlichung ist für den 30. November 2026 geplant; für iOS steht der Termin noch aus. Auf der Verfügbarkeitsseite ergänzen wir offizielle Store-Links, sobald sie verfügbar sind.',
         ],
       },
     ],

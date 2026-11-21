@@ -199,6 +199,7 @@ h1, h2, h3, p { margin-top: 0; }
 .availability .section-title { max-width: 680px; margin-inline: auto; }
 .availability .section-intro { margin: 0 auto 28px; }
 .availability-panel { display: flex; align-items: center; gap: 14px; text-align: left; margin: 0 auto; width: min(100%, 590px); background: #111821; border: 1px solid #2a3540; padding: 19px 21px; border-radius: 12px; }
+.availability-panel + .availability-panel { margin-top: 10px; }
 .availability-icon { color: #d5f536; width: 22px; height: 22px; flex: none; }
 .availability-panel strong { display: block; font-size: 12px; }
 .availability-panel p { margin: 5px 0 0; font-size: 11px; color: #8793a1; line-height: 1.5; }
