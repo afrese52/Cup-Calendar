@@ -1186,6 +1186,32 @@ test('ermöglicht nach einem fehlgeschlagenen Wiederherstellungsversand einen ne
   });
 });
 
+test('entfernt den veralteten Wiederherstellungsfehler beim Ändern der E-Mail-Adresse', async () => {
+  auth.resetPasswordForEmail
+    .mockResolvedValueOnce({ error: new Error('Email rate limit exceeded') })
+    .mockResolvedValueOnce({ error: null });
+  const view = await openSettings();
+  await fireEvent.press(view.getByTestId('forgot-password-button'));
+  await fireEvent.changeText(view.getByTestId('auth-email-input'), 'old@example.invalid');
+
+  await fireEvent.press(view.getByTestId('auth-submit-button'));
+  expect(await view.findByTestId('auth-error-message')).toBeTruthy();
+
+  await fireEvent.changeText(view.getByTestId('auth-email-input'), 'new@example.invalid');
+  expect(view.queryByTestId('auth-error-message')).toBeNull();
+  expect(view.getByTestId('auth-email-input').props.value).toBe('new@example.invalid');
+
+  await fireEvent.press(view.getByTestId('auth-submit-button'));
+
+  expect(await view.findByTestId('auth-success-message')).toBeTruthy();
+  expect(auth.resetPasswordForEmail).toHaveBeenNthCalledWith(1, 'old@example.invalid', {
+    redirectTo: 'cupcal-test://auth/reset?flow=cupcal-password-reset',
+  });
+  expect(auth.resetPasswordForEmail).toHaveBeenNthCalledWith(2, 'new@example.invalid', {
+    redirectTo: 'cupcal-test://auth/reset?flow=cupcal-password-reset',
+  });
+});
+
 test('zeigt den Ladezustand und sperrt die Schaltflächen während der Linkanfrage', async () => {
   let finishReset!: (result: { error: null }) => void;
   auth.resetPasswordForEmail.mockImplementation(

@@ -123,6 +123,7 @@ export default function SettingsScreen() {
   const isRequestingAccountDeletionRef = useRef(false);
   const isSubmittingAuth = submittingAction !== null;
   const [authError, setAuthError] = useState<string | null>(null);
+  const recoveryErrorEmailRef = useRef<string | null>(null);
   const [authErrorFocusRequest, setAuthErrorFocusRequest] = useState(0);
   const authErrorRef = useRef<React.ComponentRef<typeof Text>>(null);
   const accountFocusRef = useRef<React.ComponentRef<typeof Text>>(null);
@@ -142,7 +143,8 @@ export default function SettingsScreen() {
   const sessionRef = useRef<Session | null>(session);
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
   const accountDeletionRequest = useRequestAccountDeletion();
-  const reportAuthError = (message: string) => {
+  const reportAuthError = (message: string, recoveryEmail: string | null = null) => {
+    recoveryErrorEmailRef.current = recoveryEmail;
     setAuthError(message);
     setAuthErrorFocusRequest((request) => request + 1);
   };
@@ -350,6 +352,7 @@ export default function SettingsScreen() {
     isSubmittingAuthRef.current = true;
     setSubmittingAction('submit');
     setAuthError(null);
+    recoveryErrorEmailRef.current = null;
     setAuthMessage(null);
     setRegistrationConfirmationEmail(null);
     try {
@@ -390,7 +393,10 @@ export default function SettingsScreen() {
         }
         if (result.clearPassword) setPassword('');
       } else {
-        reportAuthError(result.error);
+        reportAuthError(
+          result.error,
+          submittedMode === 'forgot-password' ? normalizedEmail : null,
+        );
       }
     } catch (error) {
       reportAuthError(friendlyAuthError(
@@ -401,7 +407,7 @@ export default function SettingsScreen() {
             ? 'Die E-Mail konnte nicht angefordert werden. Bitte versuche es erneut.'
             : 'Die Anmeldung ist fehlgeschlagen. Bitte versuche es erneut.',
         { includeUnknownDetails: submittedMode === 'forgot-password' },
-      ));
+      ), submittedMode === 'forgot-password' ? normalizedEmail : null);
     } finally {
       isSubmittingAuthRef.current = false;
       setSubmittingAction(null);
@@ -760,7 +766,19 @@ export default function SettingsScreen() {
                 selectionColor={colors.primary}
                 textContentType="emailAddress"
                 value={email}
-                onChangeText={setEmail}
+                onChangeText={(nextEmail) => {
+                  setEmail(nextEmail);
+                  const failedRecoveryEmail = recoveryErrorEmailRef.current;
+                  if (
+                    authMode === 'forgot-password'
+                    && authError
+                    && failedRecoveryEmail !== null
+                    && nextEmail.trim() !== failedRecoveryEmail
+                  ) {
+                    recoveryErrorEmailRef.current = null;
+                    setAuthError(null);
+                  }
+                }}
                 style={[
                   styles.input,
                   { backgroundColor: colors.input, borderColor: colors.border, color: colors.foreground },
