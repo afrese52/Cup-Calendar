@@ -13,6 +13,7 @@
     "test:seo:live": "node scripts/seo-smoke.mjs --live",
     "test:mobile-layout": "node scripts/check-mobile-layout.mjs",
     "test:cls": "node scripts/check-mobile-cls.mjs",
+    "test:mobile-performance": "node scripts/check-mobile-performance.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {
