@@ -14,10 +14,12 @@ type RemoteBookmark = {
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
-  const promise = new Promise<T>((resolvePromise) => {
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
     resolve = resolvePromise;
+    reject = rejectPromise;
   });
-  return { promise, resolve };
+  return { promise, resolve, reject };
 }
 
 jest.mock('@workspace/api-client-react', () => {
@@ -102,6 +104,7 @@ function BookmarkState() {
   const {
     bookmarkedIds,
     bookmarkSyncStatus,
+    bookmarkSyncError,
     storageError,
     canRetryLocalBookmarkLoad,
     toggleBookmark,
@@ -113,6 +116,7 @@ function BookmarkState() {
     <>
       <Text testID="bookmark-ids">{bookmarkedIds.join(',')}</Text>
       <Text testID="bookmark-sync-status">{bookmarkSyncStatus}</Text>
+      <Text testID="bookmark-sync-error">{bookmarkSyncError ?? ''}</Text>
       <Text testID="storage-error">{storageError ?? ''}</Text>
       <Text testID="can-retry-local-bookmark-load">{String(canRetryLocalBookmarkLoad)}</Text>
       <Pressable testID="toggle-bookmark" onPress={() => toggleBookmark('turnier-neu')}>
@@ -663,6 +667,50 @@ test('überschreibt neue Favoriten nicht mit einer verspäteten Sync-Antwort des
         userId === 'konto-a' && remote.some((bookmark) => bookmark.event_id === 'favorit-a'),
       ),
   ).toBe(false);
+});
+
+test('verwirft verspätete Sync-Fehler des vorherigen Kontos samt Screenreader-Ansage', async () => {
+  const accountAFetch = deferred<RemoteBookmark[]>();
+  bookmarkStore.loadBookmarksForUser.mockImplementation((userId: string | null) =>
+    Promise.resolve(userId === 'konto-b' ? ['favorit-b'] : []),
+  );
+  mockedSupabase.fetchRemoteBookmarks.mockImplementation((userId: string) =>
+    userId === 'konto-a'
+      ? accountAFetch.promise
+      : Promise.reject(new Error('network failed')),
+  );
+  const announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility').mockImplementation(() => {});
+  const view = await renderProvider();
+
+  await emitUser('konto-a');
+  await waitFor(() =>
+    expect(mockedSupabase.fetchRemoteBookmarks).toHaveBeenCalledWith('konto-a'),
+  );
+  await act(async () => {
+    mockedSupabase.__emitBookmarkRealtime();
+  });
+
+  await emitUser('konto-b');
+  await waitFor(() => expect(view.getByTestId('bookmark-ids').props.children).toBe('favorit-b'));
+  await waitFor(() =>
+    expect(view.getByTestId('bookmark-sync-status').props.children).toBe('pending'),
+  );
+  const accountBStatus = view.getByTestId('bookmark-sync-status').props.children;
+  const accountBError = view.getByTestId('bookmark-sync-error').props.children;
+  expect(accountBError).toBe(
+    'Die Synchronisierung ist gerade nicht möglich. Deine Favoriten bleiben auf diesem Gerät gespeichert.',
+  );
+  announce.mockClear();
+
+  await act(async () => {
+    accountAFetch.reject(new Error('late account A failure'));
+    await accountAFetch.promise.catch(() => undefined);
+  });
+
+  expect(view.getByTestId('bookmark-ids').props.children).toBe('favorit-b');
+  expect(view.getByTestId('bookmark-sync-status').props.children).toBe(accountBStatus);
+  expect(view.getByTestId('bookmark-sync-error').props.children).toBe(accountBError);
+  expect(announce).not.toHaveBeenCalled();
 });
 
 test('führt parallele Wiederholungen und Realtime-Auslöser für denselben Favoriten nur einmal aus', async () => {
