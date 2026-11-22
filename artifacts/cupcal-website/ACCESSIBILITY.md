@@ -9,8 +9,11 @@ Die drei Themenseiten verwenden dieselbe barrierearme Seitenstruktur:
 - kurze, eindeutige Namen für Themenkarten
 
 Der Website-Build prüft diese Struktur für die Startseite und alle drei
-Themenseiten. Den echten Tastatur- und Screenreader-Ablauf zusätzlich so
-wiederholen:
+Themenseiten. Nach dem Produktionsbuild prüft
+`pnpm --filter @workspace/cupcal-website run test:mobile-layout` die drei
+Themenseiten bei 320 und 360 CSS-Pixeln auf horizontalen Überlauf sowie
+sichtbare, fokussierbare Navigation, Breadcrumbs, Karten und Links. Den echten
+Tastatur- und Screenreader-Ablauf zusätzlich so wiederholen:
 
 ## Tastatur
 
@@ -31,8 +34,8 @@ Für jede Seite öffnen:
    in der Themen-Navigation markieren. Mit `Alt+Links` zum vorherigen Thema
    zurückkehren.
 5. Die Prüfung bei breitem Desktop-Fenster sowie bei schmaler Ansicht
-   (ungefähr 360 CSS-Pixel) wiederholen. Auf schmalen Ansichten bleibt die
-   Themen-Navigation sichtbar und horizontal per Tastatur erreichbar.
+   (320 und 360 CSS-Pixel) wiederholen. Auf schmalen Ansichten darf sich die
+   Themen-Navigation auf mehrere Zeilen verteilen, ohne Links abzuschneiden.
 
 ## Screenreader
 

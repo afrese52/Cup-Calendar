@@ -11,6 +11,7 @@
     "test:serve": "node --test server/serve.test.js",
     "test:seo": "node scripts/seo-smoke.mjs",
     "test:seo:live": "node scripts/seo-smoke.mjs --live",
+    "test:mobile-layout": "node scripts/check-mobile-layout.mjs",
     "test:cls": "node scripts/check-mobile-cls.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
