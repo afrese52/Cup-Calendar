@@ -68,7 +68,7 @@ function App({ pathname }: AppProps = {}) {
   return (
     <div className="site-shell">
       <a className="skip-link" href="#main-content">Zum Inhalt springen</a>
-      <header className="container topbar">
+      <header className="container topbar home-topbar">
         <a
           className="brand"
           href="/"

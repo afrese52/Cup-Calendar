@@ -13,6 +13,7 @@ const publicRoot = path.join(projectRoot, 'dist/public');
 const viewports = [
   { label: '320×844 Hochformat', width: 320, height: 844 },
   { label: '360×800 Hochformat', width: 360, height: 800 },
+  { label: '200 % Zoom (1280 → 640 CSS-Pixel)', width: 640, height: 900 },
   { label: '640×360 Querformat', width: 640, height: 360 },
   { label: '844×390 Querformat', width: 844, height: 390 },
 ];
@@ -196,7 +197,7 @@ async function configureViewport(send, viewport) {
     width: viewport.width,
     height: viewport.height,
     deviceScaleFactor: 1,
-    mobile: true,
+    mobile: viewport.mobile ?? true,
   });
 }
 
@@ -229,6 +230,35 @@ async function inspectPage(send, route) {
           Number(style.opacity) > 0 && rect.width > 0 && rect.height > 0;
       };
       const viewportWidth = document.documentElement.clientWidth;
+      const header = document.querySelector('.topbar');
+      const headerItems = Array.from(header?.children ?? []).filter(visible);
+      const headerOverlaps = [];
+      for (let index = 0; index < headerItems.length; index += 1) {
+        for (let otherIndex = index + 1; otherIndex < headerItems.length; otherIndex += 1) {
+          const first = headerItems[index].getBoundingClientRect();
+          const second = headerItems[otherIndex].getBoundingClientRect();
+          const overlapWidth = Math.min(first.right, second.right) - Math.max(first.left, second.left);
+          const overlapHeight = Math.min(first.bottom, second.bottom) - Math.max(first.top, second.top);
+          if (overlapWidth > 1 && overlapHeight > 1) {
+            headerOverlaps.push({
+              first: headerItems[index].className,
+              second: headerItems[otherIndex].className,
+            });
+          }
+        }
+      }
+      const zoomActions = Array.from(document.querySelectorAll(
+        '.topbar a, .hero-actions a, .offline-inner a, .topic-card, .topic-footer-home, .topic-footer-links a',
+      ))
+        .filter(visible)
+        .map((element) => {
+          const rect = element.getBoundingClientRect();
+          return {
+            label: element.getAttribute('aria-label') || element.textContent.trim().slice(0, 50),
+            insideViewport: rect.left >= -1 && rect.right <= viewportWidth + 1,
+            contentFits: element.scrollWidth <= element.clientWidth + 1,
+          };
+        });
       const rectData = (element) => {
         const rect = element.getBoundingClientRect();
         return { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom };
@@ -248,6 +278,7 @@ async function inspectPage(send, route) {
       const homepage = ${JSON.stringify(route)} === '/';
       const homepageHeading = homepage ? document.querySelector('#main-content h1') : null;
       const homepageLogo = homepage ? document.querySelector('.topbar .brand img') : null;
+      const homepageNavigation = homepage ? document.querySelector('.home-topbar .nav-links') : null;
       const homepageActions = homepage
         ? ['.hero-actions .button-primary', '.hero-actions .button-muted', '.topbar .nav-cta']
             .map((selector) => document.querySelector(selector))
@@ -380,9 +411,13 @@ async function inspectPage(send, route) {
         viewportWidth,
         deviceScreenWidth: screen.width,
         documentWidth: document.documentElement.scrollWidth,
+        headerOverlaps,
+        zoomActions,
         homepage,
         homepageHeadingVisible: visible(homepageHeading),
         homepageLogoVisible: visible(homepageLogo),
+        homepageNavigationVisible: visible(homepageNavigation),
+        homepageNavigationLinks: Array.from(homepageNavigation?.querySelectorAll('a[href]') ?? []).filter(visible).length,
         homepageActionsVisible: homepageActions.map(visible),
         homepageTopicLinks: homepage
           ? Array.from(document.querySelectorAll('.topic-directory .topic-card')).filter(visible).length
@@ -429,9 +464,16 @@ function assertPageLayout(page, viewport, result) {
   const issues = [];
   if (result.viewportWidth !== viewport.width) issues.push(`Viewport ist ${result.viewportWidth}px statt ${viewport.width}px breit`);
   if (result.documentWidth > viewport.width + 1) issues.push(`Seitenbreite ${result.documentWidth}px verursacht horizontales Scrollen`);
+  if (result.headerOverlaps.length > 0) issues.push('Elemente in der Kopfzeile überlappen sich');
+  if (result.zoomActions.some((action) => !action.insideViewport || !action.contentFits)) {
+    issues.push('Mindestens eine Aktion liegt außerhalb des sichtbaren Bereichs oder ihr Text wird abgeschnitten');
+  }
   if (result.homepage) {
     if (!result.homepageHeadingVisible) issues.push('Überschrift der Startseite fehlt oder ist nicht sichtbar');
     if (!result.homepageLogoVisible) issues.push('Logo der Startseite fehlt oder ist nicht sichtbar');
+    if (!result.homepageNavigationVisible || result.homepageNavigationLinks !== 4) {
+      issues.push('Startseiten-Navigation ist nicht vollständig sichtbar');
+    }
     if (result.homepageActionsVisible.length !== 3 || result.homepageActionsVisible.includes(false)) {
       issues.push('Mindestens eine Aktion der Startseite fehlt oder ist nicht sichtbar');
     }

@@ -54,3 +54,31 @@ Mit NVDA und Firefox oder TalkBack und Chrome jede der drei Seiten öffnen:
 Diese Schritte beschreiben die manuelle Prüfung mit echten Browsern und
 Screenreadern. Der Build-Smoke-Test prüft die gerenderte Semantik, ersetzt
 aber nicht den manuellen Fokus- und Ansagetest.
+
+## Browserzoom mit 200 Prozent
+
+Die wiederholbare Layoutprüfung verwendet Chromium im Headless-Modus. Eine
+Ansicht mit 640 CSS-Pixeln Breite entspricht bei einem 1280 Pixel breiten
+Browserfenster ungefähr 200 Prozent Zoom. Der Test lädt die Startseite und alle
+drei Themenseiten mit dieser Breite sowie bei 320 und 360 CSS-Pixeln. Er meldet
+horizontalen Seitenüberlauf, abgeschnittene Texte, überlappende Kopfzeilen und
+Aktionen, deren Text nicht vollständig in den Link passt.
+
+Vom Projektstamm aus ausführen:
+
+```sh
+PORT=19101 BASE_PATH=/ pnpm --filter @workspace/cupcal-website run build
+pnpm --filter @workspace/cupcal-website run test:large-text
+```
+
+Ergebnis der letzten Prüfung: alle vier Seiten bestanden die Ansichten mit
+640 CSS-Pixeln ohne horizontalen Überlauf oder abgeschnittene Aktionen. Die
+kleinen Ansichten mit 320 und 360 CSS-Pixeln bestanden ebenfalls.
+
+Für die manuelle Wiederholung im Browser ein 1280 Pixel breites Fenster auf
+200 Prozent Zoom stellen und nacheinander `/`, `/turnierkalender-app/`,
+`/turniertermine-organisieren/` und `/turnierzeiten-zeitzone/` öffnen. Den
+gesamten Inhalt bis zum Fußbereich durchgehen: Es darf keine horizontale
+Bildlaufleiste geben; Überschriften, Themenlinks und Schaltflächen müssen
+vollständig lesbar und erreichbar bleiben. Bei der Tastaturprüfung mit `Tab`
+müssen die Links sichtbar fokussiert werden können.
