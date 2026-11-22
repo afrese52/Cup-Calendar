@@ -540,3 +540,112 @@ test('verarbeitet den zweiten Bestätigungslink nach Ablehnung des ersten Kontos
     await client.auth.dispose();
   }
 });
+
+test('behält die aktive Sitzung nach abgelehnten Bestätigungscodes und akzeptiert danach einen gültigen Link', async () => {
+  const storage = createPersistentStorage();
+  const projectRef = 'rejected-confirmation-preserves-session';
+  const desiredUser = {
+    id: '00000000-0000-4000-8000-000000000041',
+    email: 'confirmed-account@example.invalid',
+    aud: 'authenticated',
+    role: 'authenticated',
+    app_metadata: {},
+    user_metadata: {},
+    created_at: new Date(0).toISOString(),
+  };
+  const desiredAccessToken = [
+    Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url'),
+    encodeJwtPayload({
+      sub: desiredUser.id,
+      email: desiredUser.email,
+      role: 'authenticated',
+      aud: 'authenticated',
+      exp: Math.floor(Date.now() / 1000) + 3600,
+    }),
+    'desired-account-signature',
+  ].join('.');
+  const confirmationAttempts = [
+    { code: 'rejected-code-one', flowId: '55555555-5555-4555-8555-555555555555' },
+    { code: 'rejected-code-two', flowId: '66666666-6666-4666-8666-666666666666' },
+    { code: 'valid-confirmation-code', flowId: '77777777-7777-4777-8777-777777777777' },
+  ];
+  for (const { flowId } of confirmationAttempts) {
+    await storage.setItem(
+      `sb-${projectRef}-auth-token-flow-${flowId}-code-verifier`,
+      JSON.stringify('confirmation-verifier/signup'),
+    );
+  }
+
+  const authFetch = async (input, init) => {
+    const url = new URL(String(input));
+    if (url.pathname.endsWith('/token')) {
+      const request = JSON.parse(String(init?.body));
+      if (request.auth_code !== 'valid-confirmation-code') {
+        return new Response(JSON.stringify({
+          message: 'The authorization code was rejected.',
+          code: 'invalid_grant',
+        }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      return new Response(JSON.stringify({
+        access_token: desiredAccessToken,
+        refresh_token: 'confirmed-desired-account',
+        token_type: 'bearer',
+        expires_in: 3600,
+        user: desiredUser,
+      }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    return fakeUserFetch(input, init);
+  };
+  const client = createCupCalSupabaseClient(
+    `https://${projectRef}.supabase.co`,
+    'test-publishable-key',
+    storage,
+    authFetch,
+  );
+
+  try {
+    const { error: saveError } = await client.auth.setSession({
+      access_token: accessToken,
+      refresh_token: 'existing-active-session',
+    });
+    assert.equal(saveError, null);
+    const storageKey = `sb-${projectRef}-auth-token`;
+    const initialStoredSession = await storage.getItem(storageKey);
+
+    for (const { code, flowId } of confirmationAttempts.slice(0, 2)) {
+      await assert.rejects(confirmEmailCode(client.auth, code, flowId));
+
+      const currentSession = await client.auth.getSession();
+      assert.equal(currentSession.error, null);
+      assert.equal(currentSession.data.session?.user.id, testUserId);
+      assert.equal(currentSession.data.session?.user.email, testEmail);
+      assert.equal(
+        await storage.getItem(storageKey),
+        initialStoredSession,
+        'ein abgelehnter Code darf die gespeicherte aktive Sitzung nicht verändern',
+      );
+    }
+
+    const confirmedSession = await confirmEmailCode(
+      client.auth,
+      'valid-confirmation-code',
+      confirmationAttempts[2].flowId,
+    );
+    assert.equal(confirmedSession.user.id, desiredUser.id);
+    assert.equal(confirmedSession.user.email, desiredUser.email);
+
+    const finalSession = await client.auth.getSession();
+    assert.equal(finalSession.error, null);
+    assert.equal(finalSession.data.session?.user.id, desiredUser.id);
+    assert.equal(finalSession.data.session?.user.email, desiredUser.email);
+  } finally {
+    await client.auth.dispose();
+  }
+});
