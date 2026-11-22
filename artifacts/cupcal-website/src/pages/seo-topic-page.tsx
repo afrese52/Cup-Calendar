@@ -16,7 +16,8 @@ export function SeoTopicPageView({ page }: SeoTopicPageViewProps) {
   const Icon = topicIcons[pageIndex] ?? CalendarDays;
 
   return (
-    <main className="site-shell topic-shell">
+    <div className="site-shell topic-shell">
+      <a className="skip-link" href="#main-content">Zum Inhalt springen</a>
       <header className="container topbar">
         <a
           className="brand"
@@ -59,6 +60,7 @@ export function SeoTopicPageView({ page }: SeoTopicPageViewProps) {
         </a>
       </header>
 
+      <main id="main-content" tabIndex={-1}>
       <article className="container topic-article" data-analytics-section="topic_article">
         <nav className="topic-breadcrumb" aria-label="Brotkrumennavigation">
           <a
@@ -119,6 +121,7 @@ export function SeoTopicPageView({ page }: SeoTopicPageViewProps) {
               href={topic.path}
               key={topic.slug}
               data-testid={`link-related-${topic.slug}`}
+              aria-label={`${topic.eyebrow}: ${topic.h1}`}
               onClick={() => trackEvent('site_navigation_click', {
                 destination: topic.slug,
                 placement: 'related_topic',
@@ -133,6 +136,7 @@ export function SeoTopicPageView({ page }: SeoTopicPageViewProps) {
         </div>
       </section>
 
+      </main>
       <footer className="footer">
         <div className="container footer-inner">
           <div className="footer-copy">© CupCal · Der Kalender für deinen Wettkampf-Alltag</div>
@@ -150,6 +154,6 @@ export function SeoTopicPageView({ page }: SeoTopicPageViewProps) {
           <div className="footer-note">Community-Projekt · Keine offizielle Verbindung zu Epic Games</div>
         </div>
       </footer>
-    </main>
+    </div>
   );
 }

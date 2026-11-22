@@ -114,6 +114,10 @@ try {
     vite.ssrLoadModule('/src/content/seo-pages.ts'),
   ]);
   const sitemap = await fs.readFile(sourceSitemapPath, 'utf8');
+  const sourceCss = await fs.readFile(path.join(projectRoot, 'src/index.css'), 'utf8');
+  if (!sourceCss.includes(':focus-visible') || !sourceCss.includes('.skip-link:focus-visible')) {
+    throw new Error('Der Tastaturfokus oder der sichtbare Sprunglink hat keinen Fokusstil.');
+  }
   const pageUrls = [`${SITE_ORIGIN}/`, ...seoTopicPages.map((page) => `${SITE_ORIGIN}${page.path}`)];
   if (new Set(pageUrls).size !== pageUrls.length) {
     throw new Error('Die Website enthält doppelte Canonical-URLs.');
@@ -145,6 +149,24 @@ try {
     }
     if (!renderedApp.includes(expectedHeading)) {
       throw new Error(`Die Seite ${pathname} enthält nicht ihre erwartete H1-Überschrift.`);
+    }
+    if (
+      !renderedApp.includes('href="#main-content"')
+      || !renderedApp.includes('<main id="main-content" tabindex="-1">')
+    ) {
+      throw new Error(`Die Seite ${pathname} enthält keinen Tastatur-Sprunglink zum Inhalt.`);
+    }
+    if ((renderedApp.match(/<main\b/g) || []).length !== 1) {
+      throw new Error(`Die Seite ${pathname} muss genau einen Hauptbereich besitzen.`);
+    }
+    if (!renderedApp.includes(page ? 'aria-label="CupCal-Themen"' : 'aria-label="Hauptnavigation"')) {
+      throw new Error(`Die Navigation für ${pathname} hat keinen verständlichen Namen.`);
+    }
+    if (page && (
+      !renderedApp.includes('aria-label="Brotkrumennavigation"')
+      || !renderedApp.includes('aria-current="page"')
+    )) {
+      throw new Error(`Die Themenseite ${pathname} enthält keine erkennbare Brotkrumennavigation.`);
     }
 
     let pageHtml = page

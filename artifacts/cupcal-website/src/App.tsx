@@ -66,7 +66,8 @@ function App({ pathname }: AppProps = {}) {
   if (topicPage) return <SeoTopicPageView page={topicPage} />;
 
   return (
-    <main className="site-shell">
+    <div className="site-shell">
+      <a className="skip-link" href="#main-content">Zum Inhalt springen</a>
       <header className="container topbar">
         <a
           className="brand"
@@ -93,6 +94,7 @@ function App({ pathname }: AppProps = {}) {
         </a>
       </header>
 
+      <main id="main-content" tabIndex={-1}>
       <section className="container hero" id="start" data-testid="section-hero">
         <div className="hero-grid">
           <div>
@@ -122,7 +124,7 @@ function App({ pathname }: AppProps = {}) {
             </div>
             <div className="hero-note"><b>Für die Community gemacht.</b> Unabhängiges Fanprojekt.</div>
           </div>
-          <div className="hero-art" aria-label="CupCal App-Symbol und Vorschauhinweise" data-testid="visual-hero">
+          <div className="hero-art" role="img" aria-label="CupCal App-Symbol und Vorschauhinweise" data-testid="visual-hero">
             <div className="art-orbit" />
             <img className="hero-icon" src={appLogo} alt="CupCal-App-Logo mit goldenem Pokal und Kalender auf dunklem Grund" width={640} height={640} fetchPriority="high" />
             <div className="floating-tag tag-one">
@@ -333,6 +335,7 @@ function App({ pathname }: AppProps = {}) {
               href={page.path}
               key={page.slug}
               data-testid={`link-topic-${page.slug}`}
+              aria-label={`${page.eyebrow}: ${page.h1}`}
               onClick={() => trackEvent('site_navigation_click', {
                 destination: page.slug,
                 placement: 'home_topic_directory',
@@ -346,6 +349,7 @@ function App({ pathname }: AppProps = {}) {
           ))}
         </div>
       </section>
+      </main>
 
       <footer className="footer">
         <div className="container footer-inner">
@@ -368,7 +372,7 @@ function App({ pathname }: AppProps = {}) {
           <div className="footer-note">Community-Projekt · Keine offizielle Verbindung zu Epic Games</div>
         </div>
       </footer>
-    </main>
+    </div>
   );
 }
 
