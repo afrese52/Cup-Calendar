@@ -669,6 +669,68 @@ test('überschreibt neue Favoriten nicht mit einer verspäteten Sync-Antwort des
   ).toBe(false);
 });
 
+test('verwirft eine alte Sync-Antwort nach Ab- und erneuter Anmeldung desselben Kontos', async () => {
+  AppState.currentState = 'active';
+  const firstSessionExternalChange = deferred<RemoteBookmark[]>();
+  let accountAFetches = 0;
+  mockedSupabase.fetchRemoteBookmarks.mockImplementation((userId: string) => {
+    if (userId !== 'konto-a') return Promise.resolve([]);
+    accountAFetches += 1;
+    if (accountAFetches === 3) return firstSessionExternalChange.promise;
+    if (accountAFetches > 3) {
+      return Promise.resolve([{
+        event_id: 'favorit-neu',
+        is_favorite: true,
+        updated_at: '2026-01-01T00:00:00.000Z',
+        revision: 2,
+      }]);
+    }
+    return Promise.resolve([]);
+  });
+  const announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility').mockImplementation(() => {});
+  const view = await renderProvider();
+
+  await emitUser('konto-a');
+  await waitFor(() => expect(accountAFetches).toBe(2));
+  await waitFor(() => expect(view.getByTestId('bookmark-sync-status').props.children).toBe('synced'));
+
+  await act(async () => {
+    mockedSupabase.__emitBookmarkRealtime();
+  });
+  await waitFor(() => expect(accountAFetches).toBe(3));
+
+  await act(async () => {
+    mockedSupabase.__emitAuthStateChange('SIGNED_OUT', null);
+  });
+  await waitFor(() => expect(view.getByTestId('bookmark-ids').props.children).toBe(''));
+
+  await emitUser('konto-a');
+  await waitFor(() => expect(accountAFetches).toBe(5));
+  await waitFor(() => expect(view.getByTestId('bookmark-ids').props.children).toBe('favorit-neu'));
+  await waitFor(() => expect(view.getByTestId('bookmark-sync-status').props.children).toBe('synced'));
+  announce.mockClear();
+
+  await act(async () => {
+    firstSessionExternalChange.resolve([{
+      event_id: 'favorit-alt',
+      is_favorite: true,
+      updated_at: '2026-01-01T00:00:00.000Z',
+      revision: 3,
+    }]);
+    await firstSessionExternalChange.promise;
+  });
+
+  expect(view.getByTestId('bookmark-ids').props.children).toBe('favorit-neu');
+  expect(view.getByTestId('bookmark-sync-status').props.children).toBe('synced');
+  expect(announce).not.toHaveBeenCalled();
+  expect(
+    (bookmarkStore.reconcileBookmarks.mock.calls as [string, RemoteBookmark[]][])
+      .some(([userId, remote]) =>
+        userId === 'konto-a' && remote.some((bookmark) => bookmark.event_id === 'favorit-alt'),
+      ),
+  ).toBe(false);
+});
+
 test('verwirft verspätete Sync-Fehler des vorherigen Kontos samt Screenreader-Ansage', async () => {
   const accountAFetch = deferred<RemoteBookmark[]>();
   bookmarkStore.loadBookmarksForUser.mockImplementation((userId: string | null) =>
