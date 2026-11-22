@@ -31,3 +31,4 @@
 - [Datenschutz bei Kontoauth-Fehlern](account-auth-error-privacy.md) — Unbekannte Anmelde- und Registrierungsfehler bleiben allgemein; andere Auth-Abläufe behalten ihre bisherige Diagnose.
 - [Favoriten-Sync nach Sitzungswechsel](bookmark-session-generation.md) — Asynchrone Favoritenantworten müssen an die konkrete Anmeldung gebunden und bei Kontowechsel verworfen werden.
 - [Supabase-RLS bei Löschversuchen](supabase-rls-delete-results.md) — Eine von RLS blockierte DELETE-Anfrage kann ohne Fehler null Zeilen zurückgeben; Löschwirkung und Bestand prüfen.
+- [Vite-Assets in Layouttests](vite-assets-layout-tests.md) — Browserchecks für Builds müssen den in `index.html` verwendeten Asset-Präfix mit dem Testserver bereitstellen.

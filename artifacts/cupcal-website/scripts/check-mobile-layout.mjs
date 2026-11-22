@@ -10,8 +10,12 @@ import { seoTopicPages } from '../src/content/seo-pages.ts';
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const publicRoot = path.join(projectRoot, 'dist/public');
-const viewportWidths = [320, 360];
-const viewportHeight = 800;
+const viewports = [
+  { label: '320×844 Hochformat', width: 320, height: 844 },
+  { label: '360×800 Hochformat', width: 360, height: 800 },
+  { label: '640×360 Querformat', width: 640, height: 360 },
+  { label: '844×390 Querformat', width: 844, height: 390 },
+];
 const delay = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 
 async function listenOnEphemeralPort(server) {
@@ -187,10 +191,10 @@ function connectToDevTools(webSocketUrl) {
   return { socket, ready, send, navigate };
 }
 
-async function configureViewport(send, width) {
+async function configureViewport(send, viewport) {
   await send('Emulation.setDeviceMetricsOverride', {
-    width,
-    height: viewportHeight,
+    width: viewport.width,
+    height: viewport.height,
     deviceScaleFactor: 1,
     mobile: true,
   });
@@ -214,7 +218,7 @@ async function waitForPage(send) {
   await delay(150);
 }
 
-async function inspectPage(send) {
+async function inspectPage(send, route) {
   const response = await send('Runtime.evaluate', {
     expression: `(() => {
       const visible = (element) => {
@@ -224,13 +228,14 @@ async function inspectPage(send) {
         return style.display !== 'none' && style.visibility !== 'hidden' &&
           Number(style.opacity) > 0 && rect.width > 0 && rect.height > 0;
       };
+      const viewportWidth = document.documentElement.clientWidth;
       const rectData = (element) => {
         const rect = element.getBoundingClientRect();
         return { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom };
       };
       const fitViewport = (element) => {
         const rect = rectData(element);
-        return rect.left >= -1 && rect.right <= innerWidth + 1 &&
+        return rect.left >= -1 && rect.right <= viewportWidth + 1 &&
           rect.top >= -1 && rect.bottom <= innerHeight + 1;
       };
       const nav = document.querySelector('nav[aria-label="CupCal-Themen"]');
@@ -240,9 +245,17 @@ async function inspectPage(send) {
       const heading = document.querySelector('.topic-hero h1');
       const relatedHeading = document.querySelector('.topic-related h2');
       const cards = Array.from(document.querySelectorAll('.topic-related .topic-card'));
+      const homepage = ${JSON.stringify(route)} === '/';
+      const homepageHeading = homepage ? document.querySelector('#main-content h1') : null;
+      const homepageLogo = homepage ? document.querySelector('.topbar .brand img') : null;
+      const homepageActions = homepage
+        ? ['.hero-actions .button-primary', '.hero-actions .button-muted', '.topbar .nav-cta']
+            .map((selector) => document.querySelector(selector))
+        : [];
       const action = document.querySelector('.nav-cta');
       const breadcrumbLink = breadcrumb?.querySelector('a[href]');
       const footerAction = document.querySelector('.topic-footer-home');
+      document.documentElement.style.scrollBehavior = 'auto';
       const initialNavRect = nav?.getBoundingClientRect();
       const navigationLinksInitiallyVisible = Array.from(nav?.querySelectorAll('a[href]') ?? [])
         .map((link) => {
@@ -293,8 +306,9 @@ async function inspectPage(send) {
       const mainElements = Array.from(document.querySelectorAll('main *')).filter(visible);
       const offscreenMainElements = mainElements
         .filter((element) => {
+          if (element.closest('.ticker, .art-orbit')) return false;
           const rect = element.getBoundingClientRect();
-          return rect.left < -1 || rect.right > innerWidth + 1;
+          return rect.left < -1 || rect.right > viewportWidth + 1;
         })
         .map((element) => ({
           tag: element.tagName,
@@ -304,7 +318,7 @@ async function inspectPage(send) {
         }));
       const clippedElements = [document.querySelector('.topic-shell'), ...mainElements]
         .filter((element) => {
-          if (!element) return false;
+          if (!element || element.closest('.ticker')) return false;
           const style = getComputedStyle(element);
           const clipsHorizontally = ['hidden', 'clip'].includes(style.overflowX) &&
             element.scrollWidth > element.clientWidth + 1;
@@ -320,9 +334,59 @@ async function inspectPage(send) {
           scrollHeight: element.scrollHeight,
           clientHeight: element.clientHeight,
         }));
+      const clippingText = [];
+      const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+      while (walker.nextNode()) {
+        const textNode = walker.currentNode;
+        const text = textNode.textContent.trim();
+        const parent = textNode.parentElement;
+        if (!text || !parent || parent.closest('.ticker') || !visible(parent)) continue;
+        const range = document.createRange();
+        range.selectNodeContents(textNode);
+        const rects = Array.from(range.getClientRects());
+        for (const rect of rects) {
+          let clipped = rect.left < -1 || rect.right > viewportWidth + 1;
+          let ancestor = parent.parentElement;
+          while (!clipped && ancestor) {
+            const style = getComputedStyle(ancestor);
+            const bounds = ancestor.getBoundingClientRect();
+            if (['hidden', 'clip'].includes(style.overflowX) &&
+              (rect.left < bounds.left - 1 || rect.right > bounds.right + 1)) clipped = true;
+            if (['hidden', 'clip'].includes(style.overflowY) &&
+              (rect.top < bounds.top - 1 || rect.bottom > bounds.bottom + 1)) clipped = true;
+            ancestor = ancestor.parentElement;
+          }
+          if (clipped) clippingText.push({
+            text: text.slice(0, 70),
+            left: Math.round(rect.left),
+            right: Math.round(rect.right),
+            top: Math.round(rect.top),
+            bottom: Math.round(rect.bottom),
+          });
+        }
+      }
+      const offscreenControls = Array.from(document.querySelectorAll(
+        'img, a, button, [role="button"], input, select, textarea',
+      ))
+        .filter(visible)
+        .map((element) => ({
+          tag: element.tagName,
+          className: typeof element.className === 'string' ? element.className : '',
+          label: element.getAttribute('aria-label') || element.textContent.trim().slice(0, 50),
+          ...rectData(element),
+        }))
+        .filter((element) => element.left < -1 || element.right > viewportWidth + 1);
       const summary = {
-        viewportWidth: innerWidth,
+        viewportWidth,
+        deviceScreenWidth: screen.width,
         documentWidth: document.documentElement.scrollWidth,
+        homepage,
+        homepageHeadingVisible: visible(homepageHeading),
+        homepageLogoVisible: visible(homepageLogo),
+        homepageActionsVisible: homepageActions.map(visible),
+        homepageTopicLinks: homepage
+          ? Array.from(document.querySelectorAll('.topic-directory .topic-card')).filter(visible).length
+          : 0,
         navigationVisible: visible(nav),
         navigationLinksInitiallyVisible,
         navigationLinks: navFocus,
@@ -342,6 +406,8 @@ async function inspectPage(send) {
           contentFits: card.scrollWidth <= card.clientWidth + 1,
         })),
         offscreenMainElements,
+        offscreenControls,
+        clippingText,
         clippedElements,
         focused,
       };
@@ -349,49 +415,75 @@ async function inspectPage(send) {
     })()`,
     returnByValue: true,
   });
+  if (!response.result?.value) {
+    throw new Error(
+      response.exceptionDetails?.exception?.description ??
+        response.exceptionDetails?.text ??
+        'Chromium konnte die Layoutmessung nicht auswerten.',
+    );
+  }
   return response.result.value;
 }
 
-function assertPageLayout(page, width, result) {
+function assertPageLayout(page, viewport, result) {
   const issues = [];
-  if (result.viewportWidth !== width) issues.push(`Viewport ist ${result.viewportWidth}px statt ${width}px breit`);
-  if (result.documentWidth > width + 1) issues.push(`Seitenbreite ${result.documentWidth}px verursacht horizontales Scrollen`);
-  if (!result.navigationVisible || result.navigationLinks.length !== 3) issues.push('Themen-Navigation ist nicht vollständig sichtbar');
-  if (result.navigationLinksInitiallyVisible.length !== 3 || result.navigationLinksInitiallyVisible.includes(false)) {
-    issues.push('Mindestens ein Themenlink ist im Ausgangszustand abgeschnitten');
-  }
-  if (result.navigationLinks.some((link) => !link.visible || !link.active || !link.insideNavigation)) {
-    issues.push('Mindestens ein Themenlink lässt sich nicht sichtbar fokussieren');
-  }
-  if (!result.navigationCurrentPage) issues.push('Aktuelle Seite ist in der Navigation nicht markiert');
-  if (!result.breadcrumbVisible || !result.breadcrumbCurrentPage) issues.push('Breadcrumb oder aktuelle Seite fehlt');
-  if (result.navigationCurrentPage !== result.breadcrumbCurrentPage) {
-    issues.push('Navigation und Breadcrumb markieren unterschiedliche Seiten');
-  }
-  if (!result.headingVisible || !result.headingText || !result.headingInsideViewport) {
-    issues.push('Hauptüberschrift ist nicht sichtbar oder passt nicht in den Bildschirm');
-  }
-  if (!result.relatedHeadingVisible || !result.relatedHeadingInsideViewport || result.cardCount !== 2) {
-    issues.push('Themenkarten oder deren Überschrift fehlen oder sind abgeschnitten');
-  }
-  if (result.cards.some((card) => !card.visible || !card.hasLink || !card.text || !card.contentFits)) {
-    issues.push('Mindestens eine Themenkarte ist unsichtbar oder nicht verlinkt');
+  if (result.viewportWidth !== viewport.width) issues.push(`Viewport ist ${result.viewportWidth}px statt ${viewport.width}px breit`);
+  if (result.documentWidth > viewport.width + 1) issues.push(`Seitenbreite ${result.documentWidth}px verursacht horizontales Scrollen`);
+  if (result.homepage) {
+    if (!result.homepageHeadingVisible) issues.push('Überschrift der Startseite fehlt oder ist nicht sichtbar');
+    if (!result.homepageLogoVisible) issues.push('Logo der Startseite fehlt oder ist nicht sichtbar');
+    if (result.homepageActionsVisible.length !== 3 || result.homepageActionsVisible.includes(false)) {
+      issues.push('Mindestens eine Aktion der Startseite fehlt oder ist nicht sichtbar');
+    }
+    if (result.homepageTopicLinks === 0) issues.push('Themenlinks der Startseite fehlen');
+  } else {
+    if (!result.navigationVisible || result.navigationLinks.length !== 3) issues.push('Themen-Navigation ist nicht vollständig sichtbar');
+    if (result.navigationLinksInitiallyVisible.length !== 3 || result.navigationLinksInitiallyVisible.includes(false)) {
+      issues.push('Mindestens ein Themenlink ist im Ausgangszustand abgeschnitten');
+    }
+    if (result.navigationLinks.some((link) => !link.visible || !link.active || !link.insideNavigation)) {
+      issues.push('Mindestens ein Themenlink lässt sich nicht sichtbar fokussieren');
+    }
+    if (!result.navigationCurrentPage) issues.push('Aktuelle Seite ist in der Navigation nicht markiert');
+    if (!result.breadcrumbVisible || !result.breadcrumbCurrentPage) issues.push('Breadcrumb oder aktuelle Seite fehlt');
+    if (result.navigationCurrentPage !== result.breadcrumbCurrentPage) {
+      issues.push('Navigation und Breadcrumb markieren unterschiedliche Seiten');
+    }
+    if (!result.headingVisible || !result.headingText || !result.headingInsideViewport) {
+      issues.push('Hauptüberschrift ist nicht sichtbar oder passt nicht in den Bildschirm');
+    }
+    if (!result.relatedHeadingVisible || !result.relatedHeadingInsideViewport || result.cardCount !== 2) {
+      issues.push('Themenkarten oder deren Überschrift fehlen oder sind abgeschnitten');
+    }
+    if (result.cards.some((card) => !card.visible || !card.hasLink || !card.text || !card.contentFits)) {
+      issues.push('Mindestens eine Themenkarte ist unsichtbar oder nicht verlinkt');
+    }
   }
   if (result.offscreenMainElements.length > 0) issues.push('Inhaltsbereiche ragen aus dem Bildschirm heraus');
+  if (result.offscreenControls.length > 0) issues.push('Logo oder Bedienelemente ragen aus dem Bildschirm heraus');
+  if (result.clippingText.length > 0) issues.push('Text wird am Bildschirmrand oder durch einen Container abgeschnitten');
   if (result.clippedElements.length > 0) issues.push('Inhalte werden durch einen Container abgeschnitten');
-  if (result.focused.some((target) =>
+  if (!result.homepage && result.focused.some((target) =>
     !target.present || !target.hasLink || !target.active || !target.visible || !target.insideViewport
   )) {
     issues.push('Breadcrumb, Startseiten- oder Kartenlink ist nicht sichtbar fokussierbar');
   }
-  assert.deepEqual(issues, [], `${page.path} bei ${width}px: ${issues.join('; ')}\n${JSON.stringify(result, null, 2)}`);
+  assert.deepEqual(
+    issues,
+    [],
+    `${page.path} bei ${viewport.label}: ${issues.join('; ')}\n${JSON.stringify(result, null, 2)}`,
+  );
 }
 
 async function run() {
-  await readFile(path.join(publicRoot, 'index.html')).catch(() => {
+  const html = await readFile(path.join(publicRoot, 'index.html'), 'utf8').catch(() => {
     throw new Error('Kein Produktionsbuild gefunden. Führe zuerst „pnpm run build“ aus.');
   });
-  const server = createStaticServer({ root: publicRoot, basePath: '/' });
+  const assetReference = html.match(/(?:src|href)=["']([^"']*\/assets\/[^"']+)["']/)?.[1];
+  assert.ok(assetReference, 'Der Produktionsbuild enthält keinen CSS- oder JavaScript-Assetpfad.');
+  const assetPath = new URL(assetReference, 'http://localhost/').pathname;
+  const assetBasePath = assetPath.slice(0, assetPath.lastIndexOf('/assets/')) || '/';
+  const server = createStaticServer({ root: publicRoot, basePath: assetBasePath });
   let browser;
   let devTools;
 
@@ -403,17 +495,22 @@ async function run() {
     await devTools.send('Page.enable');
     await devTools.send('Runtime.enable');
 
-    for (const page of seoTopicPages) {
-      for (const width of viewportWidths) {
-        await configureViewport(devTools.send, width);
+    const pages = [{ path: '/', title: 'Startseite' }, ...seoTopicPages];
+    for (const page of pages) {
+      for (const viewport of viewports) {
+        await configureViewport(devTools.send, viewport);
         await devTools.navigate(new URL(page.path, baseUrl).href);
         await waitForPage(devTools.send);
-        const result = await inspectPage(devTools.send);
-        assertPageLayout(page, width, result);
-        console.log(`${page.path} · ${width}px: Navigation, Breadcrumb, Überschriften, Karten und Links sichtbar; kein Seitenüberlauf.`);
+        const result = await inspectPage(devTools.send, page.path);
+        assertPageLayout(page, viewport, result);
+        console.log(
+          `${page.path} · ${viewport.label}: Inhalte, Logos und Bedienelemente sichtbar; kein Seitenüberlauf.`,
+        );
       }
     }
-    console.log(`Mobiler Layout-Test bestanden: ${seoTopicPages.length} Themenseiten bei ${viewportWidths.join('px und ')}px.`);
+    console.log(
+      `Mobiler Layout-Test bestanden: ${pages.length} Seiten bei ${viewports.map(({ label }) => label).join(', ')}.`,
+    );
   } finally {
     devTools?.socket.close();
     if (browser) {

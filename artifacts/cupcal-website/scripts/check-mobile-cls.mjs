@@ -10,7 +10,13 @@ import { seoTopicPages } from '../src/content/seo-pages.ts';
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const publicRoot = path.join(projectRoot, 'dist/public');
-const mobileViewport = { width: 390, height: 844, deviceScaleFactor: 3, mobile: true };
+const mobileViewports = [
+  { label: '320×844 Hochformat', width: 320, height: 844 },
+  { label: '360×800 Hochformat', width: 360, height: 800 },
+  { label: '390×844 Hochformat (bisher)', width: 390, height: 844 },
+  { label: '640×360 Querformat', width: 640, height: 360 },
+  { label: '844×390 Querformat', width: 844, height: 390 },
+];
 const defaultLimit = 0.1;
 const defaultRuns = 3;
 
@@ -319,12 +325,16 @@ async function collectLayoutShifts(send) {
   return response.result.value;
 }
 
-async function configureMobile(send) {
+async function configureMobile(send, viewport) {
   await send('Page.enable');
   await send('Runtime.enable');
   await send('Network.enable');
   await send('Network.setCacheDisabled', { cacheDisabled: true });
-  await send('Emulation.setDeviceMetricsOverride', mobileViewport);
+  await send('Emulation.setDeviceMetricsOverride', {
+    ...viewport,
+    deviceScaleFactor: 3,
+    mobile: true,
+  });
   await send('Emulation.setCPUThrottlingRate', { rate: 4 });
   await send('Network.emulateNetworkConditions', {
     offline: false,
@@ -337,14 +347,18 @@ async function configureMobile(send) {
 }
 
 async function run() {
-  await readFile(path.join(publicRoot, 'index.html')).catch(() => {
+  const html = await readFile(path.join(publicRoot, 'index.html'), 'utf8').catch(() => {
     throw new Error('Kein Produktionsbuild gefunden. Führe zuerst „pnpm run build“ aus.');
   });
+  const assetReference = html.match(/(?:src|href)=["']([^"']*\/assets\/[^"']+)["']/)?.[1];
+  assert.ok(assetReference, 'Der Produktionsbuild enthält keinen CSS- oder JavaScript-Assetpfad.');
+  const assetPath = new URL(assetReference, 'http://localhost/').pathname;
+  const assetBasePath = assetPath.slice(0, assetPath.lastIndexOf('/assets/')) || '/';
 
   const limit = readPositiveNumber(process.env.CLS_MAX, defaultLimit, 'CLS_MAX');
   const runs = readPositiveNumber(process.env.CLS_RUNS, defaultRuns, 'CLS_RUNS');
   assert.ok(Number.isInteger(runs), 'CLS_RUNS muss eine ganze Zahl sein.');
-  const server = createStaticServer({ root: publicRoot, basePath: '/' });
+  const server = createStaticServer({ root: publicRoot, basePath: assetBasePath });
   let browser;
   let devTools;
 
@@ -353,57 +367,66 @@ async function run() {
     browser = await startChromium();
     devTools = connectToDevTools(browser.pageTarget.webSocketDebuggerUrl);
     await devTools.ready;
-    await configureMobile(devTools.send);
+    await configureMobile(devTools.send, mobileViewports[0]);
 
     const routes = ['/', ...seoTopicPages.map((page) => page.path)];
     const failures = [];
 
     for (const route of routes) {
-      const measurements = [];
-      for (let runNumber = 1; runNumber <= runs; runNumber += 1) {
-        const url = new URL(route, baseUrl).href;
-        await devTools.send('Network.clearBrowserCache');
-        await devTools.navigate(url);
-        await waitForFontsAndImages(devTools.send);
-        await delay(750);
+      for (const viewport of mobileViewports) {
+        const measurements = [];
+        for (let runNumber = 1; runNumber <= runs; runNumber += 1) {
+          const url = new URL(route, baseUrl).href;
+          await devTools.send('Emulation.setDeviceMetricsOverride', {
+            ...viewport,
+            deviceScaleFactor: 3,
+            mobile: true,
+          });
+          await devTools.send('Network.clearBrowserCache');
+          await devTools.navigate(url);
+          await waitForFontsAndImages(devTools.send);
+          await delay(750);
 
-        const result = await collectLayoutShifts(devTools.send);
-        assert.equal(
-          result.observerUnavailable,
-          false,
-          'Dieser Chromium-Build unterstützt keine Layout-Shift-Messung.',
-        );
-        const cls = calculateCls(result.entries);
-        measurements.push(cls.value);
-        console.log(
-          `${route} · Lauf ${runNumber}/${runs}: CLS ${cls.value.toFixed(3)} (Grenzwert ${limit.toFixed(3)}) · ${cls.entries.length} relevante Verschiebungen`,
-        );
+          const result = await collectLayoutShifts(devTools.send);
+          assert.equal(
+            result.observerUnavailable,
+            false,
+            'Dieser Chromium-Build unterstützt keine Layout-Shift-Messung.',
+          );
+          const cls = calculateCls(result.entries);
+          measurements.push(cls.value);
+          console.log(
+            `${route} · ${viewport.label} · Lauf ${runNumber}/${runs}: CLS ${cls.value.toFixed(3)} (Grenzwert ${limit.toFixed(3)}) · ${cls.entries.length} relevante Verschiebungen`,
+          );
 
-        if (cls.value > limit) {
-          failures.push(`${route} Lauf ${runNumber}: CLS ${cls.value.toFixed(3)}`);
-        }
-        if (cls.value > 0) {
-          for (const entry of cls.entries) {
-            for (const source of entry.sources ?? []) {
-              if (!source.node) continue;
-              const target = [source.node.tag, source.node.id, source.node.className]
-                .filter(Boolean)
-                .join('.');
-              console.log(
-                `  Verschiebungsquelle: ${target || 'unbekanntes Element'} · ${formatRect(source.previousRect)} → ${formatRect(source.currentRect)}`,
-              );
+          if (cls.value > limit) {
+            failures.push(`${route} bei ${viewport.label}, Lauf ${runNumber}: CLS ${cls.value.toFixed(3)}`);
+          }
+          if (cls.value > 0) {
+            for (const entry of cls.entries) {
+              for (const source of entry.sources ?? []) {
+                if (!source.node) continue;
+                const target = [source.node.tag, source.node.id, source.node.className]
+                  .filter(Boolean)
+                  .join('.');
+                console.log(
+                  `  Verschiebungsquelle: ${target || 'unbekanntes Element'} · ${formatRect(source.previousRect)} → ${formatRect(source.currentRect)}`,
+                );
+              }
             }
           }
         }
+        const maximum = Math.max(...measurements);
+        console.log(`${route} · ${viewport.label} · höchster CLS über ${runs} Läufe: ${maximum.toFixed(3)}`);
       }
-      const maximum = Math.max(...measurements);
-      console.log(`${route} · höchster CLS über ${runs} Läufe: ${maximum.toFixed(3)}`);
     }
 
     if (failures.length > 0) {
       throw new Error(`CLS-Grenzwert ${limit.toFixed(3)} überschritten:\n${failures.join('\n')}`);
     }
-    console.log(`Mobiler CLS-Check bestanden: ${routes.length} Seiten, ${runs} Läufe je Seite, Grenzwert ${limit.toFixed(3)}.`);
+    console.log(
+      `Mobiler CLS-Check bestanden: ${routes.length} Seiten, ${mobileViewports.length} Ansichten, ${runs} Läufe je Ansicht, Grenzwert ${limit.toFixed(3)}.`,
+    );
   } finally {
     devTools?.socket.close();
     if (browser) {
