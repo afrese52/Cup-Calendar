@@ -206,7 +206,7 @@ function App({ pathname }: AppProps = {}) {
           </article>
           <article className="faq-card">
             <h3>Wann kann ich CupCal herunterladen?</h3>
-            <p>Die Android-Veröffentlichung ist für den 30. November 2026 geplant. Für iOS steht noch kein Termin fest. Offizielle Store-Links ergänzen wir, sobald sie verfügbar sind.</p>
+            <p>CupCal ist noch nicht in den Stores verfügbar. Die Android-Veröffentlichung ist für den 30. November 2026 geplant; für iOS steht noch kein Termin fest.</p>
           </article>
         </div>
       </section>
@@ -296,22 +296,22 @@ function App({ pathname }: AppProps = {}) {
         data-analytics-section="availability"
       >
         <div className="section-label">Ehrlich gesagt</div>
-        <h2 className="section-title">Android ab 30. November.<br /><span>iOS-Termin offen.</span></h2>
+        <h2 className="section-title">Android geplant ab 30. November.<br /><span>iOS noch nicht verfügbar.</span></h2>
         <p className="section-intro">
-          Die Veröffentlichung von CupCal für Android ist für den 30. November 2026 geplant.
-          Für iOS steht noch kein Termin fest. Offizielle Store-Links ergänzen wir, sobald sie verfügbar sind.
+          CupCal ist noch nicht im Google Play Store oder Apple App Store verfügbar.
+          Die Android-Veröffentlichung ist für den 30. November 2026 geplant; für iOS steht noch kein Termin fest.
         </p>
         <div className="availability-panel" role="status" data-testid="status-download">
           <CalendarDays className="availability-icon" aria-hidden="true" />
           <div>
-            <strong>Android · 30. November 2026</strong>
-            <p>Geplante Veröffentlichung im Google Play Store.</p>
+            <strong>Android · geplant ab 30. November 2026</strong>
+            <p>Noch nicht verfügbar. Veröffentlichung im Google Play Store geplant.</p>
           </div>
         </div>
         <div className="availability-panel" role="status" data-testid="status-ios">
           <Clock3 className="availability-icon" aria-hidden="true" />
           <div>
-            <strong>iOS · Termin noch offen</strong>
+            <strong>iOS · noch nicht verfügbar</strong>
             <p>Ein Veröffentlichungstermin für den Apple App Store steht noch nicht fest.</p>
           </div>
         </div>
