@@ -185,11 +185,15 @@ test('verarbeitet nacheinander Bestätigungslinks verschiedener Konten mit ihren
   });
 });
 
-test('verarbeitet einen wartenden neuen Link nach der verspäteten Kaltstart-URL', async () => {
+test('verarbeitet mehrere wartende Links nach der verspäteten Kaltstart-URL in Empfangsreihenfolge', async () => {
   const initialUrl = deferred<string | null>();
   mockInitialUrlPromise.current = initialUrl.promise;
   supabase.auth.exchangeCodeForSession.mockImplementation(async (code: string) => {
-    const userId = code === 'account-a-code' ? 'account-a' : 'account-b';
+    const userId = code === 'account-a-code'
+      ? 'account-a'
+      : code === 'account-b-code'
+        ? 'account-b'
+        : 'account-c';
     const session = { user: { id: userId } };
     mockPersistedSession = session;
     return { data: { session }, error: null };
@@ -199,6 +203,9 @@ test('verarbeitet einen wartenden neuen Link nach der verspäteten Kaltstart-URL
   await act(async () => {
     mockUrlListener.current?.({
       url: 'cupcal-android://auth/confirm?code=account-b-code&sb_flow_id=account-b-flow',
+    });
+    mockUrlListener.current?.({
+      url: 'cupcal-android://auth/confirm?code=account-c-code&flow_id=account-c-flow',
     });
     await Promise.resolve();
   });
@@ -222,7 +229,12 @@ test('verarbeitet einen wartenden neuen Link nach der verspäteten Kaltstart-URL
       'account-b-code',
       { flowId: 'account-b-flow' },
     );
-    expect(mockPersistedSession?.user.id).toBe('account-b');
+    expect(supabase.auth.exchangeCodeForSession).toHaveBeenNthCalledWith(
+      3,
+      'account-c-code',
+      { flowId: 'account-c-flow' },
+    );
+    expect(mockPersistedSession?.user.id).toBe('account-c');
     expect(view.getByText(
       'Deine E-Mail-Adresse ist bestätigt. Du kannst CupCal jetzt verwenden.',
     )).toBeTruthy();
