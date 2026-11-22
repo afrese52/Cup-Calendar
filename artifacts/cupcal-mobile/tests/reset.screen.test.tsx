@@ -892,6 +892,7 @@ test.each(['ios', 'android'] as const)(
 
       expect(mockSaveNewPassword).toHaveBeenCalledTimes(1);
       const savingButton = view.getByTestId('reset-password-submit-button');
+      expect(savingButton.props.accessibilityRole).toBe('button');
       expect(savingButton.props.accessibilityState).toEqual({
         disabled: true,
         busy: true,
