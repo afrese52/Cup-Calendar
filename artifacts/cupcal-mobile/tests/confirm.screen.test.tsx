@@ -328,6 +328,31 @@ test('ändert nach dem Schließen bei verspätetem Erfolg keinen Seitenzustand',
   }
 });
 
+test('ignoriert die Start-URL, wenn der Bestätigungsbildschirm vorher geschlossen wurde', async () => {
+  const initialUrl = deferred<string | null>();
+  mockInitialUrlPromise.current = initialUrl.promise;
+  const view = await render(<ConfirmEmailScreen />);
+
+  expect(view.getByText('Bestätigung prüfen')).toBeTruthy();
+  expect(supabase.auth.exchangeCodeForSession).not.toHaveBeenCalled();
+  expect(supabase.auth.setSession).not.toHaveBeenCalled();
+
+  await act(async () => view.unmount());
+  await act(async () => {
+    initialUrl.resolve(
+      'cupcal-android://auth/confirm?code=late-confirmation-code&flow_id=late-confirmation-flow',
+    );
+    await initialUrl.promise;
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+
+  expect(supabase.auth.exchangeCodeForSession).not.toHaveBeenCalled();
+  expect(supabase.auth.setSession).not.toHaveBeenCalled();
+  expect(supabase.auth.signOut).not.toHaveBeenCalled();
+  expect(mockPersistedSession).toBeNull();
+});
+
 test('ändert nach dem Schließen bei verspätetem Fehler keinen Seitenzustand', async () => {
   const exchange = deferred<any>();
   const stateUpdates = trackStateUpdatesAfterUnmount();
