@@ -217,6 +217,13 @@ beweist nicht, dass er im Projekt freigegeben ist.
 Die Tabelle beschreibt erwartete Prüfschritte, keine bestätigten Ergebnisse
 eines Tests auf physischen Geräten.
 
+**Prüfversuch am 22. November 2026:** In der Arbeitsumgebung war kein
+Android-Gerät über ADB oder den Expo-Gerätetunnel verbunden. Daher konnten
+weder eine frische Bestätigungs-Mail aus dem installierten CupCal angefordert
+noch Kaltstart, geöffnete App, natives Redirect-Ziel und PKCE-Sitzung auf einem
+echten Gerät geprüft werden. Die automatisierten Tests bestätigen weiterhin
+nur die Code-Verarbeitung; sie sind kein Nachweis für den Geräte-Rücksprung.
+
 | Plattform | Zustand vor Link-Klick | Ergebnis |
 | --- | --- | --- |
 | Android | App vollständig beendet | Bestätigungslink öffnet CupCal; Code wird gegen eine Sitzung getauscht |
