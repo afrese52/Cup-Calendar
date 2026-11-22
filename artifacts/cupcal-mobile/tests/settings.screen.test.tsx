@@ -1134,9 +1134,17 @@ test('sendet bei Mehrfachklicks während einer laufenden Wiederherstellung nur e
   await fireEvent.changeText(view.getByTestId('auth-email-input'), 'test@example.invalid');
   sendAccessibilityFocus.mockClear();
 
-  await fireEvent.press(view.getByTestId('auth-submit-button'));
-  await fireEvent.press(view.getByTestId('auth-submit-button'));
-  await fireEvent.press(view.getByTestId('auth-submit-button'));
+  const submitButton = view.getByTestId('auth-submit-button');
+  const target = {};
+  await act(async () => {
+    const click = submitButton.props.onClick as (event: {
+      currentTarget: object;
+      target: object;
+    }) => void;
+    click({ currentTarget: target, target });
+    click({ currentTarget: target, target });
+    click({ currentTarget: target, target });
+  });
 
   expect(auth.resetPasswordForEmail).toHaveBeenCalledTimes(1);
   expect(view.getByTestId('auth-submit-button').props.accessibilityState).toEqual({
@@ -1150,7 +1158,7 @@ test('sendet bei Mehrfachklicks während einer laufenden Wiederherstellung nur e
 
 test('ermöglicht nach einem fehlgeschlagenen Wiederherstellungsversand einen neuen Versuch', async () => {
   auth.resetPasswordForEmail
-    .mockResolvedValueOnce({ error: new Error('Email rate limit exceeded') })
+    .mockRejectedValueOnce(new Error('Email rate limit exceeded'))
     .mockResolvedValueOnce({ error: null });
   const view = await openSettings();
   await fireEvent.press(view.getByTestId('forgot-password-button'));
