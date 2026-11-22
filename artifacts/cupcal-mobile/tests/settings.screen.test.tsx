@@ -508,6 +508,74 @@ test('verschiebt den Screenreader-Fokus während einer laufenden Registrierung n
   expect(await view.findByTestId('auth-success-message')).toBeTruthy();
 });
 
+test('verhindert doppelte Registrierungen bei schnellen Mehrfachklicks und gibt die Schaltfläche danach frei', async () => {
+  type SignUpResult = { data: { session: null }; error: null };
+  const pendingSignUps: Array<(result: SignUpResult) => void> = [];
+  auth.signUp.mockImplementation(
+    () => new Promise((resolve) => { pendingSignUps.push(resolve); }),
+  );
+  const view = await openSettings();
+  await fireEvent.press(view.getByTestId('auth-mode-toggle'));
+  await enterCredentials(view);
+
+  const submitButton = view.getByTestId('auth-submit-button');
+  const pressableClick = submitButton.props.onClick as (event: {
+    currentTarget: unknown;
+    target: unknown;
+    nativeEvent: object;
+    stopPropagation: () => void;
+  }) => void;
+  const clickEvent = {
+    currentTarget: submitButton,
+    target: submitButton,
+    nativeEvent: {},
+    stopPropagation: jest.fn(),
+  };
+  await act(async () => {
+    pressableClick(clickEvent);
+    pressableClick(clickEvent);
+    pressableClick(clickEvent);
+  });
+
+  expect(auth.signUp).toHaveBeenCalledTimes(1);
+  expect(pendingSignUps).toHaveLength(1);
+  await waitFor(() => {
+    expect(view.getByTestId('auth-submit-button').props.accessibilityState).toEqual({
+      disabled: true,
+      busy: true,
+    });
+    expect(view.getByTestId('auth-submit-button').props.accessibilityLabel).toBe('Registrierung läuft');
+  });
+
+  await act(async () => pendingSignUps[0]!({ data: { session: null }, error: null }));
+  expect(await view.findByTestId('auth-success-message')).toBeTruthy();
+  await waitFor(() => {
+    expect(view.getByTestId('auth-submit-button').props.accessibilityState).toEqual({
+      disabled: false,
+      busy: false,
+    });
+    expect(view.getByTestId('auth-submit-button').props.accessibilityLabel).toBe('Konto erstellen');
+  });
+
+  await fireEvent.changeText(view.getByTestId('auth-password-input'), 'test-password');
+  await fireEvent.press(view.getByTestId('auth-submit-button'));
+  expect(auth.signUp).toHaveBeenCalledTimes(2);
+  await waitFor(() => {
+    expect(view.getByTestId('auth-submit-button').props.accessibilityState).toEqual({
+      disabled: true,
+      busy: true,
+    });
+  });
+
+  await act(async () => pendingSignUps[1]!({ data: { session: null }, error: null }));
+  await waitFor(() => {
+    expect(view.getByTestId('auth-submit-button').props.accessibilityState).toEqual({
+      disabled: false,
+      busy: false,
+    });
+  });
+});
+
 test('zeigt nach bestätigter Registrierung auch nach Abmeldung keine alte Versandaktion', async () => {
   const storageMock = jest.requireMock('@react-native-async-storage/async-storage') as {
     __values: Map<string, string>;
