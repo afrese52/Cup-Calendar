@@ -1156,6 +1156,34 @@ test('sendet bei Mehrfachklicks während einer laufenden Wiederherstellung nur e
   expect(auth.resetPasswordForEmail).toHaveBeenCalledTimes(1);
 });
 
+test('sperrt die E-Mail-Adresse während einer laufenden Wiederherstellungsanfrage', async () => {
+  let finishReset!: (result: { error: null }) => void;
+  auth.resetPasswordForEmail.mockImplementation(
+    () => new Promise((resolve) => { finishReset = resolve; }),
+  );
+  const view = await openSettings();
+  await fireEvent.press(view.getByTestId('forgot-password-button'));
+  await fireEvent.changeText(view.getByTestId('auth-email-input'), 'original@example.invalid');
+
+  await fireEvent.press(view.getByTestId('auth-submit-button'));
+
+  const emailInput = view.getByTestId('auth-email-input');
+  expect(emailInput.props.editable).toBe(false);
+  expect(emailInput.props.accessibilityHint).toBe(
+    'Die Adresse kann während der Linkanfrage nicht geändert werden.',
+  );
+  await fireEvent.changeText(emailInput, 'changed@example.invalid');
+  expect(view.getByTestId('auth-email-input').props.value).toBe('original@example.invalid');
+  expect(auth.resetPasswordForEmail).toHaveBeenCalledWith('original@example.invalid', {
+    redirectTo: 'cupcal-test://auth/reset?flow=cupcal-password-reset',
+  });
+
+  await act(async () => finishReset({ error: null }));
+
+  expect(await view.findByTestId('auth-success-message')).toBeTruthy();
+  expect(view.getByTestId('auth-email-input').props.value).toBe('original@example.invalid');
+});
+
 test('ermöglicht nach einem fehlgeschlagenen Wiederherstellungsversand einen neuen Versuch', async () => {
   auth.resetPasswordForEmail
     .mockRejectedValueOnce(new Error('Email rate limit exceeded'))

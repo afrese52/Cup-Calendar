@@ -119,6 +119,7 @@ export default function SettingsScreen() {
   const [password, setPassword] = useState('');
   const [submittingAction, setSubmittingAction] = useState<AuthAction | null>(null);
   const isSubmittingAuthRef = useRef(false);
+  const isRequestingRecoveryRef = useRef(false);
   const isResendingConfirmationRef = useRef(false);
   const isRequestingAccountDeletionRef = useRef(false);
   const isSubmittingAuth = submittingAction !== null;
@@ -350,6 +351,7 @@ export default function SettingsScreen() {
     }
 
     isSubmittingAuthRef.current = true;
+    isRequestingRecoveryRef.current = submittedMode === 'forgot-password';
     setSubmittingAction('submit');
     setAuthError(null);
     recoveryErrorEmailRef.current = null;
@@ -410,6 +412,7 @@ export default function SettingsScreen() {
       ), submittedMode === 'forgot-password' ? normalizedEmail : null);
     } finally {
       isSubmittingAuthRef.current = false;
+      isRequestingRecoveryRef.current = false;
       setSubmittingAction(null);
     }
   };
@@ -751,10 +754,13 @@ export default function SettingsScreen() {
               <TextInput
                 accessibilityLabel="E-Mail-Adresse"
                 accessibilityHint={
-                  authMode === 'forgot-password'
-                    ? 'Gib die E-Mail-Adresse für den Wiederherstellungslink ein.'
-                    : 'Gib die E-Mail-Adresse für dein CupCal-Konto ein.'
+                  isRequestingRecoveryRef.current
+                    ? 'Die Adresse kann während der Linkanfrage nicht geändert werden.'
+                    : authMode === 'forgot-password'
+                      ? 'Gib die E-Mail-Adresse für den Wiederherstellungslink ein.'
+                      : 'Gib die E-Mail-Adresse für dein CupCal-Konto ein.'
                 }
+                editable={!isRequestingRecoveryRef.current}
                 testID="auth-email-input"
                 autoCapitalize="none"
                 autoComplete="email"
@@ -767,6 +773,7 @@ export default function SettingsScreen() {
                 textContentType="emailAddress"
                 value={email}
                 onChangeText={(nextEmail) => {
+                  if (isRequestingRecoveryRef.current) return;
                   setEmail(nextEmail);
                   const failedRecoveryEmail = recoveryErrorEmailRef.current;
                   if (
