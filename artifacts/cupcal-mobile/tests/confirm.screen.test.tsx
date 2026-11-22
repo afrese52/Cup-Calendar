@@ -23,6 +23,30 @@ function deferred<T>() {
   return { promise, resolve, reject };
 }
 
+function trackStateUpdatesAfterUnmount() {
+  const updates: unknown[] = [];
+  let isUnmounted = false;
+  const originalUseState = React.useState;
+  const stateSpy = jest.spyOn(React, 'useState').mockImplementation(((initialState: any) => {
+    const [value, setValue] = originalUseState(initialState);
+    return [
+      value,
+      (nextValue: any) => {
+        if (isUnmounted) updates.push(nextValue);
+        setValue(nextValue);
+      },
+    ];
+  }) as typeof React.useState);
+
+  return {
+    updates,
+    markUnmounted: () => {
+      isUnmounted = true;
+    },
+    restore: () => stateSpy.mockRestore(),
+  };
+}
+
 jest.mock('@expo/vector-icons', () => ({ Feather: () => null }));
 jest.mock('@react-native-async-storage/async-storage', () => ({
   default: {
@@ -258,6 +282,67 @@ test('lässt eine verspätete Antwort des ersten Links das zuletzt geöffnete Ko
       'Deine E-Mail-Adresse ist bestätigt. Du kannst CupCal jetzt verwenden.',
     )).toBeTruthy();
   });
+});
+
+test('ändert nach dem Schließen bei verspätetem Erfolg keinen Seitenzustand', async () => {
+  const exchange = deferred<any>();
+  const stateUpdates = trackStateUpdatesAfterUnmount();
+  mockInitialUrl.current =
+    'cupcal-android://auth/confirm?code=late-success-code&flow_id=late-success-flow';
+  supabase.auth.exchangeCodeForSession.mockReturnValue(exchange.promise);
+
+  try {
+    const view = await render(<ConfirmEmailScreen />);
+    await waitFor(() => {
+      expect(supabase.auth.exchangeCodeForSession).toHaveBeenCalledWith(
+        'late-success-code',
+        { flowId: 'late-success-flow' },
+      );
+    });
+
+    await act(async () => view.unmount());
+    stateUpdates.markUnmounted();
+    await act(async () => {
+      exchange.resolve({
+        data: { session: { user: { id: 'account-id' } } },
+        error: null,
+      });
+      await exchange.promise;
+    });
+
+    expect(stateUpdates.updates).toEqual([]);
+  } finally {
+    stateUpdates.restore();
+  }
+});
+
+test('ändert nach dem Schließen bei verspätetem Fehler keinen Seitenzustand', async () => {
+  const exchange = deferred<any>();
+  const stateUpdates = trackStateUpdatesAfterUnmount();
+  mockInitialUrl.current =
+    'cupcal-android://auth/confirm?code=late-error-code&flow_id=late-error-flow';
+  supabase.auth.exchangeCodeForSession.mockReturnValue(exchange.promise);
+
+  try {
+    const view = await render(<ConfirmEmailScreen />);
+    await waitFor(() => {
+      expect(supabase.auth.exchangeCodeForSession).toHaveBeenCalledWith(
+        'late-error-code',
+        { flowId: 'late-error-flow' },
+      );
+    });
+
+    await act(async () => view.unmount());
+    stateUpdates.markUnmounted();
+    await act(async () => {
+      exchange.reject(new Error('Der Bestätigungscode ist nicht mehr gültig.'));
+      await exchange.promise.catch(() => undefined);
+    });
+
+    expect(stateUpdates.updates).toEqual([]);
+  } finally {
+    stateUpdates.restore();
+  }
 });
 
 test('verarbeitet den zweiten Link nach einem fehlgeschlagenen ersten Austausch', async () => {
