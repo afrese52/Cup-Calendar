@@ -7,6 +7,20 @@ export type TeamFormat = 'Solo' | 'Duos' | 'Trios' | 'Squads';
 export type EventCategory = 'Turnier' | 'Liga' | 'Qualifikation' | 'Trainingsrunde';
 export type CalendarCategoryFilter = 'Alle Termine' | EventCategory;
 export type CalendarGameFeatureFilter = 'Alle Spielmerkmale' | 'Reload' | 'Zero Build';
+export type CalendarRegionFilter = 'Alle Regionen' | TournamentRegion;
+
+export const calendarRegionFilters: CalendarRegionFilter[] = [
+  'Alle Regionen',
+  'EU',
+  'NAE',
+  'NAC',
+  'NAW',
+  'BR',
+  'ASIA',
+  'OCE',
+  'ME',
+  'GLOBAL',
+];
 
 export interface TournamentEvent {
   id: string;
@@ -28,6 +42,7 @@ export function matchesEventFilter(
   event: TournamentEvent,
   categoryFilter: CalendarCategoryFilter,
   gameFeatureFilter: CalendarGameFeatureFilter = 'Alle Spielmerkmale',
+  regionFilter: CalendarRegionFilter = 'Alle Regionen',
 ): boolean {
   const matchesCategory =
     categoryFilter === 'Alle Termine' || event.category === categoryFilter;
@@ -38,8 +53,13 @@ export function matchesEventFilter(
     (gameFeatureFilter === 'Zero Build' &&
       (event.gameRuleset === 'Zero Build' ||
         (!event.gameRuleset && event.gameMode === 'Zero Build')));
+  const matchesRegion =
+    regionFilter === 'Alle Regionen' ||
+    (regionFilter === 'GLOBAL'
+      ? event.region === 'GLOBAL'
+      : event.region === regionFilter || event.region === 'GLOBAL');
 
-  return matchesCategory && matchesGameFeature;
+  return matchesCategory && matchesGameFeature && matchesRegion;
 }
 
 export function toLocalDateKey(value: Date | string): string {

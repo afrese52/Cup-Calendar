@@ -1,19 +1,30 @@
 import { Feather } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import React, { useMemo, useState } from 'react';
-import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import type { LocationPermissionResponse } from 'expo-location';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { EventCard } from '@/components/EventCard';
 import { MonthCalendar } from '@/components/MonthCalendar';
 import { WeekCalendarStrip } from '@/components/WeekCalendarStrip';
 import { useColors } from '@/hooks/useColors';
 import {
+  calendarRegionFilters,
   matchesEventFilter,
   toLocalDateKey,
   type CalendarCategoryFilter,
   type CalendarGameFeatureFilter,
+  type CalendarRegionFilter,
   type EventCategory,
 } from '@/data/events';
+import {
+  loadCalendarRegionPreference,
+  saveCalendarRegionPreference,
+} from '@/services/calendarRegionPreference';
+import {
+  resolveDeviceRegion,
+  type DeviceRegionStatus,
+} from '@/services/deviceRegion';
 import { useCupCal } from '@/state/AppContext';
 
 const categoryFilters: CalendarCategoryFilter[] = [
@@ -87,23 +98,178 @@ export default function CalendarScreen() {
   const [selectedCategory, setSelectedCategory] = useState<CalendarCategoryFilter>('Alle Termine');
   const [selectedGameFeature, setSelectedGameFeature] =
     useState<CalendarGameFeatureFilter>('Alle Spielmerkmale');
+  const [selectedRegion, setSelectedRegion] =
+    useState<CalendarRegionFilter>('Alle Regionen');
+  const [regionSource, setRegionSource] = useState<'automatic' | 'manual'>('manual');
+  const [regionStatus, setRegionStatus] = useState<DeviceRegionStatus | 'loading' | 'unavailable'>('loading');
+  const [regionMessage, setRegionMessage] = useState<string | null>(null);
+  const [isDetectingRegion, setIsDetectingRegion] = useState(false);
+  const [locationPermission, setLocationPermission] =
+    useState<LocationPermissionResponse | null>(null);
   const [filterOpen, setFilterOpen] = useState(false);
   const [monthExpanded, setMonthExpanded] = useState(false);
+  const requestVersion = useRef(0);
+  const manualSelectionMade = useRef(false);
+  const mounted = useRef(false);
+
+  const detectRegion = useCallback(async (request: 'initial' | 'explicit') => {
+    const version = ++requestVersion.current;
+    setIsDetectingRegion(true);
+    setRegionStatus('loading');
+    setRegionMessage(null);
+
+    try {
+      const result = await resolveDeviceRegion(request);
+      if (!mounted.current || version !== requestVersion.current) return;
+
+      setLocationPermission(result.permission);
+      setRegionStatus(result.status);
+      if (result.status === 'ready' && result.region) {
+        setSelectedRegion(result.region);
+        setRegionSource('automatic');
+        try {
+          await saveCalendarRegionPreference({
+            region: result.region,
+            source: 'automatic',
+          });
+        } catch {
+          if (mounted.current && version === requestVersion.current) {
+            setRegionMessage('Region erkannt, aber die Einstellung konnte nicht gespeichert werden.');
+          }
+        }
+      } else if (result.status === 'permission-required') {
+        setRegionMessage('Standortfreigabe fehlt. Du kannst die Region unten manuell wählen.');
+      } else if (result.status === 'settings-required') {
+        setRegionMessage('Standortfreigabe in den Geräteeinstellungen erlauben oder Region manuell wählen.');
+      } else if (result.status === 'services-disabled') {
+        setRegionMessage('Standortdienste sind ausgeschaltet. Du kannst die Region manuell wählen.');
+      }
+    } catch {
+      if (mounted.current && version === requestVersion.current) {
+        setRegionStatus('unavailable');
+        setRegionMessage('Standort konnte nicht ermittelt werden. Du kannst die Region manuell wählen.');
+      }
+    } finally {
+      if (mounted.current && version === requestVersion.current) {
+        setIsDetectingRegion(false);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      requestVersion.current += 1;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const initializeRegion = async () => {
+      try {
+        const preference = await loadCalendarRegionPreference();
+        if (cancelled || manualSelectionMade.current) return;
+
+        if (preference) {
+          setSelectedRegion(preference.region);
+          setRegionSource(preference.source);
+          if (preference.source === 'manual') {
+            setRegionStatus('ready');
+            return;
+          }
+        }
+      } catch {
+        if (!cancelled) {
+          setRegionMessage('Gespeicherte Region konnte nicht geladen werden.');
+        }
+      }
+
+      if (
+        !cancelled &&
+        !manualSelectionMade.current &&
+        requestVersion.current === 0
+      ) {
+        await detectRegion('initial');
+      }
+    };
+
+    void initializeRegion();
+    return () => {
+      cancelled = true;
+    };
+  }, [detectRegion]);
+
+  const selectRegionManually = (region: CalendarRegionFilter) => {
+    manualSelectionMade.current = true;
+    requestVersion.current += 1;
+    setIsDetectingRegion(false);
+    setSelectedRegion(region);
+    setRegionSource('manual');
+    setRegionStatus('ready');
+    setRegionMessage(null);
+    void saveCalendarRegionPreference({ region, source: 'manual' }).catch(() => {
+      setRegionMessage('Region ausgewählt, aber die Einstellung konnte nicht gespeichert werden.');
+    });
+  };
+
+  const handleAutomaticRegion = async () => {
+    if (regionStatus === 'settings-required' && Platform.OS !== 'web') {
+      try {
+        await Linking.openSettings();
+      } catch {
+        setRegionMessage('Die Geräteeinstellungen konnten nicht geöffnet werden.');
+      }
+      return;
+    }
+
+    manualSelectionMade.current = false;
+    await detectRegion('explicit');
+  };
+
   const filtersActive =
-    selectedCategory !== 'Alle Termine' || selectedGameFeature !== 'Alle Spielmerkmale';
+    selectedCategory !== 'Alle Termine' ||
+    selectedGameFeature !== 'Alle Spielmerkmale' ||
+    selectedRegion !== 'Alle Regionen';
+  const activeFilterLabels = [
+    selectedCategory !== 'Alle Termine' ? `Terminart: ${selectedCategory}` : null,
+    selectedGameFeature !== 'Alle Spielmerkmale'
+      ? `Spielmerkmal: ${selectedGameFeature}`
+      : null,
+    selectedRegion !== 'Alle Regionen' ? `Region: ${selectedRegion}` : null,
+  ].filter(Boolean);
   const filterSummary = filtersActive
-    ? [selectedCategory !== 'Alle Termine' ? selectedCategory : null,
-      selectedGameFeature !== 'Alle Spielmerkmale' ? selectedGameFeature : null]
-      .filter(Boolean)
-      .join(' · ')
+    ? [
+        selectedRegion !== 'Alle Regionen' ? selectedRegion : null,
+        selectedCategory !== 'Alle Termine' ? selectedCategory : null,
+        selectedGameFeature !== 'Alle Spielmerkmale' ? selectedGameFeature : null,
+      ].filter(Boolean).join(' · ')
     : 'Alle Termine';
+  const regionStatusLabel =
+    regionStatus === 'loading'
+      ? regionSource === 'automatic' && selectedRegion !== 'Alle Regionen'
+        ? `Standortregion wird aktualisiert · ${selectedRegion}`
+        : 'Region wird anhand des Standorts ermittelt …'
+      : (regionStatus === 'permission-required' ||
+          regionStatus === 'settings-required' ||
+          regionStatus === 'services-disabled') &&
+          regionSource === 'automatic'
+        ? `Zuletzt automatisch ermittelt · ${selectedRegion}`
+        : regionSource === 'automatic' && selectedRegion !== 'Alle Regionen'
+          ? `Automatisch ermittelt · ${selectedRegion}`
+          : regionSource === 'manual'
+            ? `Manuell ausgewählt · ${selectedRegion}`
+            : 'Region manuell auswählen';
 
   const visibleEvents = useMemo(
     () =>
       [...events]
-        .filter((event) => matchesEventFilter(event, selectedCategory, selectedGameFeature))
+        .filter((event) =>
+          matchesEventFilter(event, selectedCategory, selectedGameFeature, selectedRegion),
+        )
         .sort((a, b) => a.startTime.localeCompare(b.startTime)),
-    [events, selectedCategory, selectedGameFeature],
+    [events, selectedCategory, selectedGameFeature, selectedRegion],
   );
   const monthEvents = useMemo(
     () =>
@@ -290,13 +456,8 @@ export default function CalendarScreen() {
             accessibilityState={{ expanded: filterOpen }}
             accessibilityLabel={`Kalenderfilter. ${
               filtersActive
-                ? [
-                    selectedCategory !== 'Alle Termine' ? `Terminart: ${selectedCategory}` : null,
-                    selectedGameFeature !== 'Alle Spielmerkmale'
-                      ? `Spielmerkmal: ${selectedGameFeature}`
-                      : null,
-                  ].filter(Boolean).join(', ')
-                : 'Alle Terminarten und Spielmerkmale'
+                ? activeFilterLabels.join(', ')
+                : 'Alle Terminarten, Spielmerkmale und Regionen'
             }`}
             testID="calendar-filter"
             onPress={() => setFilterOpen((open) => !open)}
@@ -366,6 +527,105 @@ export default function CalendarScreen() {
                   </Pressable>
                 );
               })}
+              <Text
+                accessibilityRole="header"
+                style={[styles.filterGroupTitle, { color: colors.mutedForeground }]}
+              >
+                REGION
+              </Text>
+              <View style={styles.regionControls}>
+                <View style={styles.regionStatusRow}>
+                  <Feather name="map-pin" size={13} color={colors.primary} />
+                  <Text
+                    accessibilityLiveRegion="polite"
+                    style={[styles.regionStatusText, { color: colors.mutedForeground }]}
+                    numberOfLines={2}
+                  >
+                    {regionStatusLabel}
+                  </Text>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={
+                      regionStatus === 'settings-required' && Platform.OS !== 'web'
+                        ? 'Standortzugriff in den Einstellungen öffnen'
+                        : 'Region automatisch ermitteln'
+                    }
+                    accessibilityState={{ disabled: isDetectingRegion }}
+                    disabled={isDetectingRegion}
+                    testID="calendar-region-detect"
+                    onPress={() => void handleAutomaticRegion()}
+                    style={({ pressed }) => [
+                      styles.regionDetectButton,
+                      { borderColor: colors.border },
+                      pressed && styles.pressed,
+                      isDetectingRegion && styles.disabled,
+                    ]}
+                  >
+                    <Feather
+                      name={regionStatus === 'settings-required' ? 'settings' : 'crosshair'}
+                      size={13}
+                      color={colors.primary}
+                    />
+                    <Text style={[styles.regionDetectText, { color: colors.primary }]}>
+                      {isDetectingRegion
+                        ? 'Ermittle …'
+                        : regionStatus === 'settings-required' && Platform.OS !== 'web'
+                          ? 'Einstellungen'
+                          : 'Automatisch'}
+                    </Text>
+                  </Pressable>
+                </View>
+                <Text style={[styles.regionPrivacyNote, { color: colors.mutedForeground }]}>
+                  Ungefähr nächstgelegene Turnierregion; dein genauer Standort wird nicht gespeichert.
+                </Text>
+                {regionMessage ? (
+                  <Text
+                    accessibilityLiveRegion="polite"
+                    style={[styles.regionMessage, { color: colors.warning }]}
+                  >
+                    {regionMessage}
+                  </Text>
+                ) : null}
+                {locationPermission?.status === 'denied' && !locationPermission.canAskAgain &&
+                Platform.OS !== 'web' ? (
+                  <Text style={[styles.regionPrivacyNote, { color: colors.mutedForeground }]}>
+                    Du kannst den Standortzugriff auch in den Geräteeinstellungen wieder aktivieren.
+                  </Text>
+                ) : null}
+                <View style={styles.regionOptions}>
+                  {calendarRegionFilters.map((region) => {
+                    const active = selectedRegion === region;
+                    return (
+                      <Pressable
+                        key={region}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Region: ${region}`}
+                        accessibilityState={{ selected: active }}
+                        testID={`calendar-filter-region-${region}`}
+                        onPress={() => selectRegionManually(region)}
+                        style={({ pressed }) => [
+                          styles.regionOption,
+                          {
+                            borderColor: active ? colors.primary : colors.border,
+                            backgroundColor: active ? colors.accent : colors.card,
+                          },
+                          pressed && styles.pressed,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.regionOptionText,
+                            { color: active ? colors.primary : colors.foreground },
+                          ]}
+                        >
+                          {region}
+                        </Text>
+                        {active ? <Feather name="check" size={13} color={colors.primary} /> : null}
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Filter zurücksetzen"
@@ -375,6 +635,7 @@ export default function CalendarScreen() {
                 onPress={() => {
                   setSelectedCategory('Alle Termine');
                   setSelectedGameFeature('Alle Spielmerkmale');
+                  selectRegionManually('Alle Regionen');
                 }}
                 style={({ pressed }) => [
                   styles.filterReset,
@@ -454,10 +715,21 @@ const styles = StyleSheet.create({
   filterMenu: { borderWidth: 1, borderRadius: 16, marginTop: 7, overflow: 'hidden' },
   filterGroupTitle: { fontSize: 10, fontWeight: '800', letterSpacing: 1, paddingHorizontal: 15, paddingTop: 13, paddingBottom: 4 },
   filterOption: { minHeight: 45, paddingHorizontal: 15, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  regionControls: { paddingHorizontal: 14, paddingBottom: 10, gap: 8 },
+  regionStatusRow: { minHeight: 34, flexDirection: 'row', alignItems: 'center', gap: 7 },
+  regionStatusText: { flex: 1, fontSize: 11, lineHeight: 15, fontWeight: '600' },
+  regionDetectButton: { minHeight: 34, borderWidth: 1, borderRadius: 10, paddingHorizontal: 9, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5 },
+  regionDetectText: { fontSize: 10, fontWeight: '700' },
+  regionPrivacyNote: { fontSize: 10, lineHeight: 14 },
+  regionMessage: { fontSize: 11, lineHeight: 15, fontWeight: '600' },
+  regionOptions: { flexDirection: 'row', flexWrap: 'wrap', gap: 7, paddingTop: 2 },
+  regionOption: { minWidth: 65, minHeight: 36, borderWidth: 1, borderRadius: 10, paddingHorizontal: 9, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5 },
+  regionOptionText: { fontSize: 11, fontWeight: '700' },
   filterReset: { minHeight: 45, borderTopWidth: StyleSheet.hairlineWidth, alignItems: 'center', justifyContent: 'center' },
   filterResetText: { fontSize: 13, fontWeight: '700' },
   optionDot: { width: 7, height: 7, borderRadius: 4 },
   filterOptionText: { flex: 1, fontSize: 13, fontWeight: '600' },
+  disabled: { opacity: 0.55 },
   dayHeading: { marginHorizontal: 20, marginBottom: 10 },
   dayTitleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   dayTitle: { flex: 1, fontSize: 18, lineHeight: 24, fontWeight: '800', letterSpacing: -0.35 },

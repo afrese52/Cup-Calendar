@@ -1,6 +1,6 @@
 import React from 'react';
 import { afterEach, beforeEach, expect, jest, test } from '@jest/globals';
-import { act, fireEvent, render } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { AccessibilityInfo, Alert, Dimensions, Platform, StyleSheet } from 'react-native';
 import { matchesEventFilter, sampleEvents, toLocalDateKey, type TournamentEvent } from '../data/events';
 import { EventCard } from '../components/EventCard';
@@ -13,6 +13,21 @@ const mockContext: { current: Record<string, any> } = { current: {} };
 
 jest.mock('@expo/vector-icons', () => ({ Feather: () => null }));
 jest.mock('expo-haptics', () => ({ selectionAsync: jest.fn() }));
+jest.mock('../services/calendarRegionPreference', () => ({
+  loadCalendarRegionPreference: jest.fn(async () => null),
+  saveCalendarRegionPreference: jest.fn(async () => undefined),
+}));
+jest.mock('../services/deviceRegion', () => ({
+  resolveDeviceRegion: jest.fn(async () => ({
+    status: 'permission-required',
+    permission: {
+      granted: false,
+      status: 'denied',
+      canAskAgain: true,
+      expires: 'never',
+    },
+  })),
+}));
 jest.mock('expo-router', () => ({
   router: { push: jest.fn(), replace: jest.fn() },
   useLocalSearchParams: () => ({ id: 'preview-fncs-eu-duos' }),
@@ -65,6 +80,13 @@ jest.mock('@/components/MonthCalendar', () => {
 const mockRouterPush = (jest.requireMock('expo-router') as {
   router: { push: jest.Mock };
 }).router.push;
+const mockRegionPreference = jest.requireMock('../services/calendarRegionPreference') as {
+  loadCalendarRegionPreference: jest.Mock;
+  saveCalendarRegionPreference: jest.Mock;
+};
+const mockDeviceRegion = jest.requireMock('../services/deviceRegion') as {
+  resolveDeviceRegion: jest.Mock;
+};
 const event = sampleEvents[0]!;
 const originalPlatformDescriptor = Object.getOwnPropertyDescriptor(Platform, 'OS');
 const defaultWindowDimensions = Dimensions.get('window');
@@ -125,6 +147,17 @@ beforeEach(() => {
   setAuthState(false);
   mockRouterPush.mockReset();
   mockToggleBookmark.mockReset().mockResolvedValue(undefined);
+  mockRegionPreference.loadCalendarRegionPreference.mockReset().mockResolvedValue(null as never);
+  mockRegionPreference.saveCalendarRegionPreference.mockReset().mockResolvedValue(undefined as never);
+  mockDeviceRegion.resolveDeviceRegion.mockReset().mockResolvedValue({
+    status: 'permission-required',
+    permission: {
+      granted: false,
+      status: 'denied',
+      canAskAgain: true,
+      expires: 'never',
+    },
+  } as never);
   alertSpy.mockClear();
 });
 
@@ -319,7 +352,7 @@ test.each(['android', 'ios'] as const)(
     const filter = view.getByTestId('calendar-filter');
 
     expect(filter.props.accessibilityLabel).toBe(
-      'Kalenderfilter. Alle Terminarten und Spielmerkmale',
+      'Kalenderfilter. Alle Terminarten, Spielmerkmale und Regionen',
     );
     expect(filter.props.accessibilityState).toEqual({ expanded: false });
 
@@ -327,6 +360,7 @@ test.each(['android', 'ios'] as const)(
 
     expect(view.getByText('TERMINART').props.accessibilityRole).toBe('header');
     expect(view.getByText('SPIELMERKMAL').props.accessibilityRole).toBe('header');
+    expect(view.getByText('REGION').props.accessibilityRole).toBe('header');
     expect(view.getByTestId('calendar-filter-category-Alle Termine').props).toMatchObject({
       accessibilityRole: 'button',
       accessibilityLabel: 'Terminart: Alle Termine',
@@ -335,6 +369,11 @@ test.each(['android', 'ios'] as const)(
     expect(view.getByTestId('calendar-filter-feature-Alle Spielmerkmale').props).toMatchObject({
       accessibilityRole: 'button',
       accessibilityLabel: 'Spielmerkmal: Alle Spielmerkmale',
+      accessibilityState: { selected: true },
+    });
+    expect(view.getByTestId('calendar-filter-region-Alle Regionen').props).toMatchObject({
+      accessibilityRole: 'button',
+      accessibilityLabel: 'Region: Alle Regionen',
       accessibilityState: { selected: true },
     });
     expect(view.getByTestId('calendar-filter-reset').props).toMatchObject({
@@ -363,11 +402,93 @@ test.each(['android', 'ios'] as const)(
     expect(view.getByTestId('calendar-filter-feature-Alle Spielmerkmale').props.accessibilityState.selected).toBe(true);
     expect(view.getByTestId('calendar-filter-reset').props.accessibilityState.disabled).toBe(true);
     expect(view.getByTestId('calendar-filter').props.accessibilityLabel).toBe(
-      'Kalenderfilter. Alle Terminarten und Spielmerkmale',
+      'Kalenderfilter. Alle Terminarten, Spielmerkmale und Regionen',
     );
     expect(view.getByTestId('calendar-filter').props.accessibilityState.expanded).toBe(true);
   },
 );
+
+test('setzt die Gerätestandort-Region automatisch und lässt globale Turniere sichtbar', async () => {
+  const today = new Date();
+  const makeRegionEvent = (
+    base: TournamentEvent,
+    id: string,
+    title: string,
+    region: TournamentEvent['region'],
+  ): TournamentEvent => ({
+    ...base,
+    id,
+    title,
+    region,
+    startTime: new Date(today.getFullYear(), today.getMonth(), today.getDate(), 12).toISOString(),
+    endTime: new Date(today.getFullYear(), today.getMonth(), today.getDate(), 14).toISOString(),
+  });
+  mockContext.current.events = [
+    makeRegionEvent(event, 'event-eu', 'EU-Turnier', 'EU'),
+    makeRegionEvent(event, 'event-nae', 'NAE-Turnier', 'NAE'),
+    makeRegionEvent(event, 'event-global', 'Globales Turnier', 'GLOBAL'),
+  ];
+  mockDeviceRegion.resolveDeviceRegion.mockResolvedValue({
+    status: 'ready',
+    region: 'EU',
+    permission: {
+      granted: true,
+      status: 'granted',
+      canAskAgain: true,
+      expires: 'never',
+    },
+  } as never);
+
+  const view = await render(<CalendarScreen />);
+  await waitFor(() => expect(mockDeviceRegion.resolveDeviceRegion).toHaveBeenCalledWith('initial'));
+  await fireEvent.press(view.getByTestId('month-calendar-toggle'));
+  await fireEvent.press(view.getByTestId('calendar-filter'));
+
+  expect(view.getByText('Automatisch ermittelt · EU')).toBeTruthy();
+  expect(view.getByTestId('calendar-filter-region-EU').props.accessibilityState.selected).toBe(true);
+  expect(view.getByTestId('month-calendar-events').props.accessibilityLabel).toBe(
+    'EU-Turnier, Globales Turnier',
+  );
+
+  await fireEvent.press(view.getByTestId('calendar-filter-region-NAE'));
+  expect(view.getByTestId('month-calendar-events').props.accessibilityLabel).toBe(
+    'NAE-Turnier, Globales Turnier',
+  );
+  expect(mockRegionPreference.saveCalendarRegionPreference).toHaveBeenCalledWith({
+    region: 'NAE',
+    source: 'manual',
+  });
+});
+
+test('lässt die Regionsauswahl bei fehlender Standortfreigabe manuell nutzbar', async () => {
+  mockContext.current.events = [
+    { ...event, id: 'event-eu', title: 'EU-Turnier', region: 'EU' },
+    { ...event, id: 'event-nae', title: 'NAE-Turnier', region: 'NAE' },
+    { ...event, id: 'event-global', title: 'Globales Turnier', region: 'GLOBAL' },
+  ];
+
+  const view = await render(<CalendarScreen />);
+  await fireEvent.press(view.getByTestId('month-calendar-toggle'));
+  await fireEvent.press(view.getByTestId('calendar-filter'));
+  await waitFor(() => expect(view.getByText(/Standortfreigabe fehlt/)).toBeTruthy());
+  await fireEvent.press(view.getByTestId('calendar-filter-region-NAE'));
+
+  expect(view.getByTestId('month-calendar-events').props.accessibilityLabel).toBe(
+    'NAE-Turnier, Globales Turnier',
+  );
+});
+
+test('zeigt globale Termine in regionalen Ansichten, filtert GLOBAL aber gezielt', () => {
+  const euEvent = { ...event, region: 'EU' as const };
+  const naeEvent = { ...event, region: 'NAE' as const };
+  const globalEvent = { ...event, region: 'GLOBAL' as const };
+
+  expect(matchesEventFilter(euEvent, 'Alle Termine', 'Alle Spielmerkmale', 'EU')).toBe(true);
+  expect(matchesEventFilter(globalEvent, 'Alle Termine', 'Alle Spielmerkmale', 'EU')).toBe(true);
+  expect(matchesEventFilter(naeEvent, 'Alle Termine', 'Alle Spielmerkmale', 'EU')).toBe(false);
+  expect(matchesEventFilter(globalEvent, 'Alle Termine', 'Alle Spielmerkmale', 'GLOBAL')).toBe(true);
+  expect(matchesEventFilter(euEvent, 'Alle Termine', 'Alle Spielmerkmale', 'GLOBAL')).toBe(false);
+});
 
 test.each([
   ['Reload', 'Reload Liga', 'Reload Turnier', 'Zero-Build-Liga'],
@@ -435,7 +556,7 @@ test.each([
     expect(view.getByText('Battle-Royale-Turnier')).toBeTruthy();
     expect(view.getByText(new RegExp(`· 4 Termine$`))).toBeTruthy();
     expect(view.getByTestId('calendar-filter').props.accessibilityLabel).toBe(
-      'Kalenderfilter. Alle Terminarten und Spielmerkmale',
+      'Kalenderfilter. Alle Terminarten, Spielmerkmale und Regionen',
     );
   },
 );

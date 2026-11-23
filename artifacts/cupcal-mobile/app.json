@@ -35,7 +35,14 @@
     "plugins": [
       "expo-router",
       "expo-sqlite",
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "CupCal nutzt deinen Standort nur zur Auswahl der nächstgelegenen Fortnite-Turnierregion. Standortkoordinaten werden nicht gespeichert oder gesendet.",
+          "isIosReducedAccuracyByDefault": true
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
