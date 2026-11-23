@@ -966,6 +966,67 @@ test('zeigt im direkt geöffneten Wiederherstellungsmodus den Fehler einer neuen
   );
 });
 
+test('hält Wiederherstellungsfehler und Aktionen bei 200 Prozent Schrift auf kleinem Display lesbar', async () => {
+  const compactDimensions = { width: 320, height: 480, scale: 1, fontScale: 2 };
+  Dimensions.set({
+    window: compactDimensions,
+    screen: compactDimensions,
+  });
+  mockRouteParams.authMode = 'forgot-password';
+  auth.resetPasswordForEmail.mockResolvedValue({
+    error: new Error('Email rate limit exceeded'),
+  });
+
+  const view = await openSettings();
+  const scrollView = view.getByTestId('settings-scroll-view');
+  const compactScreen = within(scrollView);
+  await fireEvent.changeText(compactScreen.getByTestId('auth-email-input'), 'test@example.invalid');
+  await fireEvent.press(compactScreen.getByTestId('auth-submit-button'));
+
+  const errorMessage = await compactScreen.findByTestId('auth-error-message');
+  const emailInput = compactScreen.getByTestId('auth-email-input');
+  const submitButton = compactScreen.getByTestId('auth-submit-button');
+  const submitLabel = compactScreen.getByText('Link anfordern');
+  const backButton = compactScreen.getByTestId('auth-mode-toggle');
+  const backLabel = compactScreen.getByText('Zurück zur Anmeldung');
+
+  expect(Dimensions.get('window').fontScale).toBe(2);
+  expect(scrollView.props.scrollEnabled).toBe(true);
+  expect(StyleSheet.flatten(scrollView.props.style).flex).toBe(1);
+  expect(errorMessage.props.accessibilityRole).toBe('alert');
+  expect(errorMessage.props.allowFontScaling).not.toBe(false);
+  expect(errorMessage.props.numberOfLines).toBeUndefined();
+  expect(errorMessage.props.ellipsizeMode).toBeUndefined();
+  expect(StyleSheet.flatten(errorMessage.props.style).lineHeight).toBeUndefined();
+  expect(emailInput).toBeTruthy();
+  expect(submitButton).toBeTruthy();
+  expect(backButton).toBeTruthy();
+  expect(StyleSheet.flatten(submitLabel.props.style)).toMatchObject({
+    width: '100%',
+    flexShrink: 1,
+    textAlign: 'center',
+  });
+  expect(submitLabel.props.allowFontScaling).not.toBe(false);
+  expect(submitLabel.props.numberOfLines).toBeUndefined();
+  expect(submitLabel.props.ellipsizeMode).toBeUndefined();
+  expect(backLabel.props.allowFontScaling).not.toBe(false);
+  expect(backLabel.props.numberOfLines).toBeUndefined();
+  expect(backLabel.props.ellipsizeMode).toBeUndefined();
+
+  await fireEvent.scroll(scrollView, {
+    nativeEvent: {
+      contentOffset: { x: 0, y: 600 },
+      contentSize: { width: compactDimensions.width, height: 1200 },
+      layoutMeasurement: { width: compactDimensions.width, height: compactDimensions.height },
+    },
+  });
+
+  expect(compactScreen.getByTestId('auth-email-input')).toBeTruthy();
+  expect(compactScreen.getByTestId('auth-error-message')).toBeTruthy();
+  expect(compactScreen.getByTestId('auth-submit-button')).toBeTruthy();
+  expect(compactScreen.getByTestId('auth-mode-toggle')).toBeTruthy();
+});
+
 test('hält Eingabe, Rückmeldung und Zurück-Aktion auf kleinem Display erreichbar', async () => {
   const compactDimensions = { width: 320, height: 568, scale: 1, fontScale: 1 };
   Dimensions.set({
