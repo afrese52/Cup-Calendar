@@ -1,0 +1,72 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "zfgsII0rmf6f9PdIkqG6g"
+uri = "file://artifacts/cupcal-mobile/store-assets/google-play/store-preview.html"
+type = "html"
+title = "CupCal – Google-Play-Paket"
+description = "Vorschau der deutschen Store-Texte, Grafik und Smartphone-Bilder mit Hinweisen vor einer öffentlichen Veröffentlichung."
+logical_id = "27706d35-4611-498f-932f-6cadf00350bd"
+content_hash = "sha256:87f7f2e9564fa030bfecf28399123b9165452aa17bd87a00aad09295cbbf605e"
+size = 1150794
+mtime_ms = 1795392957578
+storage_uri = "gcs://replit-rams-assets-archer/rams/assets/repl:fba06988-5dc0-49ce-a88d-6c2b15091cfa/27706d35-4611-498f-932f-6cadf00350bd/6414eddc-8628-4514-8afb-010f32bf2657"
+storage_version_token = "1795392979949113"
+content_type = "text/html"
+
+[[outputs]]
+id = "OGahGJemm67UDggRrSEkX"
+uri = "file://artifacts/cupcal-mobile/store-assets/google-play/play-icon-512.png"
+type = "image"
+title = "CupCal – App-Symbol 512 × 512"
+description = "Google-Play-Symbol als 32-Bit-PNG mit Alpha."
+logical_id = "72bd502d-259c-4068-8e89-291723bc6879"
+content_hash = "sha256:e799121c72486dd560b7639eef72b01ca60abc337006e15dc7260b2d844a907f"
+size = 302275
+mtime_ms = 1795392736169
+storage_uri = "gcs://replit-rams-assets-archer/rams/assets/repl:fba06988-5dc0-49ce-a88d-6c2b15091cfa/72bd502d-259c-4068-8e89-291723bc6879/fb5132c9-699c-4a22-9994-768f6d3bfc08"
+storage_version_token = "1795392991862544"
+content_type = "image/png"
+
+[[outputs]]
+id = "0Etgkxez2VrPilrzRDxdY"
+uri = "file://artifacts/cupcal-mobile/store-assets/google-play/feature-graphic-1024x500.jpg"
+type = "image"
+title = "CupCal – Featuregrafik 1024 × 500"
+description = "Google-Play-Featuregrafik im JPEG-Format."
+logical_id = "88fa3b7e-26b0-4ef9-90e8-1a219703c7cc"
+content_hash = "sha256:53a400cd3c4ed70edc33c7ed08f1ce7f0f1ada7e601ea3b5a6ac30c0e910e710"
+size = 100045
+mtime_ms = 1795392838272
+storage_uri = "gcs://replit-rams-assets-archer/rams/assets/repl:fba06988-5dc0-49ce-a88d-6c2b15091cfa/88fa3b7e-26b0-4ef9-90e8-1a219703c7cc/22e7f220-4362-498f-969a-fe5620e3469b"
+storage_version_token = "1795392992569840"
+content_type = "image/jpeg"
+
+[[outputs]]
+id = "pDRWA_6Vsavl4FtM8Mr4W"
+uri = "file://artifacts/cupcal-mobile/store-assets/google-play/screenshots/play-phone-01-calendar.png"
+type = "image"
+title = "CupCal – Kalender-Vorschau"
+description = "Smartphone-Screenshot 9:16 aus der aktuellen App-Vorschau; vor Veröffentlichung mit Android und Berliner Gerätezeit neu aufnehmen."
+logical_id = "fc1a0f57-b6ce-4276-a1e4-6723211cd380"
+content_hash = "sha256:de57527221e53e3c02acb893ced34160d5c1dea3ca701f8ec623d82cc5e1690f"
+size = 181748
+mtime_ms = 1795392736415
+storage_uri = "gcs://replit-rams-assets-archer/rams/assets/repl:fba06988-5dc0-49ce-a88d-6c2b15091cfa/fc1a0f57-b6ce-4276-a1e4-6723211cd380/b267b10d-05f4-4957-b49b-83ab24e05684"
+storage_version_token = "1795392993247904"
+content_type = "image/png"
+
+[[outputs]]
+id = "ztWNT5n8PnLBYx3NTxb45"
+uri = "file://artifacts/cupcal-mobile/store-assets/google-play/screenshots/play-phone-03-account.png"
+type = "image"
+title = "CupCal – Konto-Vorschau"
+description = "Smartphone-Screenshot der Info- und Kontoansicht aus der aktuellen App-Vorschau."
+logical_id = "cc7ea5fa-61b0-4624-ba6a-7e9b8d10fda9"
+content_hash = "sha256:25aa9c60d7379e1bab8f5db09354286580b288dc225ef80028281bb653044d34"
+size = 116584
+mtime_ms = 1795392736896
+storage_uri = "gcs://replit-rams-assets-archer/rams/assets/repl:fba06988-5dc0-49ce-a88d-6c2b15091cfa/cc7ea5fa-61b0-4624-ba6a-7e9b8d10fda9/4ea8db42-e39a-447e-a6b7-ded1faddf15c"
+storage_version_token = "1795392993947685"
+content_type = "image/png"

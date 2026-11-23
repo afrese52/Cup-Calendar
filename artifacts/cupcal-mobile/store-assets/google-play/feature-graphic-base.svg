@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="500" viewBox="0 0 1024 500">
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#080b10"/>
+      <stop offset=".54" stop-color="#101a2a"/>
+      <stop offset="1" stop-color="#1b1234"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="72%" cy="48%" r="58%">
+      <stop offset="0" stop-color="#41526d" stop-opacity=".56"/>
+      <stop offset="1" stop-color="#101a2a" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#d5f536"/>
+      <stop offset="1" stop-color="#a7ea20"/>
+    </linearGradient>
+  </defs>
+  <rect width="1024" height="500" fill="url(#background)"/>
+  <rect width="1024" height="500" fill="url(#glow)"/>
+  <circle cx="724" cy="235" r="220" fill="none" stroke="#7e54ca" stroke-opacity=".18" stroke-width="1"/>
+  <circle cx="724" cy="235" r="178" fill="none" stroke="#40c9e7" stroke-opacity=".12" stroke-width="1"/>
+  <path d="M0 456 C185 398 324 500 532 432" fill="none" stroke="#d5f536" stroke-opacity=".14" stroke-width="2"/>
+  <path d="M0 473 C193 414 348 516 550 447" fill="none" stroke="#44c8e6" stroke-opacity=".1" stroke-width="1"/>
+
+  <text x="64" y="93" fill="#d5f536" font-family="Inter, Arial, sans-serif" font-size="18" font-weight="800" letter-spacing="4">CUPCAL · TURNIERKALENDER</text>
+  <text x="60" y="205" fill="#f0f2f5" font-family="Inter, Arial, sans-serif" font-size="72" font-weight="800" letter-spacing="-3">Alle Termine.</text>
+  <text x="60" y="286" fill="url(#accent)" font-family="Inter, Arial, sans-serif" font-size="72" font-weight="800" letter-spacing="-3">Ein Überblick.</text>
+  <text x="64" y="344" fill="#c0c8d4" font-family="Inter, Arial, sans-serif" font-size="24" font-weight="500">Turniere, Ligen und Qualifikationen</text>
+  <text x="64" y="378" fill="#c0c8d4" font-family="Inter, Arial, sans-serif" font-size="24" font-weight="500">Woche, Monat und Agenda im Blick.</text>
+  <rect x="64" y="413" width="318" height="3" rx="2" fill="url(#accent)"/>
+
+  <rect x="700" y="10" width="298" height="480" rx="35" fill="#070a0f" stroke="#d5f536" stroke-opacity=".72" stroke-width="2"/>
+  <rect x="711" y="21" width="276" height="458" rx="25" fill="#10161e"/>
+  <rect x="719" y="29" width="260" height="442" rx="19" fill="#080b10"/>
+</svg>
