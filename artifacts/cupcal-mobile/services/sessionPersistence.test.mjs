@@ -1,7 +1,13 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createCupCalSupabaseClient } from './createSupabaseClient.ts';
-import { confirmEmailCode, friendlyAuthError, signOutAccount } from './accountAuth.ts';
+import {
+  confirmEmailCode,
+  emailConfirmationLinkError,
+  friendlyAuthError,
+  SESSION_PERSISTENCE_ERROR_CODE,
+  signOutAccount,
+} from './accountAuth.ts';
 
 const testUserId = '00000000-0000-4000-8000-000000000015';
 const testEmail = 'restart-test@example.invalid';
@@ -323,6 +329,83 @@ for (const platform of ['Android', 'iOS']) {
     await restartedClient.auth.dispose();
   });
 }
+
+test('meldet eine bestätigte E-Mail ohne dauerhaft speicherbare Sitzung', async () => {
+  const storage = createPersistentStorage();
+  const projectRef = 'confirmation-storage-failure';
+  const flowId = '12121212-1212-4121-8121-121212121212';
+  const storageKey = `sb-${projectRef}-auth-token`;
+  await storage.setItem(
+    `sb-${projectRef}-auth-token-flow-${flowId}-code-verifier`,
+    JSON.stringify('confirmation-verifier/signup'),
+  );
+  const serverResponse = {
+    access_token: accessToken,
+    refresh_token: 'confirmed-refresh-token',
+    token_type: 'bearer',
+    expires_in: 3600,
+    user: {
+      id: testUserId,
+      email: testEmail,
+      aud: 'authenticated',
+      role: 'authenticated',
+      app_metadata: {},
+      user_metadata: {},
+      created_at: new Date(0).toISOString(),
+    },
+  };
+  let exchangeSucceeded = false;
+  const failingStorage = {
+    ...storage,
+    setItem: async (key, value) => {
+      await storage.setItem(key, value);
+      if (key === storageKey) throw new Error('Device storage failed after writing');
+    },
+  };
+  const client = createCupCalSupabaseClient(
+    `https://${projectRef}.supabase.co`,
+    'test-publishable-key',
+    failingStorage,
+    async (input) => {
+      if (new URL(String(input)).pathname.endsWith('/token')) {
+        exchangeSucceeded = true;
+        return new Response(JSON.stringify(serverResponse), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      return fakeUserFetch(input);
+    },
+  );
+
+  let restartedClient;
+  try {
+    await assert.rejects(
+      confirmEmailCode(client.auth, 'successful-confirmation-code', flowId),
+      (error) => error.code === SESSION_PERSISTENCE_ERROR_CODE,
+    );
+    assert.equal(exchangeSucceeded, true, 'der Codeaustausch muss serverseitig erfolgreich gewesen sein');
+    assert.equal(
+      emailConfirmationLinkError(SESSION_PERSISTENCE_ERROR_CODE),
+      'Deine E-Mail-Adresse ist bestätigt, aber die Sitzung konnte auf diesem Gerät nicht dauerhaft gespeichert werden. Du bist nicht angemeldet. Bitte melde dich erneut an.',
+    );
+    assert.equal((await client.auth.getSession()).data.session, null);
+    assert.equal(await storage.getItem(storageKey), null);
+
+    restartedClient = createCupCalSupabaseClient(
+      `https://${projectRef}.supabase.co`,
+      'test-publishable-key',
+      storage,
+      fakeUserFetch,
+    );
+    const restored = await restartedClient.auth.getSession();
+    assert.equal(restored.error, null);
+    assert.equal(restored.data.session, null, 'nach einem Neustart darf keine Sitzung wiederherstellbar sein');
+  } finally {
+    await client.auth.dispose();
+    await restartedClient?.auth.dispose();
+  }
+});
 
 test('ordnet zwei offene Registrierungslinks den Konten zu und meldet zuletzt das zweite an', async () => {
   const storage = createPersistentStorage();

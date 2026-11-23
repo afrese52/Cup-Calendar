@@ -5,6 +5,7 @@ import { passwordLengthRequirementError } from './passwordRecovery.ts';
 type AuthApi = SupabaseClient['auth'];
 const emailConfirmationQueues = new WeakMap<object, Promise<void>>();
 const emailConfirmationGenerations = new WeakMap<object, number>();
+export const SESSION_PERSISTENCE_ERROR_CODE = 'cupcal_session_persistence_failed';
 const storage = (AsyncStorage as typeof AsyncStorage & { default?: typeof AsyncStorage }).default
   ?? AsyncStorage;
 export const ACCOUNT_CONFIRMATION_RESEND_AVAILABLE_AT_KEY =
@@ -414,6 +415,9 @@ export function emailConfirmationLinkError(
   const description = errorDescription?.toLowerCase() ?? '';
   const details = `${code} ${description}`;
 
+  if (code === SESSION_PERSISTENCE_ERROR_CODE) {
+    return 'Deine E-Mail-Adresse ist bestätigt, aber die Sitzung konnte auf diesem Gerät nicht dauerhaft gespeichert werden. Du bist nicht angemeldet. Bitte melde dich erneut an.';
+  }
   if (details.includes('email_already_confirmed') || details.includes('already confirmed')) {
     return 'Diese E-Mail-Adresse ist bereits bestätigt. Melde dich in CupCal an.';
   }

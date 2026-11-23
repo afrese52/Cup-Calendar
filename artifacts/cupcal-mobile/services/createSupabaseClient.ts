@@ -1,5 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
-import { getRateLimitRetryAfterSeconds } from './accountAuth.ts';
+import {
+  getRateLimitRetryAfterSeconds,
+  SESSION_PERSISTENCE_ERROR_CODE,
+} from './accountAuth.ts';
 
 type SessionStorage = {
   getItem: (key: string) => Promise<string | null>;
@@ -15,6 +18,27 @@ export function createCupCalSupabaseClient(
 ) {
   const sessionStorage: SessionStorage = {
     ...storage,
+    setItem: async (key, value) => {
+      try {
+        await storage.setItem(key, value);
+      } catch (cause) {
+        if (!key.endsWith('-auth-token')) throw cause;
+
+        // A storage implementation may fail after writing. Best-effort cleanup
+        // prevents a partially persisted session from appearing restorable.
+        try {
+          await storage.removeItem(key);
+        } catch {
+          // The failed session is still never reported as a successful login.
+        }
+
+        const error = new Error(
+          'Die E-Mail-Adresse ist bestätigt, aber die Sitzung konnte auf diesem Gerät nicht dauerhaft gespeichert werden.',
+        ) as Error & { code: string };
+        error.code = SESSION_PERSISTENCE_ERROR_CODE;
+        throw error;
+      }
+    },
     getItem: async (key) => {
       const value = await storage.getItem(key);
       if (value === null || !key.endsWith('-auth-token')) return value;
