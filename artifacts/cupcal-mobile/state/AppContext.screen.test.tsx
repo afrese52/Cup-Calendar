@@ -731,6 +731,81 @@ test('verwirft eine alte Sync-Antwort nach Ab- und erneuter Anmeldung desselben 
   ).toBe(false);
 });
 
+test('verwirft alte vorbereitete Favoritenänderungen nach Ab- und erneuter Anmeldung desselben Kontos', async () => {
+  const firstSessionPreparation = deferred<Record<string, { isFavorite: boolean; updatedAt: string }>>();
+  let firstPreparationResolved = false;
+  void firstSessionPreparation.promise.then(() => {
+    firstPreparationResolved = true;
+  });
+  let preparationCount = 0;
+  bookmarkStore.prepareBookmarksForSync.mockImplementation(() => {
+    preparationCount += 1;
+    return preparationCount === 1
+      ? firstSessionPreparation.promise
+      : Promise.resolve({
+          'favorit-neu': {
+            isFavorite: true,
+            updatedAt: '2026-01-02T00:00:00.000Z',
+          },
+        });
+  });
+
+  let remoteBookmark: RemoteBookmark | null = null;
+  mockedSupabase.fetchRemoteBookmarks.mockImplementation(async () =>
+    remoteBookmark ? [remoteBookmark] : [],
+  );
+  mockedSupabase.saveRemoteBookmark.mockImplementation(async (
+    eventId: string,
+    change: { isFavorite: boolean },
+  ) => {
+    remoteBookmark = {
+      event_id: eventId,
+      is_favorite: change.isFavorite,
+      updated_at: '2026-01-02T00:00:00.000Z',
+      revision: 1,
+    };
+  });
+
+  const view = await renderProvider();
+  await emitUser('konto-a');
+  await waitFor(() => expect(preparationCount).toBe(1));
+
+  await act(async () => {
+    mockedSupabase.__emitAuthStateChange('SIGNED_OUT', null);
+  });
+  await waitFor(() => expect(view.getByTestId('bookmark-ids').props.children).toBe(''));
+  await emitUser('konto-a');
+
+  await waitFor(() => expect(preparationCount).toBe(2));
+  await waitFor(() => expect(mockedSupabase.saveRemoteBookmark).toHaveBeenCalledTimes(1));
+  await waitFor(() => expect(view.getByTestId('bookmark-ids').props.children).toBe('favorit-neu'));
+  await waitFor(() => expect(view.getByTestId('bookmark-sync-status').props.children).toBe('synced'));
+
+  expect(firstPreparationResolved).toBe(false);
+  expect(mockedSupabase.saveRemoteBookmark).toHaveBeenCalledWith('favorit-neu', {
+    isFavorite: true,
+    updatedAt: '2026-01-02T00:00:00.000Z',
+  });
+
+  await act(async () => {
+    firstSessionPreparation.resolve({
+      'favorit-alt': {
+        isFavorite: true,
+        updatedAt: '2026-01-01T00:00:00.000Z',
+      },
+    });
+    await firstSessionPreparation.promise;
+  });
+
+  expect(view.getByTestId('bookmark-ids').props.children).toBe('favorit-neu');
+  expect(view.getByTestId('bookmark-sync-status').props.children).toBe('synced');
+  expect(mockedSupabase.saveRemoteBookmark).toHaveBeenCalledTimes(1);
+  expect(
+    (bookmarkStore.reconcileBookmarks.mock.calls as [string, RemoteBookmark[]][])
+      .some(([, remote]) => remote.some((bookmark) => bookmark.event_id === 'favorit-alt')),
+  ).toBe(false);
+});
+
 test('verwirft verspätetes Favoritenspeichern nach Ab- und erneuter Anmeldung desselben Kontos', async () => {
   const firstSessionSave = deferred<string[]>();
   let accountLoads = 0;
