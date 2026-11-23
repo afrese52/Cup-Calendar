@@ -1,6 +1,8 @@
 import React from 'react';
 import { afterEach, beforeEach, expect, jest, test } from '@jest/globals';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { setAuthTokenGetter, setBaseUrl } from '@workspace/api-client-react';
 import SearchConsoleScreen from '../app/admin/search-console';
 
 const mockRouter = { back: jest.fn() };
@@ -32,27 +34,34 @@ jest.mock('@/hooks/useColors', () => ({
     input: '#0b1017',
   }),
 }));
-jest.mock('@/services/supabase', () => ({
-  supabase: {
-    auth: {
-      getSession: jest.fn(async () => ({
-        data: { session: { access_token: 'cupcal-session-token' } },
-        error: null,
-      })),
-    },
-  },
-}));
-
 beforeEach(() => {
   process.env.EXPO_PUBLIC_DOMAIN = 'cupcal.example.test';
+  setBaseUrl('https://cupcal.example.test');
+  setAuthTokenGetter(() => 'cupcal-session-token');
   globalThis.fetch = mockFetch as unknown as typeof fetch;
   mockFetch.mockReset();
 });
 
 afterEach(() => {
+  setBaseUrl(null);
+  setAuthTokenGetter(null);
   if (originalDomain === undefined) delete process.env.EXPO_PUBLIC_DOMAIN;
   else process.env.EXPO_PUBLIC_DOMAIN = originalDomain;
 });
+
+async function renderScreen() {
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false, gcTime: 0 },
+      mutations: { retry: false, gcTime: 0 },
+    },
+  });
+  return await render(
+    <QueryClientProvider client={queryClient}>
+      <SearchConsoleScreen />
+    </QueryClientProvider>,
+  );
+}
 
 test('zeigt den Hinweis, wenn Google-Zugangsdaten noch nicht eingerichtet sind', async () => {
   mockFetch.mockResolvedValueOnce(Response.json({
@@ -61,7 +70,7 @@ test('zeigt den Hinweis, wenn Google-Zugangsdaten noch nicht eingerichtet sind',
     serviceAccountEmail: null,
   }));
 
-  const view = await render(<SearchConsoleScreen />);
+  const view = await renderScreen();
 
   expect(await view.findByText(/Google-Dienstkonto und Leseberechtigung/)).toBeTruthy();
   expect(view.getByLabelText('Suchdaten abrufen').props.accessibilityState.disabled).toBe(true);
@@ -92,18 +101,67 @@ test('lädt Indexstatus und Suchleistung mit der CupCal-Admin-Sitzung', async ()
           userCanonical: null,
         },
         performance: { clicks: 12, impressions: 340, ctr: 0.035, position: 8.2 },
+        queries: [
+          { query: 'cupcal kalender', clicks: 8, impressions: 100, ctr: 0.08, position: 4.5 },
+          { query: 'fortnite cup termine', clicks: 2, impressions: 30, ctr: 0.0667, position: 7.1 },
+        ],
       }],
     }));
 
-  const view = await render(<SearchConsoleScreen />);
+  const view = await renderScreen();
   expect(await view.findByText('Google-Dienstkonto ist eingerichtet.')).toBeTruthy();
   await fireEvent.press(view.getByText('Suchdaten abrufen'));
 
   expect(await view.findByText('Eingereicht und indexiert')).toBeTruthy();
   expect(await view.findByText('12 Klicks · 340 Impressionen')).toBeTruthy();
+  expect(await view.findByText('cupcal kalender')).toBeTruthy();
+  expect(view.getByText(/anonymisierte Suchanfragen möglicherweise aus/)).toBeTruthy();
   await waitFor(() => {
-    const reportRequest = mockFetch.mock.calls[1]?.[1];
-    expect(reportRequest?.headers).toMatchObject({ authorization: 'Bearer cupcal-session-token' });
+    const reportCall = mockFetch.mock.calls[1];
+    const reportRequest = reportCall?.[1];
+    const reportUrl = reportCall?.[0];
+    expect(reportUrl).toBe('https://cupcal.example.test/api/v1/admin/search-console/report');
+    expect(new Headers(reportRequest?.headers).get('authorization')).toBe('Bearer cupcal-session-token');
     expect(reportRequest?.method).toBe('POST');
+    expect(JSON.parse(String(reportRequest?.body))).toMatchObject({
+      urls: ['https://cupcal.af-software.app/'],
+      startDate: expect.any(String),
+      endDate: expect.any(String),
+    });
   });
+});
+
+test('erklärt, wenn für eine Seite keine sichtbaren Suchbegriffe vorliegen', async () => {
+  mockFetch
+    .mockResolvedValueOnce(Response.json({
+      configured: true,
+      property: 'https://cupcal.af-software.app/',
+      serviceAccountEmail: 'cupcal-search@project.iam.gserviceaccount.com',
+    }))
+    .mockResolvedValueOnce(Response.json({
+      property: 'https://cupcal.af-software.app/',
+      data: [{
+        url: 'https://cupcal.af-software.app/',
+        indexing: {
+          verdict: 'PASS',
+          coverageState: 'Indexiert',
+          robotsTxtState: null,
+          indexingState: 'INDEXING_ALLOWED',
+          lastCrawlTime: null,
+          pageFetchState: null,
+          googleCanonical: null,
+          userCanonical: null,
+        },
+        performance: { clicks: 0, impressions: 0, ctr: 0, position: null },
+        queries: [],
+      }],
+    }));
+
+  const view = await renderScreen();
+  await fireEvent.press(await view.findByText('Suchdaten abrufen'));
+
+  expect(await view.findByText(
+    'Für diese Seite wurden im Zeitraum keine sichtbaren Suchbegriffe gemeldet.',
+  )).toBeTruthy();
+  expect(view.getByText(/Google blendet seltene oder anonymisierte Suchanfragen/)).toBeTruthy();
 });

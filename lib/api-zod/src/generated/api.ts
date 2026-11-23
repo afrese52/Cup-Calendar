@@ -165,6 +165,61 @@ export const GetAdminImportHistoryResponse = zod.object({
 
 
 /**
+ * @summary Prüft die Einrichtung der CupCal-Search-Console
+ */
+export const GetSearchConsoleStatusResponse = zod.object({
+  "configured": zod.boolean(),
+  "property": zod.literal("https://cupcal.af-software.app/"),
+  "serviceAccountEmail": zod.string().email().nullable()
+})
+
+
+/**
+ * Ausschließlich lesender Abruf für HTTPS-URLs der fest konfigurierten CupCal-Property.
+ * @summary Lädt Indexstatus, Seitenleistung und Suchbegriffe für CupCal-Seiten
+ */
+export const getSearchConsoleReportBodyUrlsMax = 10;
+
+
+
+export const GetSearchConsoleReportBody = zod.object({
+  "urls": zod.array(zod.string().url()).min(1).max(getSearchConsoleReportBodyUrlsMax),
+  "startDate": zod.coerce.date(),
+  "endDate": zod.coerce.date()
+})
+
+export const GetSearchConsoleReportResponse = zod.object({
+  "property": zod.literal("https://cupcal.af-software.app/"),
+  "data": zod.array(zod.object({
+  "url": zod.string().url(),
+  "indexing": zod.object({
+  "verdict": zod.string().nullable(),
+  "coverageState": zod.string().nullable(),
+  "robotsTxtState": zod.string().nullable(),
+  "indexingState": zod.string().nullable(),
+  "lastCrawlTime": zod.coerce.date().nullable(),
+  "pageFetchState": zod.string().nullable(),
+  "googleCanonical": zod.string().url().nullable(),
+  "userCanonical": zod.string().url().nullable()
+}),
+  "performance": zod.object({
+  "clicks": zod.number(),
+  "impressions": zod.number(),
+  "ctr": zod.number(),
+  "position": zod.number().nullable()
+}),
+  "queries": zod.array(zod.object({
+  "query": zod.string(),
+  "clicks": zod.number(),
+  "impressions": zod.number(),
+  "ctr": zod.number(),
+  "position": zod.number().nullable()
+})).describe('Sichtbare Suchbegriffe; Google kann seltene oder anonymisierte Begriffe ausblenden.')
+}))
+})
+
+
+/**
  * @summary Erstellt ein kurzlebiges Bestätigungstoken für die Kontolöschung
  */
 export const RequestAccountDeletionResponse = zod.object({

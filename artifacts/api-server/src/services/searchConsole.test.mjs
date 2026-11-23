@@ -85,6 +85,23 @@ test("uses the readonly OAuth scope and maps index and search performance data",
       const body = JSON.parse(String(init.body));
       assert.equal(body.startDate, validRequest.startDate);
       assert.equal(body.endDate, validRequest.endDate);
+      assert.deepEqual(body.dimensionFilterGroups, [{
+        filters: [{
+          dimension: "page",
+          operator: "equals",
+          expression: validRequest.urls[0],
+        }],
+      }]);
+      if (body.dimensions[0] === "query") {
+        assert.equal(body.rowLimit, 100);
+        return Response.json({
+          rows: [
+            { keys: ["cupcal kalender"], clicks: 8, impressions: 100, ctr: 0.08, position: 4.5 },
+            { keys: ["fortnite cup termine"], clicks: 2, impressions: 30, ctr: 0.0667, position: 7.1 },
+          ],
+        });
+      }
+      assert.deepEqual(body.dimensions, ["page"]);
       return Response.json({ rows: [{ clicks: 12, impressions: 340, ctr: 0.035, position: 8.2 }] });
     },
   });
@@ -103,9 +120,14 @@ test("uses the readonly OAuth scope and maps index and search performance data",
       userCanonical: null,
     },
     performance: { clicks: 12, impressions: 340, ctr: 0.035, position: 8.2 },
+    queries: [
+      { query: "cupcal kalender", clicks: 8, impressions: 100, ctr: 0.08, position: 4.5 },
+      { query: "fortnite cup termine", clicks: 2, impressions: 30, ctr: 0.0667, position: 7.1 },
+    ],
   });
-  assert.equal(calls.length, 3);
+  assert.equal(calls.length, 4);
   assert.ok(calls.slice(1).every(({ init }) => init.headers.authorization === "Bearer mock-access-token"));
+  assert.ok(calls.slice(1).every(({ init }) => init.method === "POST"));
 });
 
 test("returns zeros when Search Console has no performance row", async () => {
@@ -121,6 +143,40 @@ test("returns zeros when Search Console has no performance row", async () => {
 
   const [result] = await client.getReport({ ...validRequest, urls: [validRequest.urls[0]] });
   assert.deepEqual(result?.performance, { clicks: 0, impressions: 0, ctr: 0, position: null });
+  assert.deepEqual(result?.queries, []);
+});
+
+test("filters visible search terms separately for each selected CupCal page", async () => {
+  const requestedPages = [];
+  const client = createSearchConsoleClient({
+    env: serviceAccountEnv(),
+    fetchImpl: async (input, init = {}) => {
+      const url = String(input);
+      if (url === "https://oauth2.googleapis.com/token") {
+        return Response.json({ access_token: "mock-access-token", expires_in: 3600 });
+      }
+      if (url.endsWith("/urlInspection/index:inspect")) {
+        return Response.json({ inspectionResult: { indexStatusResult: {} } });
+      }
+      const body = JSON.parse(String(init.body));
+      const pageUrl = body.dimensionFilterGroups[0].filters[0].expression;
+      requestedPages.push({ pageUrl, dimensions: body.dimensions });
+      return body.dimensions[0] === "query"
+        ? Response.json({ rows: [{ keys: [`Suchbegriff für ${pageUrl}`], clicks: 1, impressions: 4 }] })
+        : Response.json({ rows: [{ clicks: 1, impressions: 4 }] });
+    },
+  });
+
+  const result = await client.getReport(validRequest);
+  assert.deepEqual(result.map((item) => item.queries[0]?.query), [
+    `Suchbegriff für ${validRequest.urls[0]}`,
+    `Suchbegriff für ${validRequest.urls[1]}`,
+  ]);
+  assert.equal(
+    requestedPages.filter(({ dimensions }) => dimensions[0] === "query").length,
+    2,
+  );
+  assert.ok(requestedPages.every(({ pageUrl }) => validRequest.urls.includes(pageUrl)));
 });
 
 test("does not reveal Google error response contents", async () => {

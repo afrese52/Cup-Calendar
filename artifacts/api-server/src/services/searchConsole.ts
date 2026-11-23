@@ -30,6 +30,15 @@ export type SearchConsoleReportItem = {
     ctr: number;
     position: number | null;
   };
+  queries: SearchConsoleQuery[];
+};
+
+export type SearchConsoleQuery = {
+  query: string;
+  clicks: number;
+  impressions: number;
+  ctr: number;
+  position: number | null;
 };
 
 export class SearchConsoleError extends Error {
@@ -260,7 +269,7 @@ export function createSearchConsoleClient(options: {
         `${API_BASE_URL}/webmasters/v3/sites/${encodeURIComponent(CUPCAL_SEARCH_CONSOLE_PROPERTY)}/searchAnalytics/query`;
 
       return await Promise.all(validated.urls.map(async (url): Promise<SearchConsoleReportItem> => {
-        const [inspection, analytics] = await Promise.all([
+        const [inspection, analytics, queryAnalytics] = await Promise.all([
           googlePost(`${API_BASE_URL}/v1/urlInspection/index:inspect`, token, {
             inspectionUrl: url,
             siteUrl: CUPCAL_SEARCH_CONSOLE_PROPERTY,
@@ -275,6 +284,15 @@ export function createSearchConsoleClient(options: {
             }],
             rowLimit: 1,
           }),
+          googlePost(analyticsEndpoint, token, {
+            startDate: validated.startDate,
+            endDate: validated.endDate,
+            dimensions: ["query"],
+            dimensionFilterGroups: [{
+              filters: [{ dimension: "page", operator: "equals", expression: url }],
+            }],
+            rowLimit: 100,
+          }),
         ]);
 
         const inspectionResult = inspection["inspectionResult"];
@@ -288,6 +306,7 @@ export function createSearchConsoleClient(options: {
         const row = rows[0] && typeof rows[0] === "object"
           ? rows[0] as Record<string, unknown>
           : {};
+        const queryRows = Array.isArray(queryAnalytics["rows"]) ? queryAnalytics["rows"] : [];
         const position = row["position"];
 
         return {
@@ -308,6 +327,25 @@ export function createSearchConsoleClient(options: {
             ctr: asNumber(row["ctr"]),
             position: typeof position === "number" && Number.isFinite(position) ? position : null,
           },
+          queries: queryRows.flatMap((queryRow): SearchConsoleQuery[] => {
+            if (!queryRow || typeof queryRow !== "object") return [];
+            const queryData = queryRow as Record<string, unknown>;
+            const keys = queryData["keys"];
+            const query = Array.isArray(keys) && typeof keys[0] === "string"
+              ? keys[0].trim()
+              : "";
+            if (!query) return [];
+            const queryPosition = queryData["position"];
+            return [{
+              query,
+              clicks: asNumber(queryData["clicks"]),
+              impressions: asNumber(queryData["impressions"]),
+              ctr: asNumber(queryData["ctr"]),
+              position: typeof queryPosition === "number" && Number.isFinite(queryPosition)
+                ? queryPosition
+                : null,
+            }];
+          }),
         };
       }));
     },

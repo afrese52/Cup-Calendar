@@ -16,6 +16,8 @@ tags:
     description: Admin-only upload and import of tournament schedules
   - name: account
     description: Kontoaktionen für angemeldete Benutzer
+  - name: search-console
+    description: Geschützte, lesende Google-Search-Console-Berichte für CupCal
 paths:
   /healthz:
     get:
@@ -214,6 +216,55 @@ paths:
           description: Import access is not granted
         "503":
           description: Supabase is temporarily unavailable
+  /v1/admin/search-console/status:
+    get:
+      operationId: getSearchConsoleStatus
+      tags: [search-console]
+      summary: Prüft die Einrichtung der CupCal-Search-Console
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Search-Console-Konfiguration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SearchConsoleStatusResponse"
+        "401":
+          description: Anmeldung erforderlich
+        "403":
+          description: Adminzugriff erforderlich
+  /v1/admin/search-console/report:
+    post:
+      operationId: getSearchConsoleReport
+      tags: [search-console]
+      summary: Lädt Indexstatus, Seitenleistung und Suchbegriffe für CupCal-Seiten
+      description: Ausschließlich lesender Abruf für HTTPS-URLs der fest konfigurierten CupCal-Property.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SearchConsoleReportRequest"
+      responses:
+        "200":
+          description: Indexstatus, Suchleistung und sichtbare Suchbegriffe
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SearchConsoleReportResponse"
+        "400":
+          description: Ungültige CupCal-Seiten oder ungültiger Zeitraum
+        "401":
+          description: Anmeldung erforderlich
+        "403":
+          description: Adminzugriff erforderlich
+        "502":
+          description: Google Search Console ist nicht erreichbar
+        "503":
+          description: Search Console ist noch nicht eingerichtet
   /v1/account/deletion/request:
     post:
       operationId: requestAccountDeletion
@@ -492,4 +543,70 @@ components:
           type: array
           items: { $ref: "#/components/schemas/MhtImportHistoryEntry" }
       required: [entries]
+    SearchConsoleStatusResponse:
+      type: object
+      properties:
+        configured: { type: boolean }
+        property: { type: string, const: "https://cupcal.af-software.app/" }
+        serviceAccountEmail: { type: ["string", "null"], format: email }
+      required: [configured, property, serviceAccountEmail]
+    SearchConsoleReportRequest:
+      type: object
+      properties:
+        urls:
+          type: array
+          minItems: 1
+          maxItems: 10
+          items: { type: string, format: uri }
+        startDate: { type: string, format: date }
+        endDate: { type: string, format: date }
+      required: [urls, startDate, endDate]
+    SearchConsoleQuery:
+      type: object
+      properties:
+        query: { type: string }
+        clicks: { type: number }
+        impressions: { type: number }
+        ctr: { type: number }
+        position: { type: ["number", "null"] }
+      required: [query, clicks, impressions, ctr, position]
+    SearchConsoleReportItem:
+      type: object
+      properties:
+        url: { type: string, format: uri }
+        indexing:
+          type: object
+          properties:
+            verdict: { type: ["string", "null"] }
+            coverageState: { type: ["string", "null"] }
+            robotsTxtState: { type: ["string", "null"] }
+            indexingState: { type: ["string", "null"] }
+            lastCrawlTime: { type: ["string", "null"], format: date-time }
+            pageFetchState: { type: ["string", "null"] }
+            googleCanonical: { type: ["string", "null"], format: uri }
+            userCanonical: { type: ["string", "null"], format: uri }
+          required: [verdict, coverageState, robotsTxtState, indexingState, lastCrawlTime, pageFetchState, googleCanonical, userCanonical]
+        performance:
+          type: object
+          properties:
+            clicks: { type: number }
+            impressions: { type: number }
+            ctr: { type: number }
+            position: { type: ["number", "null"] }
+          required: [clicks, impressions, ctr, position]
+        queries:
+          type: array
+          description: Sichtbare Suchbegriffe; Google kann seltene oder anonymisierte Begriffe ausblenden.
+          items:
+            $ref: "#/components/schemas/SearchConsoleQuery"
+      required: [url, indexing, performance, queries]
+    SearchConsoleReportResponse:
+      type: object
+      properties:
+        property: { type: string, const: "https://cupcal.af-software.app/" }
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/SearchConsoleReportItem"
+      required: [property, data]
 

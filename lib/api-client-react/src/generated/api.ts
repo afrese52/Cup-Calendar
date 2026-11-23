@@ -36,7 +36,10 @@ import type {
   MhtImportPreview,
   MhtImportResult,
   MhtScheduleFile,
-  PreviewMhtImportParams
+  PreviewMhtImportParams,
+  SearchConsoleReportRequest,
+  SearchConsoleReportResponse,
+  SearchConsoleStatusResponse
 } from './api.schemas';
 
 import { customFetch } from '../custom-fetch';
@@ -669,6 +672,196 @@ export function useGetAdminImportHistory<TData = Awaited<ReturnType<typeof getAd
 
 
 
+
+export const getGetSearchConsoleStatusUrl = () => {
+
+
+
+
+  return `/api/v1/admin/search-console/status`
+}
+
+/**
+ * @summary Prüft die Einrichtung der CupCal-Search-Console
+ */
+export const getSearchConsoleStatus = async ( options?: Parameters<typeof customFetch>[1]): Promise<SearchConsoleStatusResponse> => {
+
+  return customFetch<SearchConsoleStatusResponse>(getGetSearchConsoleStatusUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetSearchConsoleStatusQueryKey = () => {
+    return [
+    `/api/v1/admin/search-console/status`
+    ] as const;
+    }
+
+
+export const getGetSearchConsoleStatusQueryOptions = <TData = Awaited<ReturnType<typeof getSearchConsoleStatus>>, TError = ErrorType<void>>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getSearchConsoleStatus>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetSearchConsoleStatusQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getSearchConsoleStatus>>> = ({ signal }) => getSearchConsoleStatus({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getSearchConsoleStatus>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetSearchConsoleStatusQueryResult = NonNullable<Awaited<ReturnType<typeof getSearchConsoleStatus>>>
+export type GetSearchConsoleStatusQueryError = ErrorType<void>
+
+
+export function useGetSearchConsoleStatus<TData = Awaited<ReturnType<typeof getSearchConsoleStatus>>, TError = ErrorType<void>>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getSearchConsoleStatus>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getSearchConsoleStatus>>,
+          TError,
+          Awaited<ReturnType<typeof getSearchConsoleStatus>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetSearchConsoleStatus<TData = Awaited<ReturnType<typeof getSearchConsoleStatus>>, TError = ErrorType<void>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getSearchConsoleStatus>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getSearchConsoleStatus>>,
+          TError,
+          Awaited<ReturnType<typeof getSearchConsoleStatus>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetSearchConsoleStatus<TData = Awaited<ReturnType<typeof getSearchConsoleStatus>>, TError = ErrorType<void>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getSearchConsoleStatus>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Prüft die Einrichtung der CupCal-Search-Console
+ */
+
+export function useGetSearchConsoleStatus<TData = Awaited<ReturnType<typeof getSearchConsoleStatus>>, TError = ErrorType<void>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getSearchConsoleStatus>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetSearchConsoleStatusQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetSearchConsoleReportUrl = () => {
+
+
+
+
+  return `/api/v1/admin/search-console/report`
+}
+
+/**
+ * Ausschließlich lesender Abruf für HTTPS-URLs der fest konfigurierten CupCal-Property.
+ * @summary Lädt Indexstatus, Seitenleistung und Suchbegriffe für CupCal-Seiten
+ */
+export const getSearchConsoleReport = async (searchConsoleReportRequest: SearchConsoleReportRequest, options?: Parameters<typeof customFetch>[1]): Promise<SearchConsoleReportResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<SearchConsoleReportResponse>(getGetSearchConsoleReportUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(searchConsoleReportRequest)
+  }
+);}
+
+
+
+
+
+export const getGetSearchConsoleReportMutationKey = () => ['getSearchConsoleReport'] as const;
+
+export const getGetSearchConsoleReportMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof getSearchConsoleReport>>, TError,GetSearchConsoleReportMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof getSearchConsoleReport>>, TError,GetSearchConsoleReportMutationVariables, TContext> => {
+
+const mutationKey = getGetSearchConsoleReportMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof getSearchConsoleReport>>, GetSearchConsoleReportMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  getSearchConsoleReport(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type GetSearchConsoleReportMutationResult = NonNullable<Awaited<ReturnType<typeof getSearchConsoleReport>>>
+    export type GetSearchConsoleReportMutationBody = BodyType<SearchConsoleReportRequest>
+    export type GetSearchConsoleReportMutationError = ErrorType<void>
+    export type GetSearchConsoleReportMutationVariables = {data: BodyType<SearchConsoleReportRequest>}
+
+    /**
+ * @summary Lädt Indexstatus, Seitenleistung und Suchbegriffe für CupCal-Seiten
+ */
+export const useGetSearchConsoleReport = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof getSearchConsoleReport>>, TError,GetSearchConsoleReportMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof getSearchConsoleReport>>,
+        TError,
+        GetSearchConsoleReportMutationVariables,
+        TContext
+      > => {
+      return useMutation(getGetSearchConsoleReportMutationOptions(options), queryClient);
+    }
 
 export const getRequestAccountDeletionUrl = () => {
 

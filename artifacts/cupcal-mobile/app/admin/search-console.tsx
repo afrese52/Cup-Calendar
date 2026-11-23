@@ -1,38 +1,15 @@
 import { Feather } from '@expo/vector-icons';
+import {
+  useGetSearchConsoleReport,
+  useGetSearchConsoleStatus,
+} from '@workspace/api-client-react';
 import { Stack, useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useColors } from '@/hooks/useColors';
-import { supabase } from '@/services/supabase';
 
 const DEFAULT_URL = 'https://cupcal.af-software.app/';
-
-type SearchConsoleResult = {
-  url: string;
-  indexing: {
-    verdict: string | null;
-    coverageState: string | null;
-    robotsTxtState: string | null;
-    indexingState: string | null;
-    lastCrawlTime: string | null;
-    pageFetchState: string | null;
-    googleCanonical: string | null;
-    userCanonical: string | null;
-  };
-  performance: {
-    clicks: number;
-    impressions: number;
-    ctr: number;
-    position: number | null;
-  };
-};
-
-type SearchConsoleStatus = {
-  configured: boolean;
-  property: string;
-  serviceAccountEmail: string | null;
-};
 
 function formatDate(value: string | null) {
   if (!value) return 'Noch kein Crawl-Zeitpunkt verfügbar';
@@ -52,94 +29,35 @@ function defaultDate(daysAgo: number) {
   return date.toISOString().slice(0, 10);
 }
 
-async function requestAdminApi<T>(path: string, init?: RequestInit): Promise<T> {
-  if (!supabase) throw new Error('Supabase ist nicht verfügbar. Bitte melde dich erneut an.');
-  const { data, error } = await supabase.auth.getSession();
-  if (error || !data.session?.access_token) {
-    throw new Error('Bitte melde dich erneut an.');
-  }
-  const domain = process.env.EXPO_PUBLIC_DOMAIN?.trim();
-  if (!domain) throw new Error('Die CupCal-API ist in dieser App-Umgebung nicht konfiguriert.');
-
-  let response: Response;
-  try {
-    response = await fetch(`https://${domain}/api${path}`, {
-      ...init,
-      headers: {
-        ...(init?.headers ?? {}),
-        authorization: `Bearer ${data.session.access_token}`,
-        ...(init?.body ? { 'content-type': 'application/json' } : {}),
-      },
-    });
-  } catch {
-    throw new Error('Die Search-Console-API ist nicht erreichbar. Prüfe deine Verbindung.');
-  }
-  let payload: Record<string, unknown> = {};
-  try {
-    payload = await response.json() as Record<string, unknown>;
-  } catch {
-    // A response without JSON is presented as a generic request failure.
-  }
-  if (!response.ok) {
-    throw new Error(
-      typeof payload.error === 'string'
-        ? payload.error
-        : 'Der Search-Console-Bericht konnte nicht geladen werden.',
-    );
-  }
-  return payload as T;
-}
-
 export default function SearchConsoleScreen() {
   const colors = useColors();
   const router = useRouter();
-  const [status, setStatus] = useState<SearchConsoleStatus | null>(null);
-  const [statusLoading, setStatusLoading] = useState(true);
+  const statusQuery = useGetSearchConsoleStatus({
+    query: { retry: false },
+  });
+  const reportMutation = useGetSearchConsoleReport();
+  const status = statusQuery.data;
+  const statusLoading = statusQuery.isLoading;
+  const results = reportMutation.data?.data ?? [];
+  const loading = reportMutation.isPending;
+  const error = reportMutation.error?.message ?? statusQuery.error?.message ?? null;
   const [urls, setUrls] = useState(DEFAULT_URL);
   const [startDate, setStartDate] = useState(() => defaultDate(28));
   const [endDate, setEndDate] = useState(() => defaultDate(1));
-  const [results, setResults] = useState<SearchConsoleResult[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let active = true;
-    void requestAdminApi<SearchConsoleStatus>('/v1/admin/search-console/status')
-      .then((value) => {
-        if (active) setStatus(value);
-      })
-      .catch((requestError: unknown) => {
-        if (active) setError(requestError instanceof Error ? requestError.message : 'Zugriff nicht möglich.');
-      })
-      .finally(() => {
-        if (active) setStatusLoading(false);
-      });
-    return () => {
-      active = false;
-    };
-  }, []);
 
   const loadReport = async () => {
     if (loading) return;
-    setLoading(true);
-    setError(null);
+    reportMutation.reset();
     try {
-      const data = await requestAdminApi<{ data: SearchConsoleResult[] }>(
-        '/v1/admin/search-console/report',
-        {
-          method: 'POST',
-          body: JSON.stringify({
+      await reportMutation.mutateAsync({
+        data: {
             urls: urls.split('\n').map((url) => url.trim()).filter(Boolean),
             startDate,
             endDate,
-          }),
         },
-      );
-      setResults(data.data);
-    } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'Der Bericht konnte nicht geladen werden.');
-    } finally {
-      setLoading(false);
+      });
+    } catch {
+      // React Query exposes the request error to the error notice below.
     }
   };
 
@@ -265,6 +183,35 @@ export default function SearchConsoleScreen() {
             <Text style={[styles.help, { color: colors.mutedForeground }]}>
               CTR: {(result.performance.ctr * 100).toFixed(1)} % · Ø Position: {result.performance.position?.toFixed(1) ?? '–'}
             </Text>
+            <Text style={[styles.sectionLabel, { color: colors.mutedForeground, marginTop: 18 }]}>
+              SUCHBEGRIFFE IM ZEITRAUM
+            </Text>
+            <Text style={[styles.help, { color: colors.mutedForeground }]}>
+              Google blendet seltene oder anonymisierte Suchanfragen möglicherweise aus. Die Liste kann daher unvollständig sein.
+            </Text>
+            {result.queries.length === 0 ? (
+              <Text style={[styles.emptyQueries, { color: colors.mutedForeground }]}>
+                Für diese Seite wurden im Zeitraum keine sichtbaren Suchbegriffe gemeldet.
+              </Text>
+            ) : (
+              <>
+                <View style={styles.queryList}>
+                  {result.queries.slice(0, 20).map((query) => (
+                    <View key={query.query} style={[styles.queryRow, { borderColor: colors.border }]}>
+                      <Text style={[styles.queryText, { color: colors.foreground }]}>{query.query}</Text>
+                      <Text style={[styles.queryMetrics, { color: colors.mutedForeground }]}>
+                        {query.clicks} Klicks · {query.impressions} Impressionen · Pos. {query.position?.toFixed(1) ?? '–'}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+                {result.queries.length > 20 ? (
+                  <Text style={[styles.help, { color: colors.mutedForeground }]}>
+                    Angezeigt werden die ersten 20 von {result.queries.length} sichtbaren Suchbegriffen.
+                  </Text>
+                ) : null}
+              </>
+            )}
           </View>
         ))}
       </ScrollView>
@@ -298,4 +245,9 @@ const styles = StyleSheet.create({
   notice: { borderWidth: 1, borderRadius: 14, padding: 13, fontSize: 13, lineHeight: 19, marginBottom: 14 },
   resultUrl: { fontSize: 13, fontWeight: '700', marginBottom: 18 },
   resultValue: { fontSize: 14, fontWeight: '700', lineHeight: 20 },
+  emptyQueries: { fontSize: 13, lineHeight: 19, marginTop: 10 },
+  queryList: { marginTop: 8 },
+  queryRow: { borderBottomWidth: StyleSheet.hairlineWidth, paddingVertical: 10 },
+  queryText: { fontSize: 13, fontWeight: '700', lineHeight: 18 },
+  queryMetrics: { fontSize: 11, lineHeight: 16, marginTop: 3 },
 });

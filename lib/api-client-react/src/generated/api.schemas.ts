@@ -379,6 +379,72 @@ export interface MhtImportHistoryResponse {
   entries: MhtImportHistoryEntry[];
 }
 
+export interface SearchConsoleStatusResponse {
+  configured: boolean;
+  property: 'https://cupcal.af-software.app/';
+  /** @nullable */
+  serviceAccountEmail: string | null;
+}
+
+export interface SearchConsoleReportRequest {
+  /**
+     * @minItems 1
+     * @maxItems 10
+     */
+  urls: string[];
+  startDate: string;
+  endDate: string;
+}
+
+export interface SearchConsoleQuery {
+  query: string;
+  clicks: number;
+  impressions: number;
+  ctr: number;
+  /** @nullable */
+  position: number | null;
+}
+
+export type SearchConsoleReportItemIndexing = {
+  /** @nullable */
+  verdict: string | null;
+  /** @nullable */
+  coverageState: string | null;
+  /** @nullable */
+  robotsTxtState: string | null;
+  /** @nullable */
+  indexingState: string | null;
+  /** @nullable */
+  lastCrawlTime: string | null;
+  /** @nullable */
+  pageFetchState: string | null;
+  /** @nullable */
+  googleCanonical: string | null;
+  /** @nullable */
+  userCanonical: string | null;
+};
+
+export type SearchConsoleReportItemPerformance = {
+  clicks: number;
+  impressions: number;
+  ctr: number;
+  /** @nullable */
+  position: number | null;
+};
+
+export interface SearchConsoleReportItem {
+  url: string;
+  indexing: SearchConsoleReportItemIndexing;
+  performance: SearchConsoleReportItemPerformance;
+  /** Sichtbare Suchbegriffe; Google kann seltene oder anonymisierte Begriffe ausblenden. */
+  queries: SearchConsoleQuery[];
+}
+
+export interface SearchConsoleReportResponse {
+  property: 'https://cupcal.af-software.app/';
+  data: SearchConsoleReportItem[];
+}
+
 export type GetEventsParams = {
 region?: GetEventsRegion;
 game_mode?: GetEventsGameMode;
