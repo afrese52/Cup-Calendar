@@ -1572,7 +1572,11 @@ test('ermöglicht nach einem fehlgeschlagenen Wiederherstellungsversand einen ne
 
   await fireEvent.press(view.getByTestId('auth-submit-button'));
   expect(await view.findByTestId('auth-error-message')).toBeTruthy();
-  expect(view.getByTestId('auth-email-input').props.value).toBe('  test@example.invalid  ');
+  const emailInputAfterFailure = view.getByTestId('auth-email-input');
+  expect(emailInputAfterFailure.props.editable).toBe(true);
+  expect(emailInputAfterFailure.props.value).toBe('  test@example.invalid  ');
+  await fireEvent.changeText(emailInputAfterFailure, 'corrected@example.invalid');
+  expect(view.getByTestId('auth-email-input').props.value).toBe('corrected@example.invalid');
   expect(view.getByTestId('auth-submit-button').props.accessibilityState).toEqual({
     disabled: false,
     busy: false,
@@ -1587,7 +1591,7 @@ test('ermöglicht nach einem fehlgeschlagenen Wiederherstellungsversand einen ne
   expect(auth.resetPasswordForEmail).toHaveBeenNthCalledWith(1, 'test@example.invalid', {
     redirectTo: 'cupcal-test://auth/reset?flow=cupcal-password-reset',
   });
-  expect(auth.resetPasswordForEmail).toHaveBeenNthCalledWith(2, 'test@example.invalid', {
+  expect(auth.resetPasswordForEmail).toHaveBeenNthCalledWith(2, 'corrected@example.invalid', {
     redirectTo: 'cupcal-test://auth/reset?flow=cupcal-password-reset',
   });
 });
