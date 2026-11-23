@@ -359,7 +359,7 @@ export default function SettingsScreen() {
     setRegistrationConfirmationEmail(null);
     try {
       const result = await submitAccountAuth(supabase.auth, {
-        mode: authMode,
+        mode: submittedMode,
         email: normalizedEmail,
         password,
         emailConfirmationRedirectTo: getEmailConfirmationRedirectUrl(),
@@ -383,7 +383,7 @@ export default function SettingsScreen() {
               'Die Registrierung war erfolgreich, aber die Bestätigungsadresse konnte auf diesem Gerät nicht gespeichert werden.',
             );
           }
-        } else if (authMode === 'sign-up') {
+        } else if (submittedMode === 'sign-up') {
           setRegistrationConfirmationEmail(null);
           try {
             await clearPendingAccountConfirmationEmail();
@@ -948,6 +948,7 @@ export default function SettingsScreen() {
                 testID="auth-mode-toggle"
                 disabled={isSubmittingAuth}
                 onPress={() => {
+                  if (isSubmittingAuthRef.current) return;
                   setAuthMode(authMode === 'forgot-password' || authMode === 'sign-up' ? 'sign-in' : 'sign-up');
                   setAuthError(null);
                   setAuthMessage(null);

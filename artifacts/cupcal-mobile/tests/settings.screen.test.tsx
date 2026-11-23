@@ -593,6 +593,58 @@ test('registriert ein Konto und zeigt die Bestätigungsmeldung', async () => {
   expect(view.getByTestId('auth-password-input').props.value).toBe('');
 });
 
+test('sperrt den Moduswechsel bis die verzögerte Registrierungsantwort eintrifft', async () => {
+  type SignUpResult = { data: { session: null }; error: null };
+  let finishSignUp!: (result: SignUpResult) => void;
+  auth.signUp.mockImplementation(
+    () => new Promise((resolve) => { finishSignUp = resolve; }),
+  );
+  const view = await openSettings();
+  await fireEvent.press(view.getByTestId('auth-mode-toggle'));
+  await enterCredentials(view);
+
+  const submitButton = view.getByTestId('auth-submit-button');
+  const modeToggle = view.getByTestId('auth-mode-toggle');
+  const submitClick = submitButton.props.onClick as (event: {
+    currentTarget: unknown;
+    target: unknown;
+    nativeEvent: object;
+    stopPropagation: () => void;
+  }) => void;
+  const toggleClick = modeToggle.props.onClick as (event: {
+    currentTarget: unknown;
+    target: unknown;
+    nativeEvent: object;
+    stopPropagation: () => void;
+  }) => void;
+  const clickEvent = (target: unknown) => ({
+    currentTarget: target,
+    target,
+    nativeEvent: {},
+    stopPropagation: jest.fn(),
+  });
+  await act(async () => {
+    submitClick(clickEvent(submitButton));
+    toggleClick(clickEvent(modeToggle));
+  });
+
+  expect(auth.signUp).toHaveBeenCalledTimes(1);
+  expect(view.getByTestId('auth-mode-toggle').props.accessibilityState).toMatchObject({
+    disabled: true,
+  });
+  expect(view.getByTestId('account-session-status').props.children).toBe('Konto erstellen');
+
+  await act(async () => finishSignUp({ data: { session: null }, error: null }));
+
+  expect(view.getByTestId('account-session-status').props.children).toBe('Konto erstellen');
+  expect(view.getByTestId('auth-mode-toggle').props.accessibilityLabel)
+    .toBe('Schon ein Konto? Anmelden');
+  expect(view.getByTestId('auth-success-message').props.children).toBe(
+    'Dein Konto ist erstellt. Bitte bestätige deine E-Mail-Adresse über den Link in deinem Postfach.',
+  );
+  expect(view.getByTestId('auth-submit-button').props.accessibilityLabel).toBe('Konto erstellen');
+});
+
 test('verschiebt den Screenreader-Fokus während einer laufenden Registrierung nicht', async () => {
   let finishSignUp!: (result: { data: { session: null }; error: null }) => void;
   auth.signUp.mockImplementation(
