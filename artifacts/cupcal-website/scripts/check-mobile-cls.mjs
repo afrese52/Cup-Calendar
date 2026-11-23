@@ -237,6 +237,8 @@ function connectToDevTools(webSocketUrl) {
   const socket = new WebSocket(webSocketUrl);
   const pending = new Map();
   const loadWaiters = new Set();
+  const requestUrls = new Map();
+  const failedRequests = [];
   let commandId = 0;
 
   const ready = new Promise((resolve, reject) => {
@@ -246,6 +248,14 @@ function connectToDevTools(webSocketUrl) {
 
   socket.addEventListener('message', (event) => {
     const message = JSON.parse(event.data);
+    if (message.method === 'Network.requestWillBeSent') {
+      requestUrls.set(message.params.requestId, message.params.request.url);
+    } else if (message.method === 'Network.loadingFailed') {
+      failedRequests.push({
+        url: requestUrls.get(message.params.requestId) ?? '',
+        blockedReason: message.params.blockedReason ?? '',
+      });
+    }
     if (message.method === 'Page.loadEventFired') {
       for (const resolve of loadWaiters) resolve();
       loadWaiters.clear();
@@ -291,7 +301,16 @@ function connectToDevTools(webSocketUrl) {
     await loaded;
   }
 
-  return { socket, ready, send, navigate };
+  return {
+    socket,
+    ready,
+    send,
+    navigate,
+    getBlockedWebFontFailures: () => failedRequests.filter((request) =>
+      request.blockedReason === 'inspector' &&
+      /^https:\/\/fonts\.(?:googleapis|gstatic)\.com\//.test(request.url)
+    ),
+  };
 }
 
 async function waitForFontsAndImages(send) {
@@ -325,10 +344,15 @@ async function collectLayoutShifts(send) {
   return response.result.value;
 }
 
-async function configureMobile(send, viewport) {
+async function configureMobile(send, viewport, blockWebFonts) {
   await send('Page.enable');
   await send('Runtime.enable');
   await send('Network.enable');
+  if (blockWebFonts) {
+    await send('Network.setBlockedURLs', {
+      urls: ['https://fonts.googleapis.com/*', 'https://fonts.gstatic.com/*'],
+    });
+  }
   await send('Network.setCacheDisabled', { cacheDisabled: true });
   await send('Emulation.setDeviceMetricsOverride', {
     ...viewport,
@@ -347,6 +371,7 @@ async function configureMobile(send, viewport) {
 }
 
 async function run() {
+  const blockWebFonts = process.argv.includes('--block-web-fonts');
   const html = await readFile(path.join(publicRoot, 'index.html'), 'utf8').catch(() => {
     throw new Error('Kein Produktionsbuild gefunden. Führe zuerst „pnpm run build“ aus.');
   });
@@ -367,7 +392,10 @@ async function run() {
     browser = await startChromium();
     devTools = connectToDevTools(browser.pageTarget.webSocketDebuggerUrl);
     await devTools.ready;
-    await configureMobile(devTools.send, mobileViewports[0]);
+    await configureMobile(devTools.send, mobileViewports[0], blockWebFonts);
+    if (blockWebFonts) {
+      console.log('Externe Webfonts blockiert (fonts.googleapis.com und fonts.gstatic.com).');
+    }
 
     const routes = ['/', ...seoTopicPages.map((page) => page.path)];
     const failures = [];
@@ -423,6 +451,14 @@ async function run() {
 
     if (failures.length > 0) {
       throw new Error(`CLS-Grenzwert ${limit.toFixed(3)} überschritten:\n${failures.join('\n')}`);
+    }
+    if (blockWebFonts) {
+      const blockedRequests = devTools.getBlockedWebFontFailures();
+      assert.ok(
+        blockedRequests.length > 0,
+        'Keine externe Webfont-Anfrage wurde blockiert; der Fallback-Lauf hat die Sperre nicht bestätigt.',
+      );
+      console.log(`${blockedRequests.length} externe Webfont-Anfragen nachweislich blockiert.`);
     }
     console.log(
       `Mobiler CLS-Check bestanden: ${routes.length} Seiten, ${mobileViewports.length} Ansichten, ${runs} Läufe je Ansicht, Grenzwert ${limit.toFixed(3)}.`,

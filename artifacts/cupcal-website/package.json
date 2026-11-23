@@ -14,6 +14,7 @@
     "test:seo": "node scripts/seo-smoke.mjs",
     "test:seo:live": "node scripts/seo-smoke.mjs --live",
     "test:mobile-layout": "node scripts/check-mobile-layout.mjs",
+    "test:font-fallback": "node scripts/check-mobile-layout.mjs --block-web-fonts && node scripts/check-mobile-cls.mjs --block-web-fonts",
     "test:large-text": "node scripts/check-mobile-layout.mjs",
     "test:cls": "node scripts/check-mobile-cls.mjs",
     "test:mobile-performance": "node scripts/check-mobile-performance.mjs",

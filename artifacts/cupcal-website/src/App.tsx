@@ -123,7 +123,7 @@ function App({ pathname }: AppProps = {}) {
         <div className="hero-grid">
           <div>
             <div className="eyebrow">Für deinen nächsten Drop</div>
-            <h1>Dein <span>CupCal-<br className="mobile-h1-break" />Turnierkalender.</span><br />Schon im Blick.</h1>
+            <h1>Dein <span>CupCal-<br className="mobile-h1-break" />Turnier<wbr />kalender.</span><br />Schon im Blick.</h1>
             <p className="hero-copy">
               Finde mit CupCal Turniere, Ligen, Qualifikationen und Trainingsrunden.
               Filtere Termine und speichere deine Favoriten, damit du kommende Starts schnell im Blick hast.
