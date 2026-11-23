@@ -353,6 +353,33 @@ test('ignoriert die Start-URL, wenn der Bestätigungsbildschirm vorher geschloss
   expect(mockPersistedSession).toBeNull();
 });
 
+test('ignoriert Routenbestätigung, wenn die Start-URL nach dem Schließen fehlschlägt', async () => {
+  const initialUrl = deferred<string | null>();
+  mockInitialUrlPromise.current = initialUrl.promise;
+  mockRouteParams.current = {
+    code: 'route-confirmation-code',
+    flow_id: 'route-confirmation-flow',
+  };
+  const view = await render(<ConfirmEmailScreen />);
+
+  expect(view.getByText('Bestätigung prüfen')).toBeTruthy();
+  expect(supabase.auth.exchangeCodeForSession).not.toHaveBeenCalled();
+  expect(supabase.auth.setSession).not.toHaveBeenCalled();
+
+  await act(async () => view.unmount());
+  await act(async () => {
+    initialUrl.reject(new Error('Start-URL konnte nicht gelesen werden.'));
+    await initialUrl.promise.catch(() => undefined);
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+
+  expect(supabase.auth.exchangeCodeForSession).not.toHaveBeenCalled();
+  expect(supabase.auth.setSession).not.toHaveBeenCalled();
+  expect(supabase.auth.signOut).not.toHaveBeenCalled();
+  expect(mockPersistedSession).toBeNull();
+});
+
 test('ändert nach dem Schließen bei verspätetem Fehler keinen Seitenzustand', async () => {
   const exchange = deferred<any>();
   const stateUpdates = trackStateUpdatesAfterUnmount();
