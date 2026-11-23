@@ -353,6 +353,50 @@ test('ignoriert die Start-URL, wenn der Bestätigungsbildschirm vorher geschloss
   expect(mockPersistedSession).toBeNull();
 });
 
+test('verwirft wartende App-Link-Ereignisse, wenn der Bildschirm vor der Start-URL schließt', async () => {
+  const initialUrl = deferred<string | null>();
+  mockInitialUrlPromise.current = initialUrl.promise;
+  supabase.auth.exchangeCodeForSession.mockImplementation(async () => {
+    mockPersistedSession = { user: { id: 'late-event-account' } };
+    return {
+      data: { session: mockPersistedSession },
+      error: null,
+    };
+  });
+  supabase.auth.setSession.mockImplementation(async () => {
+    mockPersistedSession = { user: { id: 'late-event-account' } };
+    return {
+      data: { session: mockPersistedSession },
+      error: null,
+    };
+  });
+  const view = await render(<ConfirmEmailScreen />);
+
+  expect(mockUrlListener.current).not.toBeNull();
+  await act(async () => {
+    mockUrlListener.current?.({
+      url: 'cupcal-android://auth/confirm?code=late-event-code&flow_id=late-event-flow',
+    });
+    await Promise.resolve();
+  });
+  expect(supabase.auth.exchangeCodeForSession).not.toHaveBeenCalled();
+  expect(supabase.auth.setSession).not.toHaveBeenCalled();
+
+  await act(async () => view.unmount());
+  await act(async () => {
+    initialUrl.resolve(null);
+    await initialUrl.promise;
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+
+  expect(supabase.auth.exchangeCodeForSession).not.toHaveBeenCalled();
+  expect(supabase.auth.setSession).not.toHaveBeenCalled();
+  expect(supabase.auth.signOut).not.toHaveBeenCalled();
+  expect(mockPersistedSession).toBeNull();
+});
+
 test('ignoriert Routenbestätigung, wenn die Start-URL nach dem Schließen fehlschlägt', async () => {
   const initialUrl = deferred<string | null>();
   mockInitialUrlPromise.current = initialUrl.promise;
