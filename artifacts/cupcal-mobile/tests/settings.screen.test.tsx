@@ -589,6 +589,10 @@ test('registriert ein Konto und zeigt die Bestätigungsmeldung', async () => {
   expect(successMessage.props.children).toBe(
     'Dein Konto ist erstellt. Bitte bestätige deine E-Mail-Adresse über den Link in deinem Postfach.',
   );
+  await fireEvent.changeText(view.getByTestId('auth-email-input'), 'changed@example.invalid');
+  expect(view.getByTestId('auth-success-message').props.children).toBe(
+    'Dein Konto ist erstellt. Bitte bestätige deine E-Mail-Adresse über den Link in deinem Postfach.',
+  );
   expect(view.getByTestId('registration-resend-confirmation-button')).toBeTruthy();
   expect(view.getByTestId('auth-password-input').props.value).toBe('');
 });
@@ -1614,6 +1618,26 @@ test('entfernt die alte Versandbestätigung nach Änderung der Wiederherstellung
     redirectTo: 'cupcal-test://auth/reset?flow=cupcal-password-reset',
   });
   expect(view.getAllByTestId('auth-success-message')).toHaveLength(1);
+});
+
+test('bewahrt die Registrierungsbestätigung beim Ändern der Wiederherstellungsadresse', async () => {
+  const storageMock = jest.requireMock('@react-native-async-storage/async-storage') as {
+    __values: Map<string, string>;
+  };
+  storageMock.__values.set(PENDING_ACCOUNT_CONFIRMATION_EMAIL_KEY, 'registered@example.invalid');
+  mockRouteParams.authMode = 'forgot-password';
+  const view = await openSettings();
+
+  const registrationMessage = await view.findByTestId('auth-success-message');
+  expect(registrationMessage.props.children).toBe(
+    'Dein Konto ist erstellt. Bitte bestätige deine E-Mail-Adresse über den Link in deinem Postfach.',
+  );
+
+  await fireEvent.changeText(view.getByTestId('auth-email-input'), 'recovery@example.invalid');
+
+  expect(view.getByTestId('auth-success-message').props.children).toBe(
+    'Dein Konto ist erstellt. Bitte bestätige deine E-Mail-Adresse über den Link in deinem Postfach.',
+  );
 });
 
 test('entfernt den veralteten Wiederherstellungsfehler beim Ändern der E-Mail-Adresse', async () => {

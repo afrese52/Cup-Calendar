@@ -131,7 +131,12 @@ export default function SettingsScreen() {
   const accountFocusRef = useRef<React.ComponentRef<typeof Text>>(null);
   const lastAnnouncedAccountStatusRef = useRef<string | null>(null);
   const hasAnnouncedSessionCheckRef = useRef(false);
-  const [authMessage, setAuthMessage] = useState<string | null>(null);
+  const recoverySuccessEmailRef = useRef<string | null>(null);
+  const [authMessage, setAuthMessageState] = useState<string | null>(null);
+  const setAuthMessage = (message: string | null, recoveryEmail: string | null = null) => {
+    recoverySuccessEmailRef.current = message === null ? null : recoveryEmail;
+    setAuthMessageState(message);
+  };
   const [confirmationResendCooldownStatus, setConfirmationResendCooldownStatus] = useState<string | null>(null);
   const isSessionStatusSuccessMessage =
     (session !== null && authMessage === 'Du bist angemeldet.')
@@ -379,7 +384,10 @@ export default function SettingsScreen() {
         return;
       }
       if (result.ok) {
-        setAuthMessage(result.message);
+        setAuthMessage(
+          result.message,
+          submittedMode === 'forgot-password' ? normalizedEmail : null,
+        );
         if (result.emailConfirmationRequired) {
           setRegistrationConfirmationEmail(normalizedEmail);
           try {
@@ -788,7 +796,11 @@ export default function SettingsScreen() {
                     recoveryEmailRevisionRef.current += 1;
                   }
                   setEmail(nextEmail);
-                  if (authMode === 'forgot-password' && authMessage) {
+                  if (
+                    authMode === 'forgot-password'
+                    && recoverySuccessEmailRef.current !== null
+                    && nextEmail.trim() !== recoverySuccessEmailRef.current
+                  ) {
                     setAuthMessage(null);
                   }
                   const failedRecoveryEmail = recoveryErrorEmailRef.current;
