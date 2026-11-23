@@ -70,3 +70,31 @@ mtime_ms = 1795392736896
 storage_uri = "gcs://replit-rams-assets-archer/rams/assets/repl:fba06988-5dc0-49ce-a88d-6c2b15091cfa/cc7ea5fa-61b0-4624-ba6a-7e9b8d10fda9/4ea8db42-e39a-447e-a6b7-ded1faddf15c"
 storage_version_token = "1795392993947685"
 content_type = "image/png"
+
+[[outputs]]
+id = "pGfg_CuCEijwJYWGG3Lf0"
+uri = "file://.local/outputs/cupcal-status-cta-funnel.chart.json"
+type = "unspecified"
+title = "CupCal: Status-CTA-Auswertung"
+description = "Aggregierte Funnel-Daten der letzten sieben Tage; die zugehörige visualisierte Auswertung wird anschließend bereitgestellt."
+logical_id = "ff4410e5-1823-46b9-b78e-5b8c04f6f019"
+content_hash = "sha256:0a47a4ed992978929f29b996faebac03cc4a2bbfc369030d44e5a86ad17e541d"
+size = 218
+mtime_ms = 1795451562966
+storage_uri = "gcs://replit-rams-assets-archer/rams/assets/repl:fba06988-5dc0-49ce-a88d-6c2b15091cfa/ff4410e5-1823-46b9-b78e-5b8c04f6f019/a2baf786-4d0d-4c24-a48c-90de352a24ac"
+storage_version_token = "1795451563859244"
+content_type = "application/octet-stream"
+
+[[outputs]]
+id = "AebZ7qTbmzkuDejj1-rpA"
+uri = "file://.local/outputs/cupcal-status-cta-funnel.chart.html"
+type = "text"
+title = "Drei Hero-Klickbesuche sahen den Verfügbarkeitsbereich."
+description = "Funnel der letzten sieben Tage: 3 CTA-Besuche, 3 Besuche mit Bereichsansicht und 2 Ansichten nach dem Klick. Kleine Stichprobe."
+logical_id = "76b830a0-db43-4745-8c99-b7430da6214c"
+content_hash = "sha256:ac70b18d6fcef085d5fc0cdde5d6e64d09bf016bf212dd1569d452b8104e1619"
+size = 3272
+mtime_ms = 1795451579566
+storage_uri = "gcs://replit-rams-assets-archer/rams/assets/repl:fba06988-5dc0-49ce-a88d-6c2b15091cfa/76b830a0-db43-4745-8c99-b7430da6214c/e366ebaa-5f2b-4791-bbd7-7eb42d6656e2"
+storage_version_token = "1795451579902953"
+content_type = "text/html;profile=replit-chart"
