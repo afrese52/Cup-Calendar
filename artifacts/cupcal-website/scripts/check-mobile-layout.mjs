@@ -13,7 +13,12 @@ const publicRoot = path.join(projectRoot, 'dist/public');
 const viewports = [
   { label: '320×844 Hochformat', width: 320, height: 844 },
   { label: '360×800 Hochformat', width: 360, height: 800 },
-  { label: '200 % Zoom (1280 → 640 CSS-Pixel)', width: 640, height: 900 },
+  {
+    label: '200 % Zoom (1280×900 → 640×450 CSS-Pixel)',
+    width: 640,
+    height: 450,
+    mobile: true,
+  },
   { label: '640×360 Querformat', width: 640, height: 360 },
   { label: '844×390 Querformat', width: 844, height: 390 },
   { label: '568×320 Handy-Querformat', width: 568, height: 320 },
@@ -471,6 +476,7 @@ async function inspectPage(send, route) {
         .filter((element) => element.left < -1 || element.right > viewportWidth + 1);
       const summary = {
         viewportWidth,
+        viewportHeight: innerHeight,
         deviceScreenWidth: screen.width,
         documentWidth: document.documentElement.scrollWidth,
         headerOverlaps,
@@ -603,6 +609,7 @@ async function inspectForcedColors(send) {
 function assertPageLayout(page, viewport, result) {
   const issues = [];
   if (result.viewportWidth !== viewport.width) issues.push(`Viewport ist ${result.viewportWidth}px statt ${viewport.width}px breit`);
+  if (result.viewportHeight !== viewport.height) issues.push(`Viewport ist ${result.viewportHeight}px statt ${viewport.height}px hoch`);
   if (result.documentWidth > viewport.width + 1) issues.push(`Seitenbreite ${result.documentWidth}px verursacht horizontales Scrollen`);
   if (result.headerOverlaps.length > 0) issues.push('Elemente in der Kopfzeile überlappen sich');
   if (result.zoomActions.some((action) => !action.insideViewport || !action.contentFits)) {
@@ -764,7 +771,7 @@ async function run() {
       }
     }
     console.log(
-      `Mobiler Layout-Test bestanden: ${pages.length} Seiten bei ${viewports.map(({ label }) => label).join(', ')}.`,
+      `Layoutcheck bestanden: ${pages.length} Seiten bei ${viewports.map(({ label }) => label).join(', ')}.`,
     );
   } finally {
     devTools?.socket.close();
