@@ -16,6 +16,8 @@ const viewports = [
   { label: '200 % Zoom (1280 → 640 CSS-Pixel)', width: 640, height: 900 },
   { label: '640×360 Querformat', width: 640, height: 360 },
   { label: '844×390 Querformat', width: 844, height: 390 },
+  { label: '568×320 Handy-Querformat', width: 568, height: 320 },
+  { label: '667×375 Handy-Querformat', width: 667, height: 375 },
 ];
 const delay = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 
