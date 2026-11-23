@@ -397,16 +397,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
     async (eventId: string) => {
       const activeUserId = currentUserId.current;
       if (!activeUserId) return;
+      const sessionVersion = currentSessionVersion.current;
+      const isCurrentSession = () =>
+        currentUserId.current === activeUserId &&
+        currentSessionVersion.current === sessionVersion;
       const isFavorite = !currentBookmarkIds.current.includes(eventId);
       setStorageError(null);
       try {
         const savedIds = await setBookmarksFavorite(activeUserId, [eventId], isFavorite);
-        if (currentUserId.current !== activeUserId) return;
+        if (!isCurrentSession()) return;
         currentBookmarkIds.current = savedIds;
         setBookmarkedIds(savedIds);
         void syncBookmarks(activeUserId);
       } catch {
-        if (currentUserId.current === activeUserId) {
+        if (isCurrentSession()) {
           setStorageError('Favorit konnte nicht gespeichert werden. Bitte versuche es erneut.');
         }
       }
@@ -476,16 +480,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const clearBookmarks = useCallback(async () => {
     const activeUserId = currentUserId.current;
     if (!activeUserId) return;
+    const sessionVersion = currentSessionVersion.current;
+    const isCurrentSession = () =>
+      currentUserId.current === activeUserId &&
+      currentSessionVersion.current === sessionVersion;
     const idsToClear = [...currentBookmarkIds.current];
     setStorageError(null);
     try {
       const savedIds = await setBookmarksFavorite(activeUserId, idsToClear, false);
-      if (currentUserId.current !== activeUserId) return;
+      if (!isCurrentSession()) return;
       currentBookmarkIds.current = savedIds;
       setBookmarkedIds(savedIds);
       void syncBookmarks(activeUserId);
     } catch {
-      if (currentUserId.current === activeUserId) {
+      if (isCurrentSession()) {
         setStorageError('Favoriten konnten nicht gelöscht werden. Bitte versuche es erneut.');
       }
     }
