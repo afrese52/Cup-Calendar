@@ -39,6 +39,10 @@ const COMPRESSIBLE_TYPES = new Set([
   'text/plain',
 ]);
 
+function writeCompressionFailureEvent(event) {
+  console.error(JSON.stringify(event));
+}
+
 function parseAcceptEncoding(header = '') {
   const encodings = new Map();
 
@@ -143,6 +147,7 @@ export function createStaticServer({
   basePath = process.env.BASE_PATH || '/',
   compress = compressRepresentation,
   getCompressedRepresentation,
+  reportCompressionFailure = writeCompressionFailureEvent,
 } = {}) {
   const normalizedBasePath =
     basePath === '/' ? '' : `/${basePath.replace(/^\/+|\/+$/g, '')}`;
@@ -150,6 +155,7 @@ export function createStaticServer({
     getCompressedRepresentation ||
     ((filePath, encoding, original) =>
       getRepresentation(filePath, encoding, original, compress));
+  let compressionFailureCount = 0;
 
   return createServer(async (request, response) => {
     if (request.method !== 'GET' && request.method !== 'HEAD') {
@@ -261,7 +267,20 @@ export function createStaticServer({
         ? await getRepresentationForRequest(filePath, encoding, original)
         : original;
     } catch (error) {
-      console.error('Static file compression failed:', error.message);
+      compressionFailureCount += 1;
+      try {
+        const reportingResult = reportCompressionFailure({
+          event: 'cupcal.static_compression.failure',
+          version: 1,
+          encoding,
+          failureCount: compressionFailureCount,
+        });
+        if (reportingResult && typeof reportingResult.then === 'function') {
+          void Promise.resolve(reportingResult).catch(() => {});
+        }
+      } catch {
+        // Reporting must never interrupt the uncompressed response fallback.
+      }
       body = original;
       encoding = null;
     }

@@ -235,10 +235,12 @@ test('falls back to the original page and asset when compression fails', async (
   await mkdir(join(fallbackRoot, 'assets'));
   await writeFile(join(fallbackRoot, 'index.html'), originalPage);
   await writeFile(join(fallbackRoot, 'assets', 'app.js'), originalScript);
+  const compressionFailureEvents = [];
 
   const fallbackServer = createStaticServer({
     root: fallbackRoot,
     basePath: '/',
+    reportCompressionFailure: (event) => compressionFailureEvents.push(event),
     getCompressedRepresentation: async (_filePath, encoding) => {
       throw new Error(`simulated ${encoding} compression failure`);
     },
@@ -269,6 +271,58 @@ test('falls back to the original page and asset when compression fails', async (
     assert.equal(assetResponse.headers['content-encoding'], undefined);
     assert.equal(assetResponse.headers['content-length'], String(Buffer.byteLength(originalScript)));
     assert.equal(assetResponse.body.toString(), originalScript);
+
+    assert.deepEqual(compressionFailureEvents, [
+      {
+        event: 'cupcal.static_compression.failure',
+        version: 1,
+        encoding: 'br',
+        failureCount: 1,
+      },
+      {
+        event: 'cupcal.static_compression.failure',
+        version: 1,
+        encoding: 'gzip',
+        failureCount: 2,
+      },
+    ]);
+    assert.equal(
+      JSON.stringify(compressionFailureEvents).includes(fallbackRoot),
+      false,
+    );
+  } finally {
+    await new Promise((resolve) => fallbackServer.close(resolve));
+    await rm(fallbackRoot, { recursive: true, force: true });
+  }
+});
+
+test('serves the uncompressed response when compression failure reporting fails', async () => {
+  const original = `<main>${'CupCal tournament calendar '.repeat(100)}</main>`;
+  const fallbackRoot = await mkdtemp(join(tmpdir(), 'cupcal-static-monitor-failure-'));
+  await writeFile(join(fallbackRoot, 'index.html'), original);
+  const fallbackServer = createStaticServer({
+    root: fallbackRoot,
+    reportCompressionFailure: async () => {
+      throw new Error('simulated monitoring failure');
+    },
+    compress: async () => {
+      throw new Error('simulated compression failure');
+    },
+  });
+  await new Promise((resolve, reject) => {
+    fallbackServer.once('error', reject);
+    fallbackServer.listen(0, '127.0.0.1', resolve);
+  });
+
+  try {
+    const response = await getResponse(
+      '/',
+      { 'accept-encoding': 'gzip' },
+      `http://127.0.0.1:${fallbackServer.address().port}`,
+    );
+    assert.equal(response.status, 200);
+    assert.equal(response.headers['content-encoding'], undefined);
+    assert.equal(response.body.toString(), original);
   } finally {
     await new Promise((resolve) => fallbackServer.close(resolve));
     await rm(fallbackRoot, { recursive: true, force: true });
