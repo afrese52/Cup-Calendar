@@ -55,6 +55,36 @@ Diese Schritte beschreiben die manuelle Prüfung mit echten Browsern und
 Screenreadern. Der Build-Smoke-Test prüft die gerenderte Semantik, ersetzt
 aber nicht den manuellen Fokus- und Ansagetest.
 
+## Windows-Kontrastmodus
+
+Die Themennavigation, die Brotkrumennavigation und die Fokusrahmen unterstützen
+`forced-colors: active`. Im erzwungenen Farbmodus verwenden Links und
+Fokusrahmen Systemfarben. Der aktuelle Themenlink und die aktuelle Seite in der
+Brotkrumennavigation erhalten zusätzlich eine hervorgehobene Fläche und bleiben
+damit nicht allein durch ihre Textfarbe erkennbar.
+
+Die Chromium-Prüfung emuliert den erzwungenen Farbmodus für alle drei
+Themenseiten. Sie kontrolliert sichtbare Links, die Markierung der aktuellen
+Seite und 3-Pixel-Fokusrahmen an Themen- und Brotkrumenlinks. Vom Projektstamm
+ausführen:
+
+```sh
+PORT=19101 BASE_PATH=/ pnpm --filter @workspace/cupcal-website run build
+pnpm --filter @workspace/cupcal-website run test:mobile-layout
+```
+
+Ergebnis der letzten Prüfung: alle drei Themenseiten bestanden die
+`forced-colors: active`-Emulation. Navigation, aktuelle Seite in Navigation
+und Breadcrumb sowie Fokusrahmen waren sichtbar. Diese Browser-Emulation prüft
+die CSS-Regeln, ersetzt aber keinen zusätzlichen Test mit einem echten
+Windows-Kontrastdesign.
+
+Für die manuelle Prüfung in Windows unter „Einstellungen → Barrierefreiheit →
+Kontrastdesigns“ ein Design aktivieren. Danach die drei Themenseiten in Edge
+oder Chrome öffnen, mit `Tab` durch Kopfzeilennavigation und Breadcrumb gehen
+und kontrollieren, dass der Tastaturfokus sowie der aktuelle Themenlink klar
+erkennbar bleiben.
+
 ## Browserzoom mit 200 Prozent
 
 Die wiederholbare Layoutprüfung verwendet Chromium im Headless-Modus. Eine

@@ -460,6 +460,77 @@ async function inspectPage(send, route) {
   return response.result.value;
 }
 
+async function inspectForcedColors(send) {
+  await send('Emulation.setEmulatedMedia', {
+    features: [{ name: 'forced-colors', value: 'active' }],
+  });
+  await send('Input.dispatchKeyEvent', {
+    type: 'keyDown',
+    key: 'Tab',
+    code: 'Tab',
+    windowsVirtualKeyCode: 9,
+  });
+  await send('Input.dispatchKeyEvent', {
+    type: 'keyUp',
+    key: 'Tab',
+    code: 'Tab',
+    windowsVirtualKeyCode: 9,
+  });
+
+  const response = await send('Runtime.evaluate', {
+    expression: `(() => {
+      const nav = document.querySelector('nav[aria-label="CupCal-Themen"]');
+      const breadcrumb = document.querySelector('nav[aria-label="Brotkrumennavigation"]');
+      const navLink = nav?.querySelector('a[href]');
+      const currentNav = nav?.querySelector('a[aria-current="page"]');
+      const breadcrumbLink = breadcrumb?.querySelector('a[href]');
+      const currentBreadcrumb = breadcrumb?.querySelector('[aria-current="page"]');
+      const styles = (element) => {
+        const style = getComputedStyle(element);
+        return {
+          color: style.color,
+          backgroundColor: style.backgroundColor,
+          textDecorationLine: style.textDecorationLine,
+          outlineStyle: style.outlineStyle,
+          outlineWidth: style.outlineWidth,
+          outlineColor: style.outlineColor,
+        };
+      };
+      navLink?.focus();
+      const navFocusVisible = Boolean(navLink?.matches(':focus-visible'));
+      const navFocus = navLink ? styles(navLink) : null;
+      currentNav?.focus();
+      const currentNavFocusVisible = Boolean(currentNav?.matches(':focus-visible'));
+      const currentNavFocus = currentNav ? styles(currentNav) : null;
+      breadcrumbLink?.focus();
+      const breadcrumbFocusVisible = Boolean(breadcrumbLink?.matches(':focus-visible'));
+      const breadcrumbFocus = breadcrumbLink ? styles(breadcrumbLink) : null;
+      return {
+        forcedColorsActive: matchMedia('(forced-colors: active)').matches,
+        navVisible: Boolean(nav && nav.getBoundingClientRect().width > 0),
+        navLink: navLink ? styles(navLink) : null,
+        currentNav: currentNav ? styles(currentNav) : null,
+        currentBreadcrumb: currentBreadcrumb ? styles(currentBreadcrumb) : null,
+        navFocusVisible,
+        navFocus,
+        currentNavFocusVisible,
+        currentNavFocus,
+        breadcrumbFocusVisible,
+        breadcrumbFocus,
+      };
+    })()`,
+    returnByValue: true,
+  });
+  if (!response.result?.value) {
+    throw new Error(
+      response.exceptionDetails?.exception?.description ??
+        response.exceptionDetails?.text ??
+        'Chromium konnte den erzwungenen Farbmodus nicht auswerten.',
+    );
+  }
+  return response.result.value;
+}
+
 function assertPageLayout(page, viewport, result) {
   const issues = [];
   if (result.viewportWidth !== viewport.width) issues.push(`Viewport ist ${result.viewportWidth}px statt ${viewport.width}px breit`);
@@ -517,6 +588,50 @@ function assertPageLayout(page, viewport, result) {
   );
 }
 
+function assertForcedColors(page, result) {
+  const issues = [];
+  const isOpaque = (value) => value && value !== 'transparent' && value !== 'rgba(0, 0, 0, 0)';
+  const hasFocusOutline = (focusVisible, style) =>
+    focusVisible
+    && style?.outlineStyle === 'solid'
+    && Number.parseFloat(style.outlineWidth) >= 3
+    && isOpaque(style.outlineColor);
+
+  if (!result.forcedColorsActive) issues.push('forced-colors: active wurde nicht aktiviert');
+  if (!result.navVisible || !result.navLink) issues.push('Themennavigation ist nicht sichtbar');
+  if (!result.navLink?.textDecorationLine.includes('underline')) {
+    issues.push('Links der Themennavigation sind nicht zusätzlich unterstrichen');
+  }
+  if (
+    !isOpaque(result.currentNav?.backgroundColor)
+    || result.currentNav?.color === result.currentNav?.backgroundColor
+    || !result.currentNav?.textDecorationLine.includes('underline')
+  ) {
+    issues.push('Aktueller Themenlink ist nicht deutlich vom übrigen Linktext unterscheidbar');
+  }
+  if (
+    !isOpaque(result.currentBreadcrumb?.backgroundColor)
+    || result.currentBreadcrumb?.color === result.currentBreadcrumb?.backgroundColor
+  ) {
+    issues.push('Aktuelle Seite in der Brotkrumennavigation ist nicht deutlich markiert');
+  }
+  if (!hasFocusOutline(result.navFocusVisible, result.navFocus)) {
+    issues.push('Fokusrahmen der Themennavigation ist nicht sichtbar');
+  }
+  if (!hasFocusOutline(result.currentNavFocusVisible, result.currentNavFocus)) {
+    issues.push('Fokusrahmen des aktuellen Themenlinks ist nicht sichtbar');
+  }
+  if (!hasFocusOutline(result.breadcrumbFocusVisible, result.breadcrumbFocus)) {
+    issues.push('Fokusrahmen des Brotkrumenlinks ist nicht sichtbar');
+  }
+
+  assert.deepEqual(
+    issues,
+    [],
+    `${page.path} im Windows-Kontrastmodus: ${issues.join('; ')}\n${JSON.stringify(result, null, 2)}`,
+  );
+}
+
 async function run() {
   const html = await readFile(path.join(publicRoot, 'index.html'), 'utf8').catch(() => {
     throw new Error('Kein Produktionsbuild gefunden. Führe zuerst „pnpm run build“ aus.');
@@ -548,6 +663,15 @@ async function run() {
         console.log(
           `${page.path} · ${viewport.label}: Inhalte, Logos und Bedienelemente sichtbar; kein Seitenüberlauf.`,
         );
+      }
+      if (page.path !== '/') {
+        await configureViewport(devTools.send, { width: 1280, height: 900, mobile: false });
+        await devTools.navigate(new URL(page.path, baseUrl).href);
+        await waitForPage(devTools.send);
+        const forcedColorsResult = await inspectForcedColors(devTools.send);
+        assertForcedColors(page, forcedColorsResult);
+        await devTools.send('Emulation.setEmulatedMedia', { features: [] });
+        console.log(`${page.path} · Windows-Kontrastmodus: Navigation, Breadcrumbs und Fokusrahmen sichtbar.`);
       }
     }
     console.log(

@@ -304,3 +304,27 @@ h1, h2, h3, p { margin-top: 0; }
 @media (prefers-reduced-motion: reduce) {
  *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
+@media (forced-colors: active) {
+  .topic-shell .nav-links a,
+  .topic-shell .topic-breadcrumb a,
+  .topic-shell .topic-footer-home,
+  .topic-shell .topic-card {
+    color: LinkText;
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 3px;
+  }
+  .topic-shell .nav-links a[aria-current="page"],
+  .topic-shell .topic-breadcrumb [aria-current="page"] {
+    color: HighlightText;
+    background-color: Highlight;
+    font-weight: 700;
+    outline: 1px solid Highlight;
+    outline-offset: 2px;
+    text-decoration-thickness: 2px;
+  }
+  :where(a, button, input, select, textarea, [tabindex]):focus-visible {
+    outline: 3px solid CanvasText !important;
+    outline-offset: 4px;
+  }
+}
