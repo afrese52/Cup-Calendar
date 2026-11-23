@@ -102,6 +102,14 @@ export default function ResetPasswordScreen() {
     return () => clearInterval(interval);
   }, [retryAvailableAt]);
 
+  useEffect(() => {
+    if (retryWaitFinished && Platform.OS === 'ios') {
+      AccessibilityInfo.announceForAccessibility(
+        'Die Wartezeit ist abgelaufen. Du kannst es jetzt erneut versuchen.',
+      );
+    }
+  }, [retryWaitFinished]);
+
   usePreventRemove(isSaving || hasUnsavedPassword, ({ repeat }) => {
     if (isSaving) return;
 
@@ -377,8 +385,6 @@ export default function ResetPasswordScreen() {
         {retryWaitSeconds > 0 ? (
           <Text
             accessible
-            accessibilityRole="status"
-            accessibilityLiveRegion="polite"
             testID="reset-password-retry-countdown"
             style={[styles.retryCountdown, { color: colors.mutedForeground }]}
           >
@@ -390,7 +396,7 @@ export default function ResetPasswordScreen() {
           <Text
             accessible
             accessibilityRole="status"
-            accessibilityLiveRegion="polite"
+            accessibilityLiveRegion={Platform.OS === 'android' ? 'polite' : undefined}
             testID="reset-password-retry-ready"
             style={[styles.retryCountdown, { color: colors.mutedForeground }]}
           >
@@ -402,9 +408,7 @@ export default function ResetPasswordScreen() {
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={isSaving ? 'Passwort wird gespeichert' : 'Passwort speichern'}
-            accessibilityLiveRegion={
-              Platform.OS === 'android' && (isSaving || retryWaitSeconds > 0) ? 'polite' : undefined
-            }
+            accessibilityLiveRegion={Platform.OS === 'android' && isSaving ? 'polite' : undefined}
             accessibilityState={{
               disabled: isSaving || retryWaitSeconds > 0,
               busy: isSaving,
