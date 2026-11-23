@@ -33,14 +33,14 @@ content_type = "image/png"
 id = "0Etgkxez2VrPilrzRDxdY"
 uri = "file://artifacts/cupcal-mobile/store-assets/google-play/feature-graphic-1024x500.jpg"
 type = "image"
-title = "CupCal – Featuregrafik 1024 × 500"
-description = "Google-Play-Featuregrafik im JPEG-Format."
+title = "Korrigierte CupCal-Featuregrafik"
+description = "Der Telefonbildschirm enthält jetzt die korrigierte Kalenderaufnahme mit mittig ausgerichteter Menükurve."
 logical_id = "88fa3b7e-26b0-4ef9-90e8-1a219703c7cc"
-content_hash = "sha256:53a400cd3c4ed70edc33c7ed08f1ce7f0f1ada7e601ea3b5a6ac30c0e910e710"
-size = 100045
-mtime_ms = 1795392838272
-storage_uri = "gcs://replit-rams-assets-archer/rams/assets/repl:fba06988-5dc0-49ce-a88d-6c2b15091cfa/88fa3b7e-26b0-4ef9-90e8-1a219703c7cc/22e7f220-4362-498f-969a-fe5620e3469b"
-storage_version_token = "1795392992569840"
+content_hash = "sha256:b70bf4947a0c510c6da87de3784555a2a08c546d25684e3588f88274df372df6"
+size = 118719
+mtime_ms = 1795432487310
+storage_uri = "gcs://replit-rams-assets-archer/rams/assets/repl:fba06988-5dc0-49ce-a88d-6c2b15091cfa/88fa3b7e-26b0-4ef9-90e8-1a219703c7cc/e4822418-07fa-4f79-b721-98a81d15e746"
+storage_version_token = "1795432517939968"
 content_type = "image/jpeg"
 
 [[outputs]]

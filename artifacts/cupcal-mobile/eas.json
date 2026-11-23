@@ -12,6 +12,13 @@
         "image": "ubuntu-26.04-jdk-17-ndk-r27b-sdk-58",
         "buildType": "apk"
       }
+    },
+    "production": {
+      "extends": "preview",
+      "distribution": "store",
+      "android": {
+        "buildType": "app-bundle"
+      }
     }
   }
 }

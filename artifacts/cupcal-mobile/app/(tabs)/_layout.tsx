@@ -37,7 +37,10 @@ function CupCalTabBar({ state, descriptors, emitter, navigateToTab, insets }: Cu
         pointerEvents="none"
         viewBox={`0 0 400 ${barBodyHeight}`}
         preserveAspectRatio="none"
-        style={[StyleSheet.absoluteFill, { bottom: bottomInset, height: barBodyHeight }]}
+        style={[
+          StyleSheet.absoluteFill,
+          { bottom: bottomInset, height: barBodyHeight, width: '100%' },
+        ]}
       >
         <Path d={`${topEdge} V ${barBodyHeight} H 0 Z`} fill={colors.card} />
         <Path d={topEdge} fill="none" stroke={colors.border} strokeWidth={1} />
