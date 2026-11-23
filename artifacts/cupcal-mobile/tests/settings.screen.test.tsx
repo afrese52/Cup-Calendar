@@ -1722,7 +1722,7 @@ test('zeigt einen Fehler beim erneuten Anfordern des Bestätigungslinks', async 
   )).toBeTruthy();
 });
 
-test('kennzeichnet das erneute Senden des Bestätigungslinks als laufende Anfrage', async () => {
+test('sendet bei synchronen Mehrfachklicks vor dem nächsten Render nur eine Bestätigung', async () => {
   const mockedSupabase = jest.requireMock('@/services/supabase') as {
     requestEmailConfirmation: jest.Mock;
   };
@@ -1734,8 +1734,17 @@ test('kennzeichnet das erneute Senden des Bestätigungslinks als laufende Anfrag
   );
   const view = await openSettings();
   await fireEvent.changeText(view.getByTestId('auth-email-input'), 'test@example.invalid');
-  await fireEvent.press(view.getByTestId('resend-confirmation-button'));
-  await fireEvent.press(view.getByTestId('resend-confirmation-button'));
+  const resendButton = view.getByTestId('resend-confirmation-button');
+  const target = {};
+  await act(async () => {
+    const click = resendButton.props.onClick as (event: {
+      currentTarget: object;
+      target: object;
+    }) => void;
+    click({ currentTarget: target, target });
+    click({ currentTarget: target, target });
+    click({ currentTarget: target, target });
+  });
 
   expect(mockedSupabase.requestEmailConfirmation).toHaveBeenCalledTimes(1);
 
@@ -1754,6 +1763,43 @@ test('kennzeichnet das erneute Senden des Bestätigungslinks als laufende Anfrag
     disabled: true,
     busy: false,
   });
+});
+
+test('sendet aus der Registrierungsbestätigung bei synchronen Mehrfachklicks nur einen Link', async () => {
+  const mockedSupabase = jest.requireMock('@/services/supabase') as {
+    requestEmailConfirmation: jest.Mock;
+  };
+  let finishConfirmation!: () => void;
+  mockedSupabase.requestEmailConfirmation.mockImplementation(
+    () => new Promise<void>((resolve) => {
+      finishConfirmation = resolve;
+    }),
+  );
+  const view = await openSettings();
+  await fireEvent.press(view.getByTestId('auth-mode-toggle'));
+  await enterCredentials(view);
+  await fireEvent.press(view.getByTestId('auth-submit-button'));
+  const resendButton = await view.findByTestId('registration-resend-confirmation-button');
+  const target = {};
+  await act(async () => {
+    const click = resendButton.props.onClick as (event: {
+      currentTarget: object;
+      target: object;
+    }) => void;
+    click({ currentTarget: target, target });
+    click({ currentTarget: target, target });
+    click({ currentTarget: target, target });
+  });
+
+  expect(mockedSupabase.requestEmailConfirmation).toHaveBeenCalledTimes(1);
+  expect(mockedSupabase.requestEmailConfirmation).toHaveBeenCalledWith(
+    'test@example.invalid',
+    'cupcal-test://auth/confirm',
+  );
+  await act(async () => finishConfirmation());
+  expect(await view.findByText(
+    'Wenn dein Konto noch nicht bestätigt ist, erhältst du in Kürze einen neuen Bestätigungslink.',
+  )).toBeTruthy();
 });
 
 test.each(['ios', 'android'] as const)(
