@@ -101,6 +101,12 @@ test('lädt Indexstatus und Suchleistung mit der CupCal-Admin-Sitzung', async ()
           userCanonical: null,
         },
         performance: { clicks: 12, impressions: 340, ctr: 0.035, position: 8.2 },
+        countries: [
+          { country: 'DEU', clicks: 9, impressions: 280, ctr: 0.032, position: 8.1 },
+        ],
+        devices: [
+          { device: 'MOBILE', clicks: 7, impressions: 180, ctr: 0.0389, position: 6.4 },
+        ],
         queries: [
           { query: 'cupcal kalender', clicks: 8, impressions: 100, ctr: 0.08, position: 4.5 },
           { query: 'fortnite cup termine', clicks: 2, impressions: 30, ctr: 0.0667, position: 7.1 },
@@ -114,6 +120,8 @@ test('lädt Indexstatus und Suchleistung mit der CupCal-Admin-Sitzung', async ()
 
   expect(await view.findByText('Eingereicht und indexiert')).toBeTruthy();
   expect(await view.findByText('12 Klicks · 340 Impressionen')).toBeTruthy();
+  expect(await view.findByText('DEU')).toBeTruthy();
+  expect(await view.findByText('Mobilgerät')).toBeTruthy();
   expect(await view.findByText('cupcal kalender')).toBeTruthy();
   expect(view.getByText(/anonymisierte Suchanfragen möglicherweise aus/)).toBeTruthy();
   await waitFor(() => {
@@ -153,15 +161,24 @@ test('erklärt, wenn für eine Seite keine sichtbaren Suchbegriffe vorliegen', a
           userCanonical: null,
         },
         performance: { clicks: 0, impressions: 0, ctr: 0, position: null },
+        countries: [],
+        devices: [],
         queries: [],
       }],
     }));
 
   const view = await renderScreen();
+  await view.findByText('Google-Dienstkonto ist eingerichtet.');
   await fireEvent.press(await view.findByText('Suchdaten abrufen'));
 
   expect(await view.findByText(
     'Für diese Seite wurden im Zeitraum keine sichtbaren Suchbegriffe gemeldet.',
   )).toBeTruthy();
   expect(view.getByText(/Google blendet seltene oder anonymisierte Suchanfragen/)).toBeTruthy();
+  expect(view.getByText(
+    'Google hat für diese Seite im gewählten Zeitraum keine Länderwerte geliefert.',
+  )).toBeTruthy();
+  expect(view.getByText(
+    'Google hat für diese Seite im gewählten Zeitraum keine Gerätedaten geliefert.',
+  )).toBeTruthy();
 });

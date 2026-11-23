@@ -31,10 +31,30 @@ export type SearchConsoleReportItem = {
     position: number | null;
   };
   queries: SearchConsoleQuery[];
+  countries: SearchConsoleCountry[];
+  devices: SearchConsoleDevice[];
 };
 
 export type SearchConsoleQuery = {
   query: string;
+  clicks: number;
+  impressions: number;
+  ctr: number;
+  position: number | null;
+};
+
+export type SearchConsoleCountry = {
+  country: string;
+  clicks: number;
+  impressions: number;
+  ctr: number;
+  position: number | null;
+};
+
+export type SearchConsoleDeviceType = "DESKTOP" | "MOBILE" | "TABLET";
+
+export type SearchConsoleDevice = {
+  device: SearchConsoleDeviceType;
   clicks: number;
   impressions: number;
   ctr: number;
@@ -269,7 +289,7 @@ export function createSearchConsoleClient(options: {
         `${API_BASE_URL}/webmasters/v3/sites/${encodeURIComponent(CUPCAL_SEARCH_CONSOLE_PROPERTY)}/searchAnalytics/query`;
 
       return await Promise.all(validated.urls.map(async (url): Promise<SearchConsoleReportItem> => {
-        const [inspection, analytics, queryAnalytics] = await Promise.all([
+        const [inspection, analytics, queryAnalytics, countryAnalytics, deviceAnalytics] = await Promise.all([
           googlePost(`${API_BASE_URL}/v1/urlInspection/index:inspect`, token, {
             inspectionUrl: url,
             siteUrl: CUPCAL_SEARCH_CONSOLE_PROPERTY,
@@ -293,6 +313,24 @@ export function createSearchConsoleClient(options: {
             }],
             rowLimit: 100,
           }),
+          googlePost(analyticsEndpoint, token, {
+            startDate: validated.startDate,
+            endDate: validated.endDate,
+            dimensions: ["country"],
+            dimensionFilterGroups: [{
+              filters: [{ dimension: "page", operator: "equals", expression: url }],
+            }],
+            rowLimit: 250,
+          }),
+          googlePost(analyticsEndpoint, token, {
+            startDate: validated.startDate,
+            endDate: validated.endDate,
+            dimensions: ["device"],
+            dimensionFilterGroups: [{
+              filters: [{ dimension: "page", operator: "equals", expression: url }],
+            }],
+            rowLimit: 3,
+          }),
         ]);
 
         const inspectionResult = inspection["inspectionResult"];
@@ -307,6 +345,8 @@ export function createSearchConsoleClient(options: {
           ? rows[0] as Record<string, unknown>
           : {};
         const queryRows = Array.isArray(queryAnalytics["rows"]) ? queryAnalytics["rows"] : [];
+        const countryRows = Array.isArray(countryAnalytics["rows"]) ? countryAnalytics["rows"] : [];
+        const deviceRows = Array.isArray(deviceAnalytics["rows"]) ? deviceAnalytics["rows"] : [];
         const position = row["position"];
 
         return {
@@ -327,6 +367,44 @@ export function createSearchConsoleClient(options: {
             ctr: asNumber(row["ctr"]),
             position: typeof position === "number" && Number.isFinite(position) ? position : null,
           },
+          countries: countryRows.flatMap((countryRow): SearchConsoleCountry[] => {
+            if (!countryRow || typeof countryRow !== "object") return [];
+            const countryData = countryRow as Record<string, unknown>;
+            const keys = countryData["keys"];
+            const country = Array.isArray(keys) && typeof keys[0] === "string"
+              ? keys[0].trim().toUpperCase()
+              : "";
+            if (!country) return [];
+            const countryPosition = countryData["position"];
+            return [{
+              country,
+              clicks: asNumber(countryData["clicks"]),
+              impressions: asNumber(countryData["impressions"]),
+              ctr: asNumber(countryData["ctr"]),
+              position: typeof countryPosition === "number" && Number.isFinite(countryPosition)
+                ? countryPosition
+                : null,
+            }];
+          }),
+          devices: deviceRows.flatMap((deviceRow): SearchConsoleDevice[] => {
+            if (!deviceRow || typeof deviceRow !== "object") return [];
+            const deviceData = deviceRow as Record<string, unknown>;
+            const keys = deviceData["keys"];
+            const device = Array.isArray(keys) && typeof keys[0] === "string"
+              ? keys[0].trim().toUpperCase()
+              : "";
+            if (device !== "DESKTOP" && device !== "MOBILE" && device !== "TABLET") return [];
+            const devicePosition = deviceData["position"];
+            return [{
+              device,
+              clicks: asNumber(deviceData["clicks"]),
+              impressions: asNumber(deviceData["impressions"]),
+              ctr: asNumber(deviceData["ctr"]),
+              position: typeof devicePosition === "number" && Number.isFinite(devicePosition)
+                ? devicePosition
+                : null,
+            }];
+          }),
           queries: queryRows.flatMap((queryRow): SearchConsoleQuery[] => {
             if (!queryRow || typeof queryRow !== "object") return [];
             const queryData = queryRow as Record<string, unknown>;

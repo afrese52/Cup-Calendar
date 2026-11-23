@@ -176,7 +176,7 @@ export const GetSearchConsoleStatusResponse = zod.object({
 
 /**
  * Ausschließlich lesender Abruf für HTTPS-URLs der fest konfigurierten CupCal-Property.
- * @summary Lädt Indexstatus, Seitenleistung und Suchbegriffe für CupCal-Seiten
+ * @summary Lädt Indexstatus, Seitenleistung, Länder, Geräte und Suchbegriffe für CupCal-Seiten
  */
 export const getSearchConsoleReportBodyUrlsMax = 10;
 
@@ -214,7 +214,21 @@ export const GetSearchConsoleReportResponse = zod.object({
   "impressions": zod.number(),
   "ctr": zod.number(),
   "position": zod.number().nullable()
-})).describe('Sichtbare Suchbegriffe; Google kann seltene oder anonymisierte Begriffe ausblenden.')
+})).describe('Sichtbare Suchbegriffe; Google kann seltene oder anonymisierte Begriffe ausblenden.'),
+  "countries": zod.array(zod.object({
+  "country": zod.string().describe('ISO-3166-1 alpha-3 country code'),
+  "clicks": zod.number(),
+  "impressions": zod.number(),
+  "ctr": zod.number(),
+  "position": zod.number().nullable()
+})).describe('Suchleistung nach ISO-Ländercode; leer, wenn Google keine Länderzeilen meldet.'),
+  "devices": zod.array(zod.object({
+  "device": zod.enum(['DESKTOP', 'MOBILE', 'TABLET']),
+  "clicks": zod.number(),
+  "impressions": zod.number(),
+  "ctr": zod.number(),
+  "position": zod.number().nullable()
+})).describe('Suchleistung nach Gerät; leer, wenn Google keine Gerätezeilen meldet.')
 }))
 })
 

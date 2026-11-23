@@ -5,6 +5,8 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { SearchConsoleCountry } from './searchConsoleCountry';
+import type { SearchConsoleDevice } from './searchConsoleDevice';
 import type { SearchConsoleQuery } from './searchConsoleQuery';
 import type { SearchConsoleReportItemIndexing } from './searchConsoleReportItemIndexing';
 import type { SearchConsoleReportItemPerformance } from './searchConsoleReportItemPerformance';
@@ -15,4 +17,8 @@ export interface SearchConsoleReportItem {
   performance: SearchConsoleReportItemPerformance;
   /** Sichtbare Suchbegriffe; Google kann seltene oder anonymisierte Begriffe ausblenden. */
   queries: SearchConsoleQuery[];
+  /** Suchleistung nach ISO-Ländercode; leer, wenn Google keine Länderzeilen meldet. */
+  countries: SearchConsoleCountry[];
+  /** Suchleistung nach Gerät; leer, wenn Google keine Gerätezeilen meldet. */
+  devices: SearchConsoleDevice[];
 }

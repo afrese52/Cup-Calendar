@@ -238,7 +238,7 @@ paths:
     post:
       operationId: getSearchConsoleReport
       tags: [search-console]
-      summary: Lädt Indexstatus, Seitenleistung und Suchbegriffe für CupCal-Seiten
+      summary: Lädt Indexstatus, Seitenleistung, Länder, Geräte und Suchbegriffe für CupCal-Seiten
       description: Ausschließlich lesender Abruf für HTTPS-URLs der fest konfigurierten CupCal-Property.
       security:
         - BearerAuth: []
@@ -250,7 +250,7 @@ paths:
               $ref: "#/components/schemas/SearchConsoleReportRequest"
       responses:
         "200":
-          description: Indexstatus, Suchleistung und sichtbare Suchbegriffe
+          description: Indexstatus, Suchleistung nach Land und Gerät sowie sichtbare Suchbegriffe
           content:
             application/json:
               schema:
@@ -570,6 +570,24 @@ components:
         ctr: { type: number }
         position: { type: ["number", "null"] }
       required: [query, clicks, impressions, ctr, position]
+    SearchConsoleCountry:
+      type: object
+      properties:
+        country: { type: string, description: ISO-3166-1 alpha-3 country code }
+        clicks: { type: number }
+        impressions: { type: number }
+        ctr: { type: number }
+        position: { type: ["number", "null"] }
+      required: [country, clicks, impressions, ctr, position]
+    SearchConsoleDevice:
+      type: object
+      properties:
+        device: { type: string, enum: [DESKTOP, MOBILE, TABLET] }
+        clicks: { type: number }
+        impressions: { type: number }
+        ctr: { type: number }
+        position: { type: ["number", "null"] }
+      required: [device, clicks, impressions, ctr, position]
     SearchConsoleReportItem:
       type: object
       properties:
@@ -599,7 +617,17 @@ components:
           description: Sichtbare Suchbegriffe; Google kann seltene oder anonymisierte Begriffe ausblenden.
           items:
             $ref: "#/components/schemas/SearchConsoleQuery"
-      required: [url, indexing, performance, queries]
+        countries:
+          type: array
+          description: Suchleistung nach ISO-Ländercode; leer, wenn Google keine Länderzeilen meldet.
+          items:
+            $ref: "#/components/schemas/SearchConsoleCountry"
+        devices:
+          type: array
+          description: Suchleistung nach Gerät; leer, wenn Google keine Gerätezeilen meldet.
+          items:
+            $ref: "#/components/schemas/SearchConsoleDevice"
+      required: [url, indexing, performance, queries, countries, devices]
     SearchConsoleReportResponse:
       type: object
       properties:

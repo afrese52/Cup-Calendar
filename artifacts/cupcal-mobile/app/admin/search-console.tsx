@@ -29,6 +29,15 @@ function defaultDate(daysAgo: number) {
   return date.toISOString().slice(0, 10);
 }
 
+function formatDevice(device: string) {
+  switch (device) {
+    case 'DESKTOP': return 'Computer';
+    case 'MOBILE': return 'Mobilgerät';
+    case 'TABLET': return 'Tablet';
+    default: return device;
+  }
+}
+
 export default function SearchConsoleScreen() {
   const colors = useColors();
   const router = useRouter();
@@ -183,6 +192,47 @@ export default function SearchConsoleScreen() {
             <Text style={[styles.help, { color: colors.mutedForeground }]}>
               CTR: {(result.performance.ctr * 100).toFixed(1)} % · Ø Position: {result.performance.position?.toFixed(1) ?? '–'}
             </Text>
+            <Text style={[styles.sectionLabel, { color: colors.mutedForeground, marginTop: 18 }]}>
+              LÄNDER IM ZEITRAUM
+            </Text>
+            <Text style={[styles.help, { color: colors.mutedForeground }]}>
+              Google meldet Länder als ISO-Ländercodes.
+            </Text>
+            {result.countries.length === 0 ? (
+              <Text style={[styles.emptyQueries, { color: colors.mutedForeground }]}>
+                Google hat für diese Seite im gewählten Zeitraum keine Länderwerte geliefert.
+              </Text>
+            ) : (
+              <View style={styles.queryList}>
+                {result.countries.map((country) => (
+                  <View key={country.country} style={[styles.queryRow, { borderColor: colors.border }]}>
+                    <Text style={[styles.queryText, { color: colors.foreground }]}>{country.country}</Text>
+                    <Text style={[styles.queryMetrics, { color: colors.mutedForeground }]}>
+                      {country.clicks} Klicks · {country.impressions} Impressionen · CTR {(country.ctr * 100).toFixed(1)} % · Pos. {country.position?.toFixed(1) ?? '–'}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            )}
+            <Text style={[styles.sectionLabel, { color: colors.mutedForeground, marginTop: 18 }]}>
+              GERÄTE IM ZEITRAUM
+            </Text>
+            {result.devices.length === 0 ? (
+              <Text style={[styles.emptyQueries, { color: colors.mutedForeground }]}>
+                Google hat für diese Seite im gewählten Zeitraum keine Gerätedaten geliefert.
+              </Text>
+            ) : (
+              <View style={styles.queryList}>
+                {result.devices.map((device) => (
+                  <View key={device.device} style={[styles.queryRow, { borderColor: colors.border }]}>
+                    <Text style={[styles.queryText, { color: colors.foreground }]}>{formatDevice(device.device)}</Text>
+                    <Text style={[styles.queryMetrics, { color: colors.mutedForeground }]}>
+                      {device.clicks} Klicks · {device.impressions} Impressionen · CTR {(device.ctr * 100).toFixed(1)} % · Pos. {device.position?.toFixed(1) ?? '–'}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            )}
             <Text style={[styles.sectionLabel, { color: colors.mutedForeground, marginTop: 18 }]}>
               SUCHBEGRIFFE IM ZEITRAUM
             </Text>

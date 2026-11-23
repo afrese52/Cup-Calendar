@@ -405,6 +405,34 @@ export interface SearchConsoleQuery {
   position: number | null;
 }
 
+export interface SearchConsoleCountry {
+  /** ISO-3166-1 alpha-3 country code */
+  country: string;
+  clicks: number;
+  impressions: number;
+  ctr: number;
+  /** @nullable */
+  position: number | null;
+}
+
+export type SearchConsoleDeviceDevice = typeof SearchConsoleDeviceDevice[keyof typeof SearchConsoleDeviceDevice];
+
+
+export const SearchConsoleDeviceDevice = {
+  DESKTOP: 'DESKTOP',
+  MOBILE: 'MOBILE',
+  TABLET: 'TABLET',
+} as const;
+
+export interface SearchConsoleDevice {
+  device: SearchConsoleDeviceDevice;
+  clicks: number;
+  impressions: number;
+  ctr: number;
+  /** @nullable */
+  position: number | null;
+}
+
 export type SearchConsoleReportItemIndexing = {
   /** @nullable */
   verdict: string | null;
@@ -438,6 +466,10 @@ export interface SearchConsoleReportItem {
   performance: SearchConsoleReportItemPerformance;
   /** Sichtbare Suchbegriffe; Google kann seltene oder anonymisierte Begriffe ausblenden. */
   queries: SearchConsoleQuery[];
+  /** Suchleistung nach ISO-Ländercode; leer, wenn Google keine Länderzeilen meldet. */
+  countries: SearchConsoleCountry[];
+  /** Suchleistung nach Gerät; leer, wenn Google keine Gerätezeilen meldet. */
+  devices: SearchConsoleDevice[];
 }
 
 export interface SearchConsoleReportResponse {
