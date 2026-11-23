@@ -412,6 +412,34 @@ test('zeigt einen Anmeldefehler sichtbar an', async () => {
   await waitFor(() => expect(sendAccessibilityFocus).toHaveBeenCalledTimes(1));
 });
 
+test('sendet ein kurzes Bestandskennwort und zeigt nur den verständlichen Anmeldefehler', async () => {
+  const rawSupabaseMessage = 'Password should be at least 6 characters';
+  auth.signInWithPassword.mockResolvedValue({
+    error: Object.assign(new Error(rawSupabaseMessage), {
+      code: 'weak_password',
+      status: 400,
+    }),
+  });
+
+  const view = await openSettings();
+  await fireEvent.changeText(view.getByTestId('auth-email-input'), 'test@example.invalid');
+  await fireEvent.changeText(view.getByTestId('auth-password-input'), 'abc');
+  await fireEvent.press(view.getByTestId('auth-submit-button'));
+
+  expect(auth.signInWithPassword).toHaveBeenCalledWith({
+    email: 'test@example.invalid',
+    password: 'abc',
+  });
+  const errorMessage = await view.findByTestId('auth-error-message');
+  expect(errorMessage.props.children).toBe(
+    'E-Mail-Adresse oder Passwort stimmen nicht. Prüfe deine Eingaben oder fordere einen neuen Passwort-Link an.',
+  );
+  expect(errorMessage.props.children).not.toContain('mindestens 6 Zeichen');
+  expect(errorMessage.props.children).not.toContain('weak_password');
+  expect(errorMessage.props.children).not.toContain(rawSupabaseMessage);
+  expect(errorMessage.props.children).not.toContain('400');
+});
+
 test.each([
   ['Anmeldung', 'sign-in'],
   ['Registrierung', 'sign-up'],
