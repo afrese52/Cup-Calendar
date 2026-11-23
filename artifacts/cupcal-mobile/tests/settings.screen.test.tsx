@@ -527,6 +527,55 @@ test('zeigt Ladezustand und sperrt die Anmeldeschaltfläche während der Anfrage
   expect(await view.findByText('Du bist angemeldet.')).toBeTruthy();
 });
 
+test('verhindert doppelte Anmeldungen bei schnellen Mehrfachklicks und zeigt danach die Sitzung', async () => {
+  let finishSignIn!: (result: { error: null }) => void;
+  auth.signInWithPassword.mockImplementation(
+    () => new Promise((resolve) => {
+      finishSignIn = (result) => {
+        mockSupabase.__emitAuthStateChange('SIGNED_IN', testSession);
+        resolve(result);
+      };
+    }),
+  );
+  const view = await openSettings();
+  await enterCredentials(view);
+
+  const submitButton = view.getByTestId('auth-submit-button');
+  const pressableClick = submitButton.props.onClick as (event: {
+    currentTarget: unknown;
+    target: unknown;
+    nativeEvent: object;
+    stopPropagation: () => void;
+  }) => void;
+  const clickEvent = {
+    currentTarget: submitButton,
+    target: submitButton,
+    nativeEvent: {},
+    stopPropagation: jest.fn(),
+  };
+  await act(async () => {
+    pressableClick(clickEvent);
+    pressableClick(clickEvent);
+    pressableClick(clickEvent);
+  });
+
+  expect(auth.signInWithPassword).toHaveBeenCalledTimes(1);
+  await waitFor(() => {
+    expect(view.getByTestId('auth-submit-button').props.accessibilityState).toEqual({
+      disabled: true,
+      busy: true,
+    });
+    expect(view.getByTestId('auth-submit-button').props.accessibilityLabel).toBe('Anmeldung läuft');
+  });
+
+  await act(async () => finishSignIn({ error: null }));
+  expect(await view.findByTestId('account-session-status')).toBeTruthy();
+  expect(view.getByText('test@example.invalid')).toBeTruthy();
+  expect(view.queryByText('Einen Moment …')).toBeNull();
+  expect(view.queryByTestId('auth-submit-button')).toBeNull();
+  expect(auth.signInWithPassword).toHaveBeenCalledTimes(1);
+});
+
 test('registriert ein Konto und zeigt die Bestätigungsmeldung', async () => {
   const view = await openSettings();
   await fireEvent.press(view.getByTestId('auth-mode-toggle'));
