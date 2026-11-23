@@ -16,11 +16,16 @@ let temporaryRoot;
 let server;
 let origin;
 
-function getResponse(pathname, headers = {}, requestOrigin = origin) {
+function getResponse(
+  pathname,
+  headers = {},
+  requestOrigin = origin,
+  method = 'GET',
+) {
   return new Promise((resolve, reject) => {
     const request = httpRequest(
       `${requestOrigin}${pathname}`,
-      { headers },
+      { headers, method },
       (response) => {
         const chunks = [];
         response.on('data', (chunk) => chunks.push(chunk));
@@ -80,12 +85,61 @@ test('serves compressed content, generated pages, and real 404 responses', async
   assert.equal(brotliPage.headers.vary, 'Accept-Encoding');
   assert.equal(brotliDecompressSync(brotliPage.body).toString(), page);
 
+  const brotliHead = await getResponse(
+    '/',
+    { 'accept-encoding': 'br, gzip' },
+    origin,
+    'HEAD',
+  );
+  assert.equal(brotliHead.status, brotliPage.status);
+  for (const header of [
+    'cache-control',
+    'content-encoding',
+    'content-length',
+    'content-type',
+    'vary',
+    'x-content-type-options',
+  ]) {
+    assert.equal(
+      brotliHead.headers[header],
+      brotliPage.headers[header],
+      header,
+    );
+  }
+  assert.equal(
+    brotliHead.headers['content-length'],
+    String(brotliPage.body.length),
+  );
+  assert.equal(brotliHead.body.length, 0);
+
   const gzipScript = await getResponse('/assets/app.js', {
     'accept-encoding': 'gzip',
   });
   assert.equal(gzipScript.status, 200);
   assert.equal(gzipScript.headers['content-encoding'], 'gzip');
   assert.equal(gunzipSync(gzipScript.body).toString(), script);
+
+  const gzipHead = await getResponse(
+    '/assets/app.js',
+    { 'accept-encoding': 'gzip' },
+    origin,
+    'HEAD',
+  );
+  assert.equal(gzipHead.status, gzipScript.status);
+  assert.equal(
+    gzipHead.headers['content-encoding'],
+    gzipScript.headers['content-encoding'],
+  );
+  assert.equal(
+    gzipHead.headers['content-length'],
+    gzipScript.headers['content-length'],
+  );
+  assert.equal(
+    gzipHead.headers['content-type'],
+    gzipScript.headers['content-type'],
+  );
+  assert.equal(gzipHead.headers.vary, gzipScript.headers.vary);
+  assert.equal(gzipHead.body.length, 0);
 
   const identityOnly = await getResponse('/', {
     'accept-encoding': 'identity',
@@ -110,8 +164,34 @@ test('serves compressed content, generated pages, and real 404 responses', async
     'accept-encoding': 'identity;q=0, gzip;q=0, br;q=0',
   });
   assert.equal(identityExplicitlyExcluded.status, 406);
-  assert.equal(identityExplicitlyExcluded.headers['content-encoding'], undefined);
+  assert.equal(
+    identityExplicitlyExcluded.headers['content-encoding'],
+    undefined,
+  );
   assert.equal(identityExplicitlyExcluded.headers.vary, 'Accept-Encoding');
+  assert.equal(identityExplicitlyExcluded.body.toString(), 'Not Acceptable');
+
+  const rejectedHead = await getResponse(
+    '/',
+    { 'accept-encoding': 'identity;q=0, gzip;q=0, br;q=0' },
+    origin,
+    'HEAD',
+  );
+  assert.equal(rejectedHead.status, 406);
+  assert.equal(rejectedHead.headers['content-encoding'], undefined);
+  assert.equal(
+    rejectedHead.headers['content-type'],
+    identityExplicitlyExcluded.headers['content-type'],
+  );
+  assert.equal(
+    rejectedHead.headers['content-length'],
+    identityExplicitlyExcluded.headers['content-length'],
+  );
+  assert.equal(
+    rejectedHead.headers.vary,
+    identityExplicitlyExcluded.headers.vary,
+  );
+  assert.equal(rejectedHead.body.length, 0);
 
   const tinyResourceRequiresCompression = await getResponse('/assets/tiny.txt', {
     'accept-encoding': 'gzip, identity;q=0',

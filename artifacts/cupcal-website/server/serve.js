@@ -9,6 +9,7 @@ const brotliAsync = promisify(brotliCompress);
 const gzipAsync = promisify(gzip);
 const publicRoot = resolve(fileURLToPath(new URL('../dist/public/', import.meta.url)));
 const MINIMUM_COMPRESS_BYTES = 512;
+const NOT_ACCEPTABLE_BODY = 'Not Acceptable';
 const bodyCache = new Map();
 
 const MIME_TYPES = {
@@ -231,9 +232,10 @@ export function createStaticServer({
     if (!encoding && !identityAcceptable) {
       response.writeHead(406, {
         'content-type': 'text/plain; charset=utf-8',
+        'content-length': Buffer.byteLength(NOT_ACCEPTABLE_BODY),
         'vary': 'Accept-Encoding',
       });
-      response.end(request.method === 'HEAD' ? undefined : 'Not Acceptable');
+      response.end(request.method === 'HEAD' ? undefined : NOT_ACCEPTABLE_BODY);
       return;
     }
 
