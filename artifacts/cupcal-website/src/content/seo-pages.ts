@@ -31,7 +31,7 @@ export const seoTopicPages: SeoTopicPage[] = [
     path: '/turnierkalender-app/',
     title: 'Turnierkalender-App: Termine im Blick behalten | CupCal',
     description:
-      'CupCal bündelt Cups, Ligen und Trainingsrunden. Android-Start am 30. November 2026 geplant; iOS-Termin offen. Noch keine bestätigten offiziellen CupCal-Store-Links.',
+      'Cups, Ligen und Trainingsrunden in CupCal. Noch nicht in den Stores; Android ab 30. November 2026 geplant, iOS-Termin offen. Keine bestätigten CupCal-Store-Links.',
     eyebrow: 'Kalender-App',
     h1: 'Turnierkalender-App für Cups, Ligen und Events',
     intro:

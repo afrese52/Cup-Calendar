@@ -131,7 +131,12 @@ function assertPublishedReleaseStatus(html, pageLabel, { checkSearchDescription 
     const description = extractMetaDescription(html);
     assert.match(
       description,
-      /Android-Start am 30\. November 2026 geplant/i,
+      /noch nicht in den Stores/i,
+      `${pageLabel}: Die Suchbeschreibung verschweigt, dass CupCal noch nicht in den Stores verfügbar ist.`,
+    );
+    assert.match(
+      description,
+      /Android(?:-Start am| ab) 30\. November 2026 geplant/i,
       `${pageLabel}: Die Suchbeschreibung nennt nicht den geplanten Android-Termin.`,
     );
     assert.match(
@@ -141,7 +146,7 @@ function assertPublishedReleaseStatus(html, pageLabel, { checkSearchDescription 
     );
     assert.match(
       description,
-      /noch keine bestätigten offiziellen CupCal-Store-Links/i,
+      /keine bestätigten CupCal-Store-Links/i,
       `${pageLabel}: Die Suchbeschreibung behauptet nicht, dass offizielle Store-Downloads fehlen.`,
     );
   }
