@@ -4,7 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { createStaticServer } from '../server/serve.js';
-import { seoTopicPages, SITE_ORIGIN } from '../src/content/seo-pages.ts';
+import { confirmedStoreLinks, seoTopicPages, SITE_ORIGIN } from '../src/content/seo-pages.ts';
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const publicRoot = path.join(projectRoot, 'dist/public');
@@ -13,8 +13,11 @@ const expectedSitemapUrls = [
   `${SITE_ORIGIN}/`,
   ...seoTopicPages.map((page) => `${SITE_ORIGIN}${page.path}`),
 ];
-// Keep this empty until an official store listing has been verified.
-const confirmedStoreDownloadUrls = new Set();
+const confirmedStoreDownloadUrls = new Set(
+  Object.values(confirmedStoreLinks)
+    .filter((url) => url !== null)
+    .map((url) => new URL(url).href),
+);
 const storeDomains = ['play.google.com', 'apps.apple.com', 'itunes.apple.com'];
 const topicPagesByUrl = new Map(
   seoTopicPages.map((page) => [`${SITE_ORIGIN}${page.path}`, page]),
@@ -138,7 +141,7 @@ function assertPublishedReleaseStatus(html, pageLabel, { checkSearchDescription 
     );
     assert.match(
       description,
-      /noch keine offiziellen Store-Downloads/i,
+      /noch keine bestätigten offiziellen CupCal-Store-Links/i,
       `${pageLabel}: Die Suchbeschreibung behauptet nicht, dass offizielle Store-Downloads fehlen.`,
     );
   }
@@ -401,6 +404,13 @@ async function runSmokeTest() {
       calendarAppReleaseStatusChecked,
       'Die Veröffentlichungsangaben der Kalender-App-Themenseite wurden nicht geprüft.',
     );
+    const homepageAnchors = new Set(extractAnchorHrefs(homepageHtml));
+    for (const storeUrl of confirmedStoreDownloadUrls) {
+      assert.ok(
+        homepageAnchors.has(storeUrl),
+        `Die Startseite verlinkt eine bestätigte Store-Seite nicht: ${storeUrl}`,
+      );
+    }
     assert.deepEqual(
       unconfirmedStoreTargets,
       [],

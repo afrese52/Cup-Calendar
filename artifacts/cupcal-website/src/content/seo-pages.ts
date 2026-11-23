@@ -1,5 +1,11 @@
 export const SITE_ORIGIN = 'https://cupcal.af-software.app';
 
+// Erst nach Betreiberfreigabe mit offiziellen CupCal-Store-Seiten befüllen.
+export const confirmedStoreLinks: Record<'android' | 'ios', string | null> = {
+  android: null,
+  ios: null,
+};
+
 export interface SeoPageSection {
   heading: string;
   paragraphs?: string[];
@@ -25,7 +31,7 @@ export const seoTopicPages: SeoTopicPage[] = [
     path: '/turnierkalender-app/',
     title: 'Turnierkalender-App: Termine im Blick behalten | CupCal',
     description:
-      'CupCal bündelt Cups, Ligen und Trainingsrunden im Kalender. Android-Start am 30. November 2026 geplant; iOS-Termin offen, noch keine offiziellen Store-Downloads.',
+      'CupCal bündelt Cups, Ligen und Trainingsrunden. Android-Start am 30. November 2026 geplant; iOS-Termin offen. Noch keine bestätigten offiziellen CupCal-Store-Links.',
     eyebrow: 'Kalender-App',
     h1: 'Turnierkalender-App für Cups, Ligen und Events',
     intro:
@@ -50,7 +56,7 @@ export const seoTopicPages: SeoTopicPage[] = [
       {
         heading: 'Verfügbarkeit der App',
         paragraphs: [
-          'CupCal ist ein unabhängiges Community-Projekt und derzeit noch nicht in den Stores verfügbar. Die Android-Veröffentlichung ist für den 30. November 2026 geplant; für iOS steht der Termin noch aus.',
+          'CupCal ist ein unabhängiges Community-Projekt und derzeit noch nicht in den Stores verfügbar. Die Android-Veröffentlichung ist für den 30. November 2026 geplant; für iOS steht der Termin noch aus. Offizielle Download-Links werden erst nach Betreiberfreigabe ergänzt.',
         ],
       },
     ],

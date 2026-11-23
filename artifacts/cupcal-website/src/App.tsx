@@ -1,11 +1,34 @@
 import { useEffect, useRef } from 'react';
 import { ArrowDown, ArrowRight, Bookmark, CalendarDays, Check, Clock3, Download, Filter, WifiOff } from 'lucide-react';
 import { trackEvent } from './lib/analytics';
-import { normalizeWebsitePath, seoTopicPages } from './content/seo-pages';
+import { confirmedStoreLinks, normalizeWebsitePath, seoTopicPages } from './content/seo-pages';
 import { SeoTopicPageView } from './pages/seo-topic-page';
 
 const websiteLogo = `${import.meta.env.BASE_URL}cupcal-website-logo-transparent.webp`;
 const appLogo = `${import.meta.env.BASE_URL}cupcal-app-logo.webp`;
+
+function getOfficialStoreUrl(url: string | null, platform: 'android' | 'ios') {
+  if (!url) return null;
+
+  const parsedUrl = new URL(url);
+  const isOfficialListing = platform === 'android'
+    ? parsedUrl.protocol === 'https:'
+      && parsedUrl.hostname === 'play.google.com'
+      && parsedUrl.pathname === '/store/apps/details'
+      && Boolean(parsedUrl.searchParams.get('id'))
+    : parsedUrl.protocol === 'https:'
+      && parsedUrl.hostname === 'apps.apple.com'
+      && /\/app\/[^/]+\/id\d+\/?$/.test(parsedUrl.pathname);
+
+  if (!isOfficialListing) {
+    throw new Error(`Die bestätigte ${platform}-Store-URL ist keine gültige offizielle Store-Seite.`);
+  }
+
+  return parsedUrl.href;
+}
+
+const androidStoreUrl = getOfficialStoreUrl(confirmedStoreLinks.android, 'android');
+const iosStoreUrl = getOfficialStoreUrl(confirmedStoreLinks.ios, 'ios');
 
 interface AppProps {
   pathname?: string;
@@ -206,7 +229,11 @@ function App({ pathname }: AppProps = {}) {
           </article>
           <article className="faq-card">
             <h3>Wann kann ich CupCal herunterladen?</h3>
-            <p>CupCal ist noch nicht in den Stores verfügbar. Die Android-Veröffentlichung ist für den 30. November 2026 geplant; für iOS steht noch kein Termin fest.</p>
+            <p>
+              {androidStoreUrl || iosStoreUrl
+                ? 'CupCal ist für die Plattformen mit bestätigter Store-Seite jetzt verfügbar.'
+                : 'CupCal ist noch nicht in den Stores verfügbar. Die Android-Veröffentlichung ist für den 30. November 2026 geplant; für iOS steht noch kein Termin fest. Offizielle Download-Links werden erst nach Betreiberfreigabe ergänzt.'}
+            </p>
           </article>
         </div>
       </section>
@@ -296,24 +323,56 @@ function App({ pathname }: AppProps = {}) {
         data-analytics-section="availability"
       >
         <div className="section-label">Ehrlich gesagt</div>
-        <h2 className="section-title">Android geplant ab 30. November.<br /><span>iOS noch nicht verfügbar.</span></h2>
+        <h2 className="section-title">
+          {androidStoreUrl ? 'Android jetzt verfügbar.' : 'Android geplant ab 30. November.'}<br />
+          <span>{iosStoreUrl ? 'iOS jetzt verfügbar.' : 'iOS noch nicht verfügbar.'}</span>
+        </h2>
         <p className="section-intro">
-          CupCal ist noch nicht im Google Play Store oder Apple App Store verfügbar.
-          Die Android-Veröffentlichung ist für den 30. November 2026 geplant; für iOS steht noch kein Termin fest.
+          {androidStoreUrl
+            ? 'CupCal ist jetzt im Google Play Store verfügbar.'
+            : 'CupCal ist noch nicht im Google Play Store verfügbar. Die Android-Veröffentlichung ist für den 30. November 2026 geplant.'}
+          {' '}
+          {iosStoreUrl
+            ? 'CupCal ist jetzt im Apple App Store verfügbar.'
+            : 'Im Apple App Store ist CupCal noch nicht verfügbar; ein Veröffentlichungstermin steht noch nicht fest.'}
         </p>
         <div className="availability-panel" role="status" data-testid="status-download">
-          <CalendarDays className="availability-icon" aria-hidden="true" />
+          {androidStoreUrl ? <Check className="availability-icon" aria-hidden="true" /> : <CalendarDays className="availability-icon" aria-hidden="true" />}
           <div>
-            <strong>Android · geplant ab 30. November 2026</strong>
-            <p>Noch nicht verfügbar. Veröffentlichung im Google Play Store geplant.</p>
+            <strong>{androidStoreUrl ? 'Android · jetzt verfügbar' : 'Android · geplant ab 30. November 2026'}</strong>
+            <p>{androidStoreUrl ? 'Öffne die offizielle CupCal-Seite im Google Play Store.' : 'Noch nicht verfügbar. Ein offizieller Download-Link wird erst nach Betreiberfreigabe ergänzt.'}</p>
           </div>
+          {androidStoreUrl && (
+            <a
+              className="button-muted"
+              href={androidStoreUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              data-testid="link-google-play"
+              onClick={() => trackEvent('availability_cta_click', { placement: 'availability_section', platform: 'android' })}
+            >
+              Google Play öffnen <ArrowRight aria-hidden="true" />
+            </a>
+          )}
         </div>
         <div className="availability-panel" role="status" data-testid="status-ios">
-          <Clock3 className="availability-icon" aria-hidden="true" />
+          {iosStoreUrl ? <Check className="availability-icon" aria-hidden="true" /> : <Clock3 className="availability-icon" aria-hidden="true" />}
           <div>
-            <strong>iOS · noch nicht verfügbar</strong>
-            <p>Ein Veröffentlichungstermin für den Apple App Store steht noch nicht fest.</p>
+            <strong>{iosStoreUrl ? 'iOS · jetzt verfügbar' : 'iOS · noch nicht verfügbar'}</strong>
+            <p>{iosStoreUrl ? 'Öffne die offizielle CupCal-Seite im Apple App Store.' : 'Ein Veröffentlichungstermin für den Apple App Store steht noch nicht fest.'}</p>
           </div>
+          {iosStoreUrl && (
+            <a
+              className="button-muted"
+              href={iosStoreUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              data-testid="link-app-store"
+              onClick={() => trackEvent('availability_cta_click', { placement: 'availability_section', platform: 'ios' })}
+            >
+              App Store öffnen <ArrowRight aria-hidden="true" />
+            </a>
+          )}
         </div>
         <div className="disclaimer">Inoffizielles Fanprojekt · Nicht mit Epic Games verbunden oder von Epic Games unterstützt</div>
       </section>
