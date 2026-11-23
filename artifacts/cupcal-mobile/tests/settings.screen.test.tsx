@@ -1013,21 +1013,56 @@ test.each(['ios', 'android'] as const)(
   },
 );
 
-test('öffnet nach einem abgelaufenen Reset direkt die Linkanfrage und sendet an die Reset-Rücksprungadresse', async () => {
-  mockRouteParams.authMode = 'forgot-password';
-  mockRouteParams.focusAccount = 'true';
-  const view = await openSettings();
+test.each(['ios', 'android'] as const)(
+  'öffnet nach einem abgelaufenen Reset auf %s die Linkanfrage mit sinnvollem Fokus',
+  async (platform) => {
+    const originalPlatformOS = Platform.OS;
+    Object.defineProperty(Platform, 'OS', { configurable: true, value: platform });
+    mockRouteParams.authMode = 'forgot-password';
+    mockRouteParams.focusAccount = 'true';
 
-  expect(view.getByText('Passwort zurücksetzen')).toBeTruthy();
-  expect(view.queryByTestId('auth-password-input')).toBeNull();
-  await fireEvent.changeText(view.getByTestId('auth-email-input'), 'test@example.invalid');
-  await fireEvent.press(view.getByTestId('auth-submit-button'));
+    try {
+      const view = await openSettings();
+      const recoveryHeading = view.getByTestId('account-session-status');
 
-  expect(await view.findByTestId('auth-success-message')).toBeTruthy();
-  expect(auth.resetPasswordForEmail).toHaveBeenCalledWith('test@example.invalid', {
-    redirectTo: 'cupcal-test://auth/reset?flow=cupcal-password-reset',
-  });
-});
+      expect(recoveryHeading.props).toMatchObject({
+        accessible: true,
+        accessibilityRole: 'header',
+        children: 'Passwort zurücksetzen',
+      });
+      await waitFor(() => expect(sendAccessibilityFocus).toHaveBeenCalledTimes(1));
+      const [focusTarget, focusEvent] = sendAccessibilityFocus.mock.calls[0]!;
+      expect(focusEvent).toBe('focus');
+      expect((focusTarget as { props?: { testID?: string; children?: string } }).props)
+        .toMatchObject({
+          testID: 'account-session-status',
+          children: 'Passwort zurücksetzen',
+        });
+      expect(view.queryByTestId('auth-password-input')).toBeNull();
+      expect(view.getByTestId('auth-email-input').props.accessibilityLabel).toBe('E-Mail-Adresse');
+      expect(view.getByTestId('auth-submit-button').props.accessibilityLabel).toBe('Link anfordern');
+
+      await fireEvent.changeText(view.getByTestId('auth-email-input'), 'test@example.invalid');
+      await fireEvent.press(view.getByTestId('auth-submit-button'));
+
+      const successMessage = await view.findByTestId('auth-success-message');
+      expect(successMessage.props).toMatchObject({
+        accessible: true,
+        accessibilityRole: 'alert',
+        accessibilityLiveRegion: 'polite',
+      });
+      expect(successMessage.props.children).toContain(
+        'erhältst du in Kürze einen Wiederherstellungslink.',
+      );
+      expect(sendAccessibilityFocus).toHaveBeenCalledTimes(1);
+      expect(auth.resetPasswordForEmail).toHaveBeenCalledWith('test@example.invalid', {
+        redirectTo: 'cupcal-test://auth/reset?flow=cupcal-password-reset',
+      });
+    } finally {
+      Object.defineProperty(Platform, 'OS', { configurable: true, value: originalPlatformOS });
+    }
+  },
+);
 
 test('öffnet bei aktualisiertem Routenparameter die Linkanfrage und entfernt den alten Konto-Fehler', async () => {
   const view = await openSettings();
