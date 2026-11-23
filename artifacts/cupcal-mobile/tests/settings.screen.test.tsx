@@ -1588,6 +1588,34 @@ test('ermöglicht nach einem fehlgeschlagenen Wiederherstellungsversand einen ne
   });
 });
 
+test('entfernt die alte Versandbestätigung nach Änderung der Wiederherstellungsadresse', async () => {
+  auth.resetPasswordForEmail
+    .mockResolvedValueOnce({ error: null })
+    .mockResolvedValueOnce({ error: null });
+  const view = await openSettings();
+  await fireEvent.press(view.getByTestId('forgot-password-button'));
+  await fireEvent.changeText(view.getByTestId('auth-email-input'), 'old@example.invalid');
+
+  await fireEvent.press(view.getByTestId('auth-submit-button'));
+  expect(await view.findByTestId('auth-success-message')).toBeTruthy();
+
+  await fireEvent.changeText(view.getByTestId('auth-email-input'), 'new@example.invalid');
+  expect(view.queryByTestId('auth-success-message')).toBeNull();
+
+  await fireEvent.press(view.getByTestId('auth-submit-button'));
+  const currentSuccessMessage = await view.findByTestId('auth-success-message');
+  expect(currentSuccessMessage.props.children).toBe(
+    'Wenn zu dieser E-Mail ein CupCal-Konto besteht, erhältst du in Kürze einen Wiederherstellungslink. Der Versand kann etwas dauern. Prüfe auch deinen Spam-Ordner.',
+  );
+  expect(auth.resetPasswordForEmail).toHaveBeenNthCalledWith(1, 'old@example.invalid', {
+    redirectTo: 'cupcal-test://auth/reset?flow=cupcal-password-reset',
+  });
+  expect(auth.resetPasswordForEmail).toHaveBeenNthCalledWith(2, 'new@example.invalid', {
+    redirectTo: 'cupcal-test://auth/reset?flow=cupcal-password-reset',
+  });
+  expect(view.getAllByTestId('auth-success-message')).toHaveLength(1);
+});
+
 test('entfernt den veralteten Wiederherstellungsfehler beim Ändern der E-Mail-Adresse', async () => {
   auth.resetPasswordForEmail
     .mockResolvedValueOnce({ error: new Error('Email rate limit exceeded') })

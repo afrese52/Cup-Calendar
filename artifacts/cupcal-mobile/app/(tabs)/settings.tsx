@@ -788,6 +788,9 @@ export default function SettingsScreen() {
                     recoveryEmailRevisionRef.current += 1;
                   }
                   setEmail(nextEmail);
+                  if (authMode === 'forgot-password' && authMessage) {
+                    setAuthMessage(null);
+                  }
                   const failedRecoveryEmail = recoveryErrorEmailRef.current;
                   if (
                     authMode === 'forgot-password'
