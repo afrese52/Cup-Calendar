@@ -90,6 +90,11 @@ export function getAccountDeletionRedirectUrl(confirmationToken: string): string
     webOrigin: Platform.OS === 'web' && typeof window !== 'undefined'
       ? window.location.origin
       : null,
+    webBasePath: Platform.OS === 'web'
+      && typeof window !== 'undefined'
+      && window.location.pathname.startsWith('/mobile/')
+      ? '/mobile'
+      : '',
     nativeUrl,
     confirmationToken,
   });

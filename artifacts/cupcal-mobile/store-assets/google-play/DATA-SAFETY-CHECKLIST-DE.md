@@ -19,12 +19,18 @@ abgeschlossene Play-Console-Erklärung oder Rechtsberatung.
 - **Kontolöschung:** In der App lässt sich ein Löschlink anfordern. Das Konto
   wird erst nach Öffnen des Bestätigungslinks gelöscht.
 - **Berechtigungen:** Die Android-Konfiguration fordert Internet- und
-  Netzwerkstatus-Berechtigungen an. Eine Standort-, Kamera- oder
-  Mikrofonberechtigung ist in der Android-Konfiguration nicht eingetragen.
+  Netzwerkstatus-Berechtigungen sowie eine optionale Standortberechtigung an.
+  Erteilte Standortkoordinaten werden auf dem Gerät nur zur Auswahl der
+  nächstgelegenen Turnierregion verwendet und weder gespeichert noch gesendet.
+  Kamera und Mikrofon werden nicht angefordert.
 - **Werbung und Analyse:** In den geprüften mobilen App-Dateien und direkten
   App-Abhängigkeiten wurde kein Werbe- oder Analytics-SDK-Aufruf gefunden.
-  Die App-Build-Kette und die Dienstanbieter müssen vor dem Ausfüllen des
-  Play-Formulars trotzdem vollständig geprüft werden.
+  Für die Website sind Google Fonts eingebunden; Replit Analytics wurde
+  zeitweise in einer Live-HTML-Antwort beobachtet.
+- **Dienstanbieter:** Supabase Auth und Datenbank laufen in Frankfurt/EU.
+  Website und API werden über Replit bereitgestellt. Der vorhandene IONOS-
+  E-Mail-Hook ist laut Projektprüfung nicht aktiviert und wird nicht als
+  aktiver Versanddienst angegeben.
 - **Admin-Import:** Der Dateiimport für Spielpläne ist eine Admin-Funktion und
   für normale Konten nicht sichtbar. Das darf nicht als Funktion der
   öffentlichen Nutzerreise dargestellt werden.
@@ -50,15 +56,21 @@ sind zu prüfen.
 
 ## Vor Freigabe noch zu klären
 
-1. Eine öffentlich erreichbare Datenschutzerklärung mit Anbieter/Kontakt,
-   den Datenflüssen, Speicherdauer, Löschung und Dienstanbietern veröffentlichen
-   und in der App sowie im Play-Eintrag verlinken.
-2. Einen öffentlich erreichbaren Web-Löschpfad bereitstellen. Die vorhandene
-   In-App-Bestätigung per E-Mail ersetzt den geforderten externen Link nicht.
+1. Die öffentliche Datenschutzerklärung ist unter
+   `https://cupcal.af-software.app/datenschutz/` vorgesehen und wird in der
+   App verlinkt. Nach Veröffentlichung den Link in der Play Console eintragen.
+2. Der Web-Löschpfad ist unter
+   `https://cupcal.af-software.app/konto-loeschen/` vorgesehen. Die Seite
+   authentifiziert das Konto im Browser und verwendet die bestehende
+   E-Mail-Bestätigung. Nach Veröffentlichung den Ablauf ohne installierte App
+   prüfen und den Link in der Play Console eintragen.
 3. Das finale APK/AAB und seine tatsächlich eingebundenen SDKs prüfen; die
    Liste in `package.json` allein ist für die Play-Erklärung nicht ausreichend.
-4. Die Löschung gespeicherter Favoriten und möglicher weiterer Kontodaten
-   anhand der Produktionsdatenbank und ihrer Aufbewahrungsregeln bestätigen.
+4. Die bestätigten Fristen lauten: Konto- und Favoritendaten während der
+   aktiven Kontonutzung, Löschung binnen sieben Tagen nach Kontoschließung,
+   Sicherungskopien binnen sieben Tagen und Betriebsprotokolle nach 30 Tagen.
+   Vor dem Play-Console-Absenden muss der Kontoinhaber sie mit der tatsächlichen
+   Produktionskonfiguration und den Datenanbietern abgleichen.
 
 ## Quellen
 

@@ -138,6 +138,23 @@ Die Sitzung wird auf nativen Geräten geschützt gespeichert und beim nächsten
 Start geladen. Vorhandene AsyncStorage-Sitzungen werden beim ersten Zugriff
 übernommen; im Web bleibt AsyncStorage unverändert.
 
+### Öffentliche Web-Kontolöschung
+
+Der öffentliche Browserablauf fordert die Löschung auf der CupCal-Website an
+und kehrt für die E-Mail-Bestätigung zu dieser Website-Route zurück:
+
+```text
+https://cupcal.af-software.app/konto-loeschen/bestaetigen/
+```
+
+Vor dem echten Versand muss ein Projektverantwortlicher genau diese HTTPS-URL
+unter **Authentication → URL Configuration → Redirect URLs** freigeben. Die
+Bestätigungsseite tauscht den Supabase-PKCE-Code im Browser gegen eine Sitzung
+und ruft danach den bestehenden, sitzungs- und kontogebundenen Löschendpunkt
+auf. Eine nicht freigegebene URL kann auf die Supabase-Site-URL zurückfallen;
+das ist kein erfolgreicher Löschablauf. Die Redirect-Freigabe wurde im
+Dashboard nicht überprüft oder geändert.
+
 ### Native App-Link
 
 Die native App verwendet in `app.json` das URL-Schema `cupcal-android`. Der von

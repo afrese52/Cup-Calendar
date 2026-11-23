@@ -240,6 +240,35 @@ h1, h2, h3, p { margin-top: 0; }
 .topic-footer-links { display: flex; flex-wrap: wrap; gap: 14px; }
 .topic-footer-links a, .topic-footer-home { color: #9ca7b4; font-size: 10px; text-decoration: none; }
 .topic-footer-links a:hover, .topic-footer-home:hover { color: #d5f536; }
+.legal-footer-links { display: flex; flex-wrap: wrap; gap: 14px; }
+.legal-footer-links a { color: #9ca7b4; font-size: 10px; text-decoration: none; }
+.legal-footer-links a:hover { color: #d5f536; }
+.legal-article { max-width: 900px; padding-top: 56px; padding-bottom: 82px; }
+.legal-article h1 { margin: 16px 0 15px; font: 800 clamp(42px, 6vw, 68px)/1.05 var(--app-font-heading); text-transform: uppercase; }
+.legal-lead { max-width: 760px; color: #aab3bf; font-size: 17px; line-height: 1.75; }
+.legal-updated { color: #84909e; font-size: 12px; }
+.legal-section { margin-top: 22px; padding: 24px 26px; border: 1px solid #283440; border-radius: 14px; background: #111821; }
+.legal-section h2 { margin: 0 0 12px; font: 700 25px/1.25 var(--app-font-heading); }
+.legal-section p, .legal-section li { color: #9ca7b4; font-size: 13px; line-height: 1.75; }
+.legal-section p:last-child { margin-bottom: 0; }
+.legal-section ol, .legal-section ul { padding-left: 22px; margin: 0 0 14px; }
+.legal-section li + li { margin-top: 8px; }
+.legal-section a { color: #d5f536; text-underline-offset: 3px; overflow-wrap: anywhere; }
+.legal-section strong { color: #e7edf3; }
+.legal-action { display: inline-flex; min-height: 46px; align-items: center; gap: 10px; padding: 0 17px; border-radius: 8px; background: #d5f536; color: #151a0a !important; font-size: 13px; font-weight: 700; text-decoration: none; }
+.legal-action:hover { background: #e1ff63; }
+.legal-action svg { width: 16px; height: 16px; }
+.legal-action:disabled { opacity: .65; cursor: wait; transform: none; }
+.deletion-form { display: grid; gap: 10px; margin: 18px 0 24px; max-width: 560px; }
+.deletion-form label { color: #dce3ea; font-size: 12px; font-weight: 700; }
+.deletion-form input { width: 100%; min-height: 46px; padding: 0 13px; border: 1px solid #38434f; border-radius: 8px; background: #0b1016; color: #eaf0f5; font: inherit; }
+.deletion-form .legal-action { justify-self: start; margin-top: 7px; }
+.legal-form-message { margin: 4px 0 0; padding: 12px 14px; border-radius: 8px; font-size: 12px; line-height: 1.6; }
+.error-message { border: 1px solid rgba(255, 105, 105, .35); color: #ffaaaa; background: rgba(255, 80, 80, .08); }
+.success-message { border: 1px solid rgba(213, 245, 54, .28); color: #dce9a4; background: rgba(213, 245, 54, .06); }
+.legal-confirmation { max-width: 760px; margin-top: 18px; padding: 20px; border: 1px solid #283440; border-radius: 12px; background: #111821; }
+.legal-confirmation p { color: #aab3bf; font-size: 14px; line-height: 1.7; }
+.legal-confirmation a { color: #d5f536; text-underline-offset: 3px; }
 .topic-article { padding-top: 25px; padding-bottom: 45px; }
 .topic-breadcrumb { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; color: #768393; font-size: 11px; }
 .topic-breadcrumb a { color: #aab3bf; text-decoration: none; }
@@ -303,6 +332,13 @@ h1, h2, h3, p { margin-top: 0; }
   .topic-article { padding-top: 18px; }.topic-hero { padding: 42px 0 28px; }.topic-hero h1 { font-size: clamp(42px, 12vw, 58px); }.topic-intro { font-size: 14px; }.topic-section { padding: 19px; }.topic-section h2 { font-size: 22px; }
   .topic-directory { padding-block: 58px; }.topic-card { min-height: 195px; padding: 19px; }.topic-related { padding-block: 45px 65px; }
   .topic-footer-links { gap: 10px 14px; }.topic-footer-links a { min-height: 28px; display: inline-flex; align-items: center; }
+  .legal-article { padding-top: 40px; padding-bottom: 60px; }
+  .legal-lead { font-size: 14px; }
+  .legal-section { padding: 19px; }
+  .legal-section h2 { font-size: 22px; }
+  .deletion-form .legal-action { width: 100%; justify-content: center; }
+  .legal-footer-links { gap: 10px 14px; }
+  .legal-footer-links a { min-height: 28px; display: inline-flex; align-items: center; }
 }
 @media (max-width: 620px) and (max-height: 420px) {
   .topic-hero h1 { font-size: 34px; line-height: 1.15; }

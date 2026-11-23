@@ -151,6 +151,10 @@ export function SeoTopicPageView({ page }: SeoTopicPageViewProps) {
           >
             CupCal-Startseite
           </a>
+          <nav className="legal-footer-links" aria-label="Rechtliche Informationen">
+            <a href="/datenschutz/">Datenschutzerklärung</a>
+            <a href="/konto-loeschen/">Konto löschen</a>
+          </nav>
           <div className="footer-note">Community-Projekt · Keine offizielle Verbindung zu Epic Games</div>
         </div>
       </footer>

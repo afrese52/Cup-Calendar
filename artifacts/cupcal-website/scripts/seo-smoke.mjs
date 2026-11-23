@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 import { createStaticServer } from '../server/serve.js';
 import { confirmedStoreLinks, seoTopicPages, SITE_ORIGIN } from '../src/content/seo-pages.ts';
+import { deletionConfirmationPage, legalPages } from '../src/content/legal-pages.ts';
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const publicRoot = path.join(projectRoot, 'dist/public');
@@ -12,6 +13,7 @@ const builtIndexPath = path.join(publicRoot, 'index.html');
 const expectedSitemapUrls = [
   `${SITE_ORIGIN}/`,
   ...seoTopicPages.map((page) => `${SITE_ORIGIN}${page.path}`),
+  ...legalPages.map((page) => `${SITE_ORIGIN}${page.path}`),
 ];
 const confirmedStoreDownloadUrls = new Set(
   Object.values(confirmedStoreLinks)
@@ -21,6 +23,9 @@ const confirmedStoreDownloadUrls = new Set(
 const storeDomains = ['play.google.com', 'apps.apple.com', 'itunes.apple.com'];
 const topicPagesByUrl = new Map(
   seoTopicPages.map((page) => [`${SITE_ORIGIN}${page.path}`, page]),
+);
+const legalPagesByUrl = new Map(
+  legalPages.map((page) => [`${SITE_ORIGIN}${page.path}`, page]),
 );
 
 function readAttribute(tag, name) {
@@ -355,6 +360,7 @@ async function runSmokeTest() {
       assert.equal(new Set(schemaIds).size, schemaIds.length, `${sitemapPageUrl.pathname} enthält doppelte Schema-IDs.`);
 
       const topicPage = topicPagesByUrl.get(sitemapUrl);
+      const legalPage = legalPagesByUrl.get(sitemapUrl);
       if (topicPage) {
         assert.equal(title, topicPage.title, `Seitentitel weicht von der SEO-Definition für ${sitemapPageUrl.pathname} ab.`);
         assert.equal(description, topicPage.description, `Meta-Beschreibung weicht für ${sitemapPageUrl.pathname} ab.`);
@@ -375,6 +381,39 @@ async function runSmokeTest() {
           ],
           `${sitemapPageUrl.pathname} hat eine ungültige Breadcrumb-Reihenfolge.`,
         );
+      } else if (legalPage) {
+        assert.equal(title, legalPage.title, `Seitentitel weicht für ${sitemapPageUrl.pathname} ab.`);
+        assert.equal(headings[0], legalPage.h1, `H1 weicht für ${sitemapPageUrl.pathname} ab.`);
+        const renderedText = extractRenderedText(html);
+        if (legalPage.slug === 'datenschutz') {
+          for (const requiredText of [
+            'Andreas Frese',
+            'Am Tonberg 4',
+            'info@af-software.app',
+            'Frankfurt, EU',
+            '30 Tage',
+            'sieben Tagen',
+            'Google Fonts',
+            'Deutschland',
+            'Replit',
+            'nicht bekannt',
+            'nicht bestätigt',
+          ]) {
+            assert.ok(
+              renderedText.includes(requiredText),
+              `Die Datenschutzerklärung enthält die bestätigte Angabe nicht: ${requiredText}`,
+            );
+          }
+        } else {
+          assert.ok(
+            html.includes('id="deletion-email"') && html.includes('id="deletion-password"'),
+            'Die Kontolöschseite enthält kein Browserformular zur Anmeldung.',
+          );
+          assert.match(renderedText, /Löschbestätigungslink anfordern/);
+          assert.match(renderedText, /Bestätigungslink aus der E-Mail öffnest/i);
+          assert.match(renderedText, /30 Minuten/);
+          assert.ok(renderedText.includes('info@af-software.app'));
+        }
       } else if (sitemapUrl === `${sitemapOrigin}/`) {
         const [organization] = schemaNodesOfType(schemaNodes, 'Organization');
         const [website] = schemaNodesOfType(schemaNodes, 'WebSite');
@@ -403,6 +442,29 @@ async function runSmokeTest() {
 
       console.log(`SEO geprüft: ${sitemapPageUrl.pathname} (HTTP 200)`);
     }
+
+    const confirmationPath = deletionConfirmationPage.path;
+    const confirmationResponse = await fetch(`${baseUrl}${confirmationPath}`);
+    assert.equal(confirmationResponse.status, 200, 'Die Kontolösch-Bestätigungsroute muss öffentlich erreichbar sein.');
+    assertContentType(confirmationResponse, 'text/html', confirmationPath);
+    const confirmationHtml = await confirmationResponse.text();
+    assert.equal(extractTitle(confirmationHtml), deletionConfirmationPage.title);
+    assert.match(
+      extractRobotsDirectives(confirmationHtml).join(' '),
+      /\bnoindex\b/i,
+      'Die tokenhaltige Bestätigungsseite muss von Suchmaschinen ausgeschlossen sein.',
+    );
+    assert.equal(
+      extractHeadings(confirmationHtml)[0],
+      deletionConfirmationPage.h1,
+      'Die Bestätigungsroute muss ihre eigene H1 enthalten.',
+    );
+    assert.ok(
+      !extractSitemapUrls(await (await fetch(`${baseUrl}/sitemap.xml`)).text())
+        .includes(`${SITE_ORIGIN}${confirmationPath}`),
+      'Die tokenhaltige Bestätigungsroute darf nicht in der Sitemap stehen.',
+    );
+    console.log(`Löschbestätigungsroute geprüft: ${confirmationPath} (HTTP 200, noindex).`);
     assert.ok(organizationLogoChecked, 'Die Organization- und WebSite-Daten der Startseite wurden nicht geprüft.');
     assert.ok(homeReleaseStatusChecked, 'Die Veröffentlichungsangaben der Startseite wurden nicht geprüft.');
     assert.ok(

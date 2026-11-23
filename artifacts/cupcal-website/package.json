@@ -9,6 +9,7 @@
     "serve": "vite preview --config vite.config.ts --host 0.0.0.0",
     "serve:production": "node server/serve.js",
     "test:analytics": "node --test src/App.analytics.test.mjs",
+    "test:account-deletion-web": "node --test scripts/account-deletion-web.test.mjs",
     "test:serve": "node --test server/serve.test.js",
     "test:compression:live": "node scripts/check-live-compression.mjs",
     "test:seo": "node scripts/seo-smoke.mjs",
@@ -85,5 +86,8 @@
     "vite": "catalog:",
     "wouter": "^3.3.5",
     "zod": "catalog:"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.119.0"
   }
 }

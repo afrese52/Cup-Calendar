@@ -425,6 +425,10 @@ importers:
         version: 3.5.4(zod@4.6.6)
 
   artifacts/cupcal-website:
+    dependencies:
+      '@supabase/supabase-js':
+        specifier: ^2.119.0
+        version: 2.119.0
     devDependencies:
       '@hookform/resolvers':
         specifier: ^3.10.0

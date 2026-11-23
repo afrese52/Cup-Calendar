@@ -29,6 +29,14 @@ if (!basePath) {
 
 export default defineConfig({
   base: basePath,
+  define: {
+    __CUPCAL_SUPABASE_URL__: JSON.stringify(
+      process.env.EXPO_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || '',
+    ),
+    __CUPCAL_SUPABASE_PUBLISHABLE_KEY__: JSON.stringify(
+      process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_ANON_KEY || '',
+    ),
+  },
   plugins: [
     react(),
     tailwindcss(),

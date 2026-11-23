@@ -220,6 +220,15 @@ test('öffnet die Kontoeinstellungen mit Fokus auf der Anmeldeüberschrift', asy
   await waitFor(() => expect(sendAccessibilityFocus).toHaveBeenCalledWith(expect.anything(), 'focus'));
 });
 
+test('zeigt die Datenschutzerklärung und den öffentlichen Löschweg in den Einstellungen', async () => {
+  const view = await render(<SettingsScreen />);
+
+  expect(view.getByText('Datenschutzerklärung')).toBeTruthy();
+  expect(view.getByText('Verarbeitung, Speicherfristen und deine Rechte.')).toBeTruthy();
+  expect(view.getByText('Konto löschen')).toBeTruthy();
+  expect(view.getByText('Öffnet den Web-Löschweg und die Bestätigung per E-Mail.')).toBeTruthy();
+});
+
 test.each(['ios', 'android'] as const)(
   'fokussiert nach jedem Kontomoduswechsel die neue Überschrift auf %s',
   async (platform) => {

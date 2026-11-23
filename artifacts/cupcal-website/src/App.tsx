@@ -2,7 +2,9 @@ import { useEffect, useRef } from 'react';
 import { ArrowDown, ArrowRight, Bookmark, CalendarDays, Check, Clock3, Download, Filter, WifiOff } from 'lucide-react';
 import { trackEvent } from './lib/analytics';
 import { confirmedStoreLinks, normalizeWebsitePath, seoTopicPages } from './content/seo-pages';
+import { deletionConfirmationPage, legalPages } from './content/legal-pages';
 import { SeoTopicPageView } from './pages/seo-topic-page';
+import { LegalPageView } from './pages/legal-pages';
 
 const websiteLogo = `${import.meta.env.BASE_URL}cupcal-website-logo-transparent.webp`;
 const appLogo = `${import.meta.env.BASE_URL}cupcal-app-logo.webp`;
@@ -61,6 +63,7 @@ function App({ pathname }: AppProps = {}) {
     pathname ?? (typeof window === 'undefined' ? '/' : window.location.pathname),
   );
   const topicPage = seoTopicPages.find((page) => page.path === currentPath);
+  const legalPage = [...legalPages, deletionConfirmationPage].find((page) => page.path === currentPath);
 
   useEffect(() => {
     if (typeof IntersectionObserver === 'undefined') return;
@@ -88,6 +91,7 @@ function App({ pathname }: AppProps = {}) {
   }, [currentPath]);
 
   if (topicPage) return <SeoTopicPageView page={topicPage} />;
+  if (legalPage) return <LegalPageView page={legalPage} />;
 
   return (
     <div className="site-shell">
@@ -428,6 +432,10 @@ function App({ pathname }: AppProps = {}) {
                 {page.eyebrow}
               </a>
             ))}
+          </nav>
+          <nav className="legal-footer-links" aria-label="Rechtliche Informationen">
+            <a href="/datenschutz/" data-testid="link-footer-datenschutz">Datenschutzerklärung</a>
+            <a href="/konto-loeschen/" data-testid="link-footer-konto-loeschen">Konto löschen</a>
           </nav>
           <div className="footer-note">Community-Projekt · Keine offizielle Verbindung zu Epic Games</div>
         </div>

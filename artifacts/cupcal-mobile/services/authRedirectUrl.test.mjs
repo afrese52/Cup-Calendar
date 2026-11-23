@@ -38,11 +38,25 @@ test('meldet eine fehlende Browser-Adresse ausdrücklich', () => {
   );
 });
 
-test('leitet die Kontolöschung im Browser mit dem signierten Bestätigungstoken zurück', () => {
+test('leitet die Kontolöschung im Browser in die App-Webroute zurück', () => {
   assert.equal(
     createAccountDeletionRedirectUrl({
       platform: 'web',
       webOrigin: 'https://cupcal-preview.example',
+      webBasePath: '/mobile',
+      nativeUrl: 'cupcal-android://auth/confirm',
+      confirmationToken: 'signed.token',
+    }),
+    'https://cupcal-preview.example/mobile/auth/confirm?flow=cupcal-account-deletion&deletion_token=signed.token',
+  );
+});
+
+test('behält den Bestätigungsrücksprung im Expo-Webpreview am Domain-Stamm', () => {
+  assert.equal(
+    createAccountDeletionRedirectUrl({
+      platform: 'web',
+      webOrigin: 'https://cupcal-preview.example',
+      webBasePath: '',
       nativeUrl: 'cupcal-android://auth/confirm',
       confirmationToken: 'signed.token',
     }),

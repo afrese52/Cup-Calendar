@@ -2,12 +2,13 @@
 
 ## Ergebnis und Grenze dieser Prüfung
 
-Der App-Code fordert den Löschlink mit `emailRedirectTo` an. Er enthält die
-Bestätigungsroute, `flow=cupcal-account-deletion` und einen serverseitig
-signierten, 30 Minuten gültigen Löschcode. Der Bestätigungsbildschirm ruft die
-Lösch-API erst nach einem erfolgreichen Supabase-Codeaustausch beziehungsweise
-einer vollständigen bestätigten E-Mail-Sitzung auf. Die API prüft die Sitzung
-serverseitig mit Supabase, Signatur, Ablaufzeit und Kontozuordnung.
+App und öffentliche Website fordern den Löschlink mit `emailRedirectTo` an. Er
+enthält die jeweilige Bestätigungsroute, `flow=cupcal-account-deletion` und
+einen serverseitig signierten, 30 Minuten gültigen Löschcode. Die App oder
+Website ruft die Lösch-API erst nach einem erfolgreichen Supabase-Codeaustausch
+beziehungsweise einer vollständigen bestätigten E-Mail-Sitzung auf. Die API
+prüft die Sitzung serverseitig mit Supabase, Signatur, Ablaufzeit und
+Kontozuordnung.
 
 **Ein echter E-Mail-Rücksprung in Browser und installierter Android-App ist
 nicht bestanden.** Es wurden keine echten E-Mails versendet und keine Konten
@@ -74,6 +75,16 @@ Dabei wird der vollständige angeforderte Rücksprung unverändert übernommen:
 Browser: https://<CupCal-Expo-Host>/auth/confirm?flow=cupcal-account-deletion&deletion_token=<signierter-Code>
 Android: cupcal-android://auth/confirm?flow=cupcal-account-deletion&deletion_token=<signierter-Code>
 ```
+
+Für den externen Website-Löschweg lautet der bestätigte Rücksprung:
+
+```text
+https://cupcal.af-software.app/konto-loeschen/bestaetigen/?flow=cupcal-account-deletion&deletion_token=<signierter-Code>
+```
+
+Diese HTTPS-URL muss vor dem Versand in der Supabase-Redirect-Allowlist
+freigegeben sein. Der Eintrag wurde im Dashboard nicht überprüft oder
+geändert. Die Website-Route ist vorab gerendert und nicht indexierbar.
 
 Der Supabase-HTTPS-Link bleibt der Link in der E-Mail; erst Supabase führt
 nach der einmaligen Auth-Prüfung zum Browserziel oder registrierten

@@ -22,6 +22,7 @@ export function createPasswordResetRedirectUrl(options: {
 export function createAccountDeletionRedirectUrl(options: {
   platform: 'web' | 'native';
   webOrigin?: string | null;
+  webBasePath?: string;
   nativeUrl: string;
   confirmationToken: string;
 }): string {
@@ -33,7 +34,8 @@ export function createAccountDeletionRedirectUrl(options: {
       throw new Error('Die Browser-Adresse für die Kontolöschung ist nicht verfügbar.');
     }
 
-    const url = new URL('/auth/confirm', options.webOrigin);
+    const basePath = options.webBasePath?.replace(/\/+$/, '') ?? '';
+    const url = new URL(`${basePath}/auth/confirm`, options.webOrigin);
     url.searchParams.set('flow', accountDeletionFlowMarker);
     url.searchParams.set('deletion_token', options.confirmationToken);
     return url.toString();

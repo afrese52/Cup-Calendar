@@ -10,6 +10,7 @@ import {
   AppState,
   AccessibilityInfo,
   ActivityIndicator,
+  Linking,
   Platform,
   Pressable,
   StyleSheet,
@@ -1098,6 +1099,22 @@ export default function SettingsScreen() {
 
         {storageError ? <Text style={[styles.error, { color: colors.warning }]}>{storageError}</Text> : null}
 
+        <Text style={[styles.groupLabel, { color: colors.mutedForeground }]}>RECHTLICHES</Text>
+        <View style={[styles.group, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <SettingRow
+            icon="shield"
+            title="Datenschutzerklärung"
+            subtitle="Verarbeitung, Speicherfristen und deine Rechte."
+            onPress={() => void Linking.openURL('https://cupcal.af-software.app/datenschutz/')}
+          />
+          <SettingRow
+            icon="trash-2"
+            title="Konto löschen"
+            subtitle="Öffnet den Web-Löschweg und die Bestätigung per E-Mail."
+            destructive
+            onPress={() => void Linking.openURL('https://cupcal.af-software.app/konto-loeschen/')}
+          />
+        </View>
         <Text style={[styles.groupLabel, { color: colors.mutedForeground }]}>ÜBER CUPCAL</Text>
         <View style={[styles.about, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <Text style={[styles.aboutTitle, { color: colors.foreground }]}>Inoffizielle Begleit-App</Text>

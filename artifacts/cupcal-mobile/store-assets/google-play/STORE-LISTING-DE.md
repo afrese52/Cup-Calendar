@@ -78,10 +78,11 @@ Gerät in der vorgesehenen Zeitzone neu aufgenommen werden.
 - Weil CupCal Konten erstellen lässt, verlangt Google Play zusätzlich einen
   funktionierenden Web-Link, über den auch ohne installierte App die
   Kontolöschung beantragt werden kann.
-- In der Website-Quelle ist derzeit keine Datenschutzerklärung und kein
-  externer Kontolösch-Link auffindbar. Diese URLs und die endgültigen
-  Datenschutzangaben sind daher noch nicht für die Produktionsfreigabe
-  bestätigt.
+- Für den Play-Console-Eintrag sind diese öffentlichen URLs vorgesehen:
+  - Datenschutzerklärung: `https://cupcal.af-software.app/datenschutz/`
+  - Kontolöschung: `https://cupcal.af-software.app/konto-loeschen/`
+- Die URLs müssen nach Veröffentlichung des Website-Builds in der Play Console
+  eingetragen und dort auf Erreichbarkeit geprüft werden.
 - Das Google-Play-Formular „Datensicherheit“ muss im Play Console vom
   Kontoinhaber ausgefüllt und bestätigt werden. Die technische Vorprüfung
   steht in `DATA-SAFETY-CHECKLIST-DE.md`; sie ersetzt keine Betreiberprüfung.

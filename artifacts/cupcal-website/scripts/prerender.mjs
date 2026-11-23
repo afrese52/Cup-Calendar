@@ -108,17 +108,29 @@ const vite = await createServer({
 });
 
 try {
-  const [{ default: App }, { ErrorBoundary }, { seoTopicPages, SITE_ORIGIN }] = await Promise.all([
+  const [
+    { default: App },
+    { ErrorBoundary },
+    { seoTopicPages, SITE_ORIGIN },
+    { deletionConfirmationPage, legalPages },
+    { withLegalMetadata },
+  ] = await Promise.all([
     vite.ssrLoadModule('/src/App.tsx'),
     vite.ssrLoadModule('/src/components/error-boundary.tsx'),
     vite.ssrLoadModule('/src/content/seo-pages.ts'),
+    vite.ssrLoadModule('/src/content/legal-pages.ts'),
+    vite.ssrLoadModule('/src/pages/legal-pages.tsx'),
   ]);
   const sitemap = await fs.readFile(sourceSitemapPath, 'utf8');
   const sourceCss = await fs.readFile(path.join(projectRoot, 'src/index.css'), 'utf8');
   if (!sourceCss.includes(':focus-visible') || !sourceCss.includes('.skip-link:focus-visible')) {
     throw new Error('Der Tastaturfokus oder der sichtbare Sprunglink hat keinen Fokusstil.');
   }
-  const pageUrls = [`${SITE_ORIGIN}/`, ...seoTopicPages.map((page) => `${SITE_ORIGIN}${page.path}`)];
+  const pageUrls = [
+    `${SITE_ORIGIN}/`,
+    ...seoTopicPages.map((page) => `${SITE_ORIGIN}${page.path}`),
+    ...legalPages.map((page) => `${SITE_ORIGIN}${page.path}`),
+  ];
   if (new Set(pageUrls).size !== pageUrls.length) {
     throw new Error('Die Website enthält doppelte Canonical-URLs.');
   }
@@ -133,7 +145,7 @@ try {
     throw new Error('Der Root-Platzhalter für das Vorab-Rendering fehlt im Build.');
   }
 
-  function renderPage(pathname, expectedHeading, page) {
+  function renderPage(pathname, expectedHeading, page, isLegalPage = false) {
     const renderedApp = renderToString(
       React.createElement(
         ErrorBoundary,
@@ -159,7 +171,12 @@ try {
     if ((renderedApp.match(/<main\b/g) || []).length !== 1) {
       throw new Error(`Die Seite ${pathname} muss genau einen Hauptbereich besitzen.`);
     }
-    if (!renderedApp.includes(page ? 'aria-label="CupCal-Themen"' : 'aria-label="Hauptnavigation"')) {
+    const expectedNavigationLabel = isLegalPage
+      ? 'aria-label="Rechtliche Informationen"'
+      : page
+        ? 'aria-label="CupCal-Themen"'
+        : 'aria-label="Hauptnavigation"';
+    if (!renderedApp.includes(expectedNavigationLabel)) {
       throw new Error(`Die Navigation für ${pathname} hat keinen verständlichen Namen.`);
     }
     if (page && (
@@ -198,6 +215,38 @@ try {
     await fs.writeFile(outputPath, html);
     console.log(`Themenseite vorab gerendert: ${page.path} (${renderedLength} Zeichen).`);
   }
+
+  for (const page of legalPages) {
+    const { html: renderedHtml, renderedLength } = renderPage(page.path, page.h1, null, true);
+    const html = withLegalMetadata(renderedHtml, page);
+    const outputPath = path.join(
+      projectRoot,
+      'dist/public',
+      page.slug,
+      'index.html',
+    );
+    await fs.mkdir(path.dirname(outputPath), { recursive: true });
+    await fs.writeFile(outputPath, html);
+    console.log(`Rechtliche Seite vorab gerendert: ${page.path} (${renderedLength} Zeichen).`);
+  }
+
+  const confirmation = renderPage(
+    deletionConfirmationPage.path,
+    deletionConfirmationPage.h1,
+    null,
+    true,
+  );
+  const confirmationHtml = withLegalMetadata(confirmation.html, deletionConfirmationPage);
+  const confirmationOutputPath = path.join(
+    projectRoot,
+    'dist/public',
+    'konto-loeschen',
+    'bestaetigen',
+    'index.html',
+  );
+  await fs.mkdir(path.dirname(confirmationOutputPath), { recursive: true });
+  await fs.writeFile(confirmationOutputPath, confirmationHtml);
+  console.log(`Bestätigungsseite vorab gerendert: ${deletionConfirmationPage.path} (${confirmation.renderedLength} Zeichen).`);
 } finally {
   await vite.close();
 }
