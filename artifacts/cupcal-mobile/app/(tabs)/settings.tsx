@@ -120,6 +120,7 @@ export default function SettingsScreen() {
   const [submittingAction, setSubmittingAction] = useState<AuthAction | null>(null);
   const isSubmittingAuthRef = useRef(false);
   const isRequestingRecoveryRef = useRef(false);
+  const recoveryEmailRevisionRef = useRef(0);
   const isResendingConfirmationRef = useRef(false);
   const isRequestingAccountDeletionRef = useRef(false);
   const isSubmittingAuth = submittingAction !== null;
@@ -340,6 +341,7 @@ export default function SettingsScreen() {
 
     const normalizedEmail = email.trim();
     const submittedMode = authMode;
+    const submittedRecoveryEmailRevision = recoveryEmailRevisionRef.current;
     if (!normalizedEmail || (authMode !== 'forgot-password' && !password)) {
       reportAuthError(
         authMode === 'forgot-password'
@@ -365,6 +367,10 @@ export default function SettingsScreen() {
         emailConfirmationRedirectTo: getEmailConfirmationRedirectUrl(),
         requestPasswordReset,
       });
+      if (
+        submittedMode === 'forgot-password'
+        && recoveryEmailRevisionRef.current !== submittedRecoveryEmailRevision
+      ) return;
       if (submittedMode === 'sign-up' && sessionRef.current) {
         setAuthMessage('Du bist angemeldet.');
         setRegistrationConfirmationEmail(null);
@@ -401,6 +407,10 @@ export default function SettingsScreen() {
         );
       }
     } catch (error) {
+      if (
+        submittedMode === 'forgot-password'
+        && recoveryEmailRevisionRef.current !== submittedRecoveryEmailRevision
+      ) return;
       reportAuthError(friendlyAuthError(
         error,
         submittedMode === 'sign-up'
@@ -754,13 +764,11 @@ export default function SettingsScreen() {
               <TextInput
                 accessibilityLabel="E-Mail-Adresse"
                 accessibilityHint={
-                  isRequestingRecoveryRef.current
-                    ? 'Die Adresse kann während der Linkanfrage nicht geändert werden.'
-                    : authMode === 'forgot-password'
-                      ? 'Gib die E-Mail-Adresse für den Wiederherstellungslink ein.'
-                      : 'Gib die E-Mail-Adresse für dein CupCal-Konto ein.'
+                  authMode === 'forgot-password'
+                    ? 'Gib die E-Mail-Adresse für den Wiederherstellungslink ein.'
+                    : 'Gib die E-Mail-Adresse für dein CupCal-Konto ein.'
                 }
-                editable={!isRequestingRecoveryRef.current}
+                editable
                 testID="auth-email-input"
                 autoCapitalize="none"
                 autoComplete="email"
@@ -773,7 +781,12 @@ export default function SettingsScreen() {
                 textContentType="emailAddress"
                 value={email}
                 onChangeText={(nextEmail) => {
-                  if (isRequestingRecoveryRef.current) return;
+                  if (
+                    authMode === 'forgot-password'
+                    && isRequestingRecoveryRef.current
+                  ) {
+                    recoveryEmailRevisionRef.current += 1;
+                  }
                   setEmail(nextEmail);
                   const failedRecoveryEmail = recoveryErrorEmailRef.current;
                   if (
