@@ -220,6 +220,20 @@ async function waitForPage(send) {
 }
 
 async function inspectPage(send, route) {
+  if (route === '/') {
+    await send('Input.dispatchKeyEvent', {
+      type: 'keyDown',
+      key: 'Tab',
+      code: 'Tab',
+      windowsVirtualKeyCode: 9,
+    });
+    await send('Input.dispatchKeyEvent', {
+      type: 'keyUp',
+      key: 'Tab',
+      code: 'Tab',
+      windowsVirtualKeyCode: 9,
+    });
+  }
   const response = await send('Runtime.evaluate', {
     expression: `(() => {
       const visible = (element) => {
@@ -283,6 +297,52 @@ async function inspectPage(send, route) {
         ? ['.hero-actions .button-primary', '.hero-actions .button-muted', '.topbar .nav-cta']
             .map((selector) => document.querySelector(selector))
         : [];
+      const homepageTopicCards = homepage
+        ? Array.from(document.querySelectorAll('.topic-directory .topic-card'))
+        : [];
+      const homepageSkipLink = homepage ? document.querySelector('.skip-link') : null;
+      const homepageSkipLinkFocused = homepageSkipLink ? {
+        active: document.activeElement === homepageSkipLink,
+        visible: visible(homepageSkipLink),
+        insideViewport: fitViewport(homepageSkipLink),
+      } : null;
+      const homepageFocusTargets = homepage
+        ? Array.from(document.querySelectorAll(
+            '.home-topbar .nav-links a, .home-topbar .nav-cta, .hero-actions a, ' +
+            '.offline-inner a, .topic-directory .topic-card, .footer .topic-footer-links a',
+          ))
+        : [];
+      const homepageLandmarks = homepage
+        ? ['.home-topbar', '#main-content', '.footer'].map((selector) => {
+            const element = document.querySelector(selector);
+            const rect = element?.getBoundingClientRect();
+            return {
+              selector,
+              present: Boolean(element),
+              insideViewport: Boolean(rect && rect.left >= -1 && rect.right <= viewportWidth + 1),
+              contentFits: selector === '#main-content'
+                ? null
+                : Boolean(element && element.scrollWidth <= element.clientWidth + 1),
+            };
+          })
+        : [];
+      const homepageFocused = [];
+      document.documentElement.style.scrollBehavior = 'auto';
+      for (const target of homepageFocusTargets) {
+        target.scrollIntoView({ block: 'center', inline: 'nearest' });
+        target.focus();
+        const rect = rectData(target);
+        homepageFocused.push({
+          label: target.getAttribute('aria-label') || target.textContent.trim().slice(0, 50),
+          hasLink: Boolean(target.getAttribute('href')),
+          active: document.activeElement === target,
+          visible: visible(target),
+          insideViewport: rect.left >= -1 && rect.right <= viewportWidth + 1 &&
+            rect.top >= -1 && rect.bottom <= innerHeight + 1,
+          contentFits: target.scrollWidth <= target.clientWidth + 1,
+          topicCard: target.classList.contains('topic-card'),
+        });
+      }
       const action = document.querySelector('.nav-cta');
       const breadcrumbLink = breadcrumb?.querySelector('a[href]');
       const footerAction = document.querySelector('.topic-footer-home');
@@ -419,9 +479,16 @@ async function inspectPage(send, route) {
         homepageNavigationVisible: visible(homepageNavigation),
         homepageNavigationLinks: Array.from(homepageNavigation?.querySelectorAll('a[href]') ?? []).filter(visible).length,
         homepageActionsVisible: homepageActions.map(visible),
-        homepageTopicLinks: homepage
-          ? Array.from(document.querySelectorAll('.topic-directory .topic-card')).filter(visible).length
-          : 0,
+        homepageTopicLinks: homepageTopicCards.filter(visible).length,
+        homepageSkipLinkFocused,
+        homepageTopicCards: homepageTopicCards.map((card) => ({
+          visible: visible(card),
+          hasLink: Boolean(card.getAttribute('href')),
+          text: card.textContent.trim(),
+          contentFits: card.scrollWidth <= card.clientWidth + 1,
+        })),
+        homepageLandmarks,
+        homepageFocused,
         navigationVisible: visible(nav),
         navigationLinksInitiallyVisible,
         navigationLinks: navFocus,
@@ -548,7 +615,27 @@ function assertPageLayout(page, viewport, result) {
     if (result.homepageActionsVisible.length !== 3 || result.homepageActionsVisible.includes(false)) {
       issues.push('Mindestens eine Aktion der Startseite fehlt oder ist nicht sichtbar');
     }
-    if (result.homepageTopicLinks === 0) issues.push('Themenlinks der Startseite fehlen');
+    if (result.homepageLandmarks.length !== 3 || result.homepageLandmarks.some((landmark) =>
+      !landmark.present || !landmark.insideViewport || landmark.contentFits === false
+    )) {
+      issues.push('Kopf-, Haupt- oder Fußbereich der Startseite ist nicht vollständig im Viewport');
+    }
+    if (result.homepageTopicLinks !== 3 || result.homepageTopicCards.some((card) =>
+      !card.visible || !card.hasLink || !card.text || !card.contentFits
+    )) {
+      issues.push('Mindestens eine Themenkarte der Startseite fehlt, ist abgeschnitten oder nicht verlinkt');
+    }
+    if (!result.homepageSkipLinkFocused?.active || !result.homepageSkipLinkFocused.visible ||
+      !result.homepageSkipLinkFocused.insideViewport
+    ) {
+      issues.push('Sprunglink ist beim Tastaturfokus nicht sichtbar');
+    }
+    if (result.homepageFocused.length !== 14 || result.homepageFocused.some((target) =>
+      !target.hasLink || !target.active || !target.visible || !target.insideViewport ||
+      !target.contentFits
+    )) {
+      issues.push('Mindestens ein Aktions- oder Themenlink der Startseite lässt sich nicht sichtbar fokussieren');
+    }
   } else {
     if (!result.navigationVisible || result.navigationLinks.length !== 3) issues.push('Themen-Navigation ist nicht vollständig sichtbar');
     if (result.navigationLinksInitiallyVisible.length !== 3 || result.navigationLinksInitiallyVisible.includes(false)) {
