@@ -412,6 +412,37 @@ test('zeigt einen Anmeldefehler sichtbar an', async () => {
   await waitFor(() => expect(sendAccessibilityFocus).toHaveBeenCalledTimes(1));
 });
 
+test('ermöglicht nach abgelehnter Anmeldung einen korrigierten zweiten Versuch', async () => {
+  auth.signInWithPassword.mockResolvedValueOnce({
+    error: new Error('Invalid login credentials'),
+  });
+  const view = await openSettings();
+  await enterCredentials(view);
+  const submitButton = view.getByTestId('auth-submit-button');
+
+  await fireEvent.press(submitButton);
+
+  expect(await view.findByTestId('auth-error-message')).toBeTruthy();
+  await waitFor(() => {
+    expect(submitButton.props.accessibilityState).toEqual({
+      disabled: false,
+      busy: false,
+    });
+  });
+  expect(view.getByTestId('auth-email-input').props.value).toBe('test@example.invalid');
+  expect(view.getByTestId('auth-password-input').props.value).toBe('test-password');
+
+  await fireEvent.changeText(view.getByTestId('auth-password-input'), 'corrected-password');
+  await fireEvent.press(submitButton);
+
+  expect(auth.signInWithPassword).toHaveBeenCalledTimes(2);
+  expect(auth.signInWithPassword).toHaveBeenNthCalledWith(2, {
+    email: 'test@example.invalid',
+    password: 'corrected-password',
+  });
+  expect(await view.findByText('Du bist angemeldet.')).toBeTruthy();
+});
+
 test('sendet ein kurzes Bestandskennwort und zeigt nur den verständlichen Anmeldefehler', async () => {
   const rawSupabaseMessage = 'Password should be at least 6 characters';
   auth.signInWithPassword.mockResolvedValue({
