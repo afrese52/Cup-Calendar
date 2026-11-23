@@ -65,6 +65,7 @@ function App({ pathname }: AppProps = {}) {
   useEffect(() => {
     if (typeof IntersectionObserver === 'undefined') return;
 
+    viewedSections.current.clear();
     const sections = document.querySelectorAll<HTMLElement>('[data-analytics-section]');
     const observer = new IntersectionObserver(
       (entries) => {
@@ -84,7 +85,7 @@ function App({ pathname }: AppProps = {}) {
 
     sections.forEach((section) => observer.observe(section));
     return () => observer.disconnect();
-  }, []);
+  }, [currentPath]);
 
   if (topicPage) return <SeoTopicPageView page={topicPage} />;
 

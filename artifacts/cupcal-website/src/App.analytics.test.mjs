@@ -12,7 +12,21 @@ const websiteRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '
 let dom;
 let root;
 let vite;
+let App;
 let trackedEvents;
+class TestIntersectionObserver {
+  constructor(callback) {
+    this.callback = callback;
+  }
+
+  observe(target) {
+    this.callback([{ isIntersecting: true, intersectionRatio: 1, target }]);
+  }
+
+  unobserve() {}
+
+  disconnect() {}
+}
 const availabilityCtas = [
   { testId: 'button-download-status', placement: 'header' },
   { testId: 'button-availability', placement: 'hero' },
@@ -29,6 +43,7 @@ before(async () => {
     document: { configurable: true, value: dom.window.document },
     navigator: { configurable: true, value: dom.window.navigator },
     HTMLElement: { configurable: true, value: dom.window.HTMLElement },
+    IntersectionObserver: { configurable: true, value: TestIntersectionObserver },
     IS_REACT_ACT_ENVIRONMENT: { configurable: true, value: true },
   });
 
@@ -46,13 +61,20 @@ before(async () => {
     server: { middlewareMode: true },
     logLevel: 'error',
   });
-  const { default: App } = await vite.ssrLoadModule('/src/App.tsx');
+  ({ default: App } = await vite.ssrLoadModule('/src/App.tsx'));
 
   root = createRoot(dom.window.document.getElementById('root'));
   await act(async () => {
     root.render(createElement(App, { pathname: '/' }));
   });
 });
+
+async function renderApp(pathname) {
+  trackedEvents.length = 0;
+  await act(async () => {
+    root.render(createElement(App, { pathname }));
+  });
+}
 
 after(async () => {
   if (root) {
@@ -75,3 +97,22 @@ for (const { testId, placement } of availabilityCtas) {
     ]);
   });
 }
+
+test('Inhaltsereignisse aller CupCal-Themenseiten enthalten Seite und Bereich', async () => {
+  const { seoTopicPages } = await vite.ssrLoadModule('/src/content/seo-pages.ts');
+  assert.ok(seoTopicPages.length > 0, 'Mindestens eine CupCal-Themenseite muss geprüft werden');
+
+  for (const page of seoTopicPages) {
+    await renderApp(page.path);
+
+    const contentEvents = trackedEvents.filter(([name]) => name === 'content_section_view');
+    assert.deepEqual(
+      contentEvents,
+      [
+        ['content_section_view', { section: 'topic_article', page: page.path }],
+        ['content_section_view', { section: 'related_topics', page: page.path }],
+      ],
+      `Jeder Inhaltsbereich auf ${page.path} muss mit page und section gesendet werden`,
+    );
+  }
+});
