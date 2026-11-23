@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createCupCalSupabaseClient } from './createSupabaseClient.ts';
-import { confirmEmailCode, friendlyAuthError } from './accountAuth.ts';
+import { confirmEmailCode, friendlyAuthError, signOutAccount } from './accountAuth.ts';
 
 const testUserId = '00000000-0000-4000-8000-000000000015';
 const testEmail = 'restart-test@example.invalid';
@@ -645,6 +645,87 @@ test('behält die aktive Sitzung nach abgelehnten Bestätigungscodes und akzepti
     assert.equal(finalSession.error, null);
     assert.equal(finalSession.data.session?.user.id, desiredUser.id);
     assert.equal(finalSession.data.session?.user.email, desiredUser.email);
+  } finally {
+    await client.auth.dispose();
+  }
+});
+
+test('hält die Abmeldung wirksam, wenn die ausstehende Bestätigung danach erfolgreich zurückkehrt', async () => {
+  const storage = createPersistentStorage();
+  const projectRef = 'confirmation-after-sign-out';
+  const flowId = '88888888-8888-4888-8888-888888888888';
+  const storageKey = `sb-${projectRef}-auth-token`;
+  await storage.setItem(
+    `sb-${projectRef}-auth-token-flow-${flowId}-code-verifier`,
+    JSON.stringify('confirmation-verifier/signup'),
+  );
+
+  let markRequestStarted;
+  const requestStarted = new Promise((resolve) => {
+    markRequestStarted = resolve;
+  });
+  let resolveConfirmationResponse;
+  const confirmationResponse = new Promise((resolve) => {
+    resolveConfirmationResponse = resolve;
+  });
+  const delayedFetch = async (input, init) => {
+    const url = new URL(String(input));
+    if (url.pathname.endsWith('/token')) {
+      markRequestStarted();
+      return confirmationResponse;
+    }
+    if (url.pathname.endsWith('/logout')) {
+      return new Response(null, { status: 204 });
+    }
+    return fakeUserFetch(input, init);
+  };
+  const client = createCupCalSupabaseClient(
+    `https://${projectRef}.supabase.co`,
+    'test-publishable-key',
+    storage,
+    delayedFetch,
+  );
+
+  try {
+    const confirmation = confirmEmailCode(
+      client.auth,
+      'delayed-confirmation-code',
+      flowId,
+    );
+    await requestStarted;
+
+    const signOutResult = await signOutAccount(client.auth);
+    assert.equal(signOutResult.ok, true);
+    assert.equal((await client.auth.getSession()).data.session, null);
+
+    resolveConfirmationResponse(new Response(JSON.stringify({
+      access_token: accessToken,
+      refresh_token: 'late-confirmation-refresh-token',
+      token_type: 'bearer',
+      expires_in: 3600,
+      user: {
+        id: testUserId,
+        email: testEmail,
+        aud: 'authenticated',
+        role: 'authenticated',
+        app_metadata: {},
+        user_metadata: {},
+        created_at: new Date(0).toISOString(),
+      },
+    }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    }));
+
+    await assert.rejects(confirmation, /durch die Abmeldung abgebrochen/);
+    const finalSession = await client.auth.getSession();
+    assert.equal(finalSession.error, null);
+    assert.equal(finalSession.data.session, null);
+    assert.equal(
+      await storage.getItem(storageKey),
+      null,
+      'die verspätete Bestätigung darf keine Sitzung auf dem Gerät speichern',
+    );
   } finally {
     await client.auth.dispose();
   }

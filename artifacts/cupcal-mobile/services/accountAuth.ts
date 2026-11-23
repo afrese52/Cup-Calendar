@@ -4,6 +4,7 @@ import { passwordLengthRequirementError } from './passwordRecovery.ts';
 
 type AuthApi = SupabaseClient['auth'];
 const emailConfirmationQueues = new WeakMap<object, Promise<void>>();
+const emailConfirmationGenerations = new WeakMap<object, number>();
 const storage = (AsyncStorage as typeof AsyncStorage & { default?: typeof AsyncStorage }).default
   ?? AsyncStorage;
 export const ACCOUNT_CONFIRMATION_RESEND_AVAILABLE_AT_KEY =
@@ -361,12 +362,13 @@ export function watchAuthSession(
 }
 
 export async function confirmEmailCode(
-  auth: Pick<AuthApi, 'exchangeCodeForSession'>,
+  auth: Pick<AuthApi, 'exchangeCodeForSession' | 'getSession' | 'signOut'>,
   code: string,
   flowId?: string,
 ): Promise<Session> {
   if (!code) throw new Error('Der Bestätigungslink enthält keinen gültigen Code.');
 
+  const confirmationGeneration = emailConfirmationGenerations.get(auth) ?? 0;
   const previousConfirmation = emailConfirmationQueues.get(auth) ?? Promise.resolve();
   let releaseConfirmation!: () => void;
   const currentConfirmation = new Promise<void>((resolve) => {
@@ -376,12 +378,25 @@ export async function confirmEmailCode(
 
   await previousConfirmation;
   try {
+    if ((emailConfirmationGenerations.get(auth) ?? 0) !== confirmationGeneration) {
+      throw new Error('Die Bestätigung wurde durch die Abmeldung abgebrochen.');
+    }
+
     const { data, error } = await auth.exchangeCodeForSession(
       code,
       flowId ? { flowId } : undefined,
     );
     if (error) throw error;
     if (!data.session) throw new Error('Es wurde keine gültige Sitzung erstellt.');
+
+    if ((emailConfirmationGenerations.get(auth) ?? 0) !== confirmationGeneration) {
+      const { data: currentSession } = await auth.getSession();
+      if (currentSession.session?.access_token === data.session.access_token) {
+        await auth.signOut({ scope: 'local' });
+      }
+      throw new Error('Die Bestätigung wurde durch die Abmeldung abgebrochen.');
+    }
+
     return data.session;
   } finally {
     releaseConfirmation();
@@ -543,6 +558,10 @@ export async function resendAccountConfirmation(options: {
 }
 
 export async function signOutAccount(auth: AuthApi): Promise<AuthOperationResult> {
+  emailConfirmationGenerations.set(
+    auth,
+    (emailConfirmationGenerations.get(auth) ?? 0) + 1,
+  );
   try {
     const { error } = await auth.signOut();
     if (error) throw error;
