@@ -25,6 +25,147 @@ function createAuth(overrides = {}) {
   };
 }
 
+async function runDisposablePasswordTest(
+  { testClient, shouldRestorePassword, restorePassword, shouldSignOut = () => true },
+  runTest,
+) {
+  let testError;
+  try {
+    await runTest();
+  } catch (error) {
+    testError = error;
+  }
+
+  const cleanupErrors = [];
+  const captureCleanupError = async (description, operation) => {
+    try {
+      await operation();
+    } catch (error) {
+      const detail = error?.message ?? (error == null ? '' : String(error));
+      const message = detail ? `: ${detail}` : '.';
+      cleanupErrors.push(new Error(`${description}${message}`, { cause: error }));
+    }
+  };
+
+  await captureCleanupError(
+    'Das ursprüngliche Passwort des Wegwerf-Kontos konnte nicht wiederhergestellt werden',
+    async () => {
+      if (shouldRestorePassword()) {
+        const result = await restorePassword();
+        if (result?.error) throw result.error;
+      }
+    },
+  );
+
+  await captureCleanupError(
+    'Der Supabase-Testclient konnte nicht abgemeldet werden',
+    async () => {
+      if (shouldSignOut()) await testClient.auth.signOut();
+    },
+  );
+  await captureCleanupError(
+    'Der Supabase-Testclient konnte nicht geschlossen werden',
+    () => testClient.auth.dispose(),
+  );
+
+  if (testError && cleanupErrors.length) {
+    throw new AggregateError(
+      [testError, ...cleanupErrors],
+      `Der Live-Test ist fehlgeschlagen (${testError?.message ?? String(testError)}). ` +
+        cleanupErrors.map((error) => error.message).join(' '),
+    );
+  }
+  if (cleanupErrors.length === 1) throw cleanupErrors[0];
+  if (cleanupErrors.length > 1) {
+    throw new AggregateError(
+      cleanupErrors,
+      `Die Bereinigung des Supabase-Testclients ist fehlgeschlagen: ${
+        cleanupErrors.map((error) => error.message).join(' ')
+      }`,
+    );
+  }
+  if (testError) throw testError;
+}
+
+test('stellt das Wegwerf-Passwort nach einem fehlgeschlagenen Grenzfall wieder her', async () => {
+  const cleanup = [];
+  const testClient = {
+    auth: {
+      signOut: async () => cleanup.push('signOut'),
+      dispose: async () => cleanup.push('dispose'),
+    },
+  };
+
+  await assert.rejects(
+    runDisposablePasswordTest({
+      testClient,
+      shouldRestorePassword: () => true,
+      restorePassword: async () => {
+        cleanup.push('restore');
+        return { error: null };
+      },
+    }, async () => {
+      throw new Error('absichtlich fehlgeschlagener Grenzfall');
+    }),
+    /absichtlich fehlgeschlagener Grenzfall/,
+  );
+  assert.deepEqual(cleanup, ['restore', 'signOut', 'dispose']);
+});
+
+test('meldet ein nicht freigegebenes Testkonto ab, ohne sein Passwort zu ändern', async () => {
+  const cleanup = [];
+  const testClient = {
+    auth: {
+      signOut: async () => cleanup.push('signOut'),
+      dispose: async () => cleanup.push('dispose'),
+    },
+  };
+
+  await assert.rejects(
+    runDisposablePasswordTest({
+      testClient,
+      shouldRestorePassword: () => false,
+      restorePassword: async () => {
+        cleanup.push('restore');
+        return { error: null };
+      },
+    }, async () => {
+      throw new Error('Das angemeldete Konto ist nicht als Wegwerf-Konto markiert.');
+    }),
+    /nicht als Wegwerf-Konto markiert/,
+  );
+  assert.deepEqual(cleanup, ['signOut', 'dispose']);
+});
+
+test('meldet Wiederherstellungsfehler und schließt den Client trotz Abmeldefehler', async () => {
+  let disposed = false;
+  const testClient = {
+    auth: {
+      signOut: async () => {
+        throw new Error('Abmeldung fehlgeschlagen');
+      },
+      dispose: async () => {
+        disposed = true;
+      },
+    },
+  };
+
+  await assert.rejects(
+    runDisposablePasswordTest({
+      testClient,
+      shouldRestorePassword: () => true,
+      restorePassword: async () => ({ error: new Error('Supabase hat die Änderung abgelehnt') }),
+    }, async () => {}),
+    (error) => {
+      assert.ok(error instanceof AggregateError);
+      assert.match(error.message, /ursprüngliche Passwort.*Supabase hat die Änderung abgelehnt/i);
+      assert.match(error.message, /Testclient konnte nicht abgemeldet werden.*Abmeldung fehlgeschlagen/i);
+      return true;
+    },
+  );
+  assert.equal(disposed, true);
+});
+
 test('weist ungültige Wiederherstellungslinks ab und sperrt den Passwortwechsel', async () => {
   let updateCalled = false;
   const recovery = createPasswordRecovery(createAuth({
@@ -897,12 +1038,19 @@ test(
     const email = process.env.CUPCAL_SUPABASE_PASSWORD_TEST_EMAIL.trim();
     const initialPassword = process.env.CUPCAL_SUPABASE_PASSWORD_TEST_PASSWORD;
     let signedInDisposableAccount = false;
+    let signedInAccount = false;
 
-    try {
+    await runDisposablePasswordTest({
+      testClient,
+      shouldRestorePassword: () => signedInDisposableAccount,
+      shouldSignOut: () => signedInAccount,
+      restorePassword: () => testClient.auth.updateUser({ password: initialPassword }),
+    }, async () => {
       const { data: signedIn, error: signInError } = await testClient.auth.signInWithPassword({
         email,
         password: initialPassword,
       });
+      signedInAccount = Boolean(signedIn?.user);
       assert.ifError(signInError);
       assert.equal(
         signedIn.user?.user_metadata?.cupcal_disposable_password_test,
@@ -1004,21 +1152,7 @@ test(
           `${sample.label}: unerwartete Supabase-Entscheidung${error ? ` (Supabase: ${error.message})` : ''}.`,
         );
       }
-    } finally {
-      try {
-        if (signedInDisposableAccount) {
-          const { error } = await testClient.auth.updateUser({ password: initialPassword });
-          assert.equal(
-            error,
-            null,
-            `Das ursprüngliche Passwort des Wegwerf-Kontos konnte nicht wiederhergestellt werden${error?.message ? `: ${error.message}` : '.'}`,
-          );
-          await testClient.auth.signOut();
-        }
-      } finally {
-        await testClient.auth.dispose();
-      }
-    }
+    });
   },
 );
 
@@ -1072,7 +1206,15 @@ test(
       return data;
     };
 
-    try {
+    await runDisposablePasswordTest({
+      testClient,
+      shouldRestorePassword: () => Boolean(disposableUserId),
+      restorePassword: async () => {
+        await testClient.auth.signOut();
+        await signInAsDisposableAccount(currentPassword);
+        return testClient.auth.updateUser({ password: initialPassword });
+      },
+    }, async () => {
       const { data: initialSignIn, error: initialSignInError } =
         await testClient.auth.signInWithPassword({ email, password: initialPassword });
       assert.ifError(initialSignInError);
@@ -1118,25 +1260,7 @@ test(
         'Supabase hat NFC als Anmeldepasswort akzeptiert, obwohl das Wegwerf-Konto mit dem unterscheidbaren NFD-Wert aktualisiert wurde.',
       );
       assert.equal(nfcWithNfdPassword.session, null);
-    } finally {
-      try {
-        if (disposableUserId) {
-          await testClient.auth.signOut();
-          await signInAsDisposableAccount(currentPassword);
-          const { error: restoreError } = await testClient.auth.updateUser({
-            password: initialPassword,
-          });
-          assert.equal(
-            restoreError,
-            null,
-            `Das ursprüngliche Passwort des Wegwerf-Kontos konnte nicht wiederhergestellt werden${restoreError?.message ? `: ${restoreError.message}` : '.'}`,
-          );
-          await testClient.auth.signOut();
-        }
-      } finally {
-        await testClient.auth.dispose();
-      }
-    }
+    });
   },
 );
 
@@ -1188,7 +1312,12 @@ test(
     let disposableUserId = null;
     let verifiedRecoveryUserId = null;
 
-    try {
+    await runDisposablePasswordTest({
+      testClient,
+      shouldRestorePassword: () =>
+        Boolean(verifiedRecoveryUserId && verifiedRecoveryUserId === disposableUserId),
+      restorePassword: () => testClient.auth.updateUser({ password: initialPassword }),
+    }, async () => {
       const { data: signedIn, error: signInError } = await testClient.auth.signInWithPassword({
         email,
         password: initialPassword,
@@ -1248,20 +1377,6 @@ test(
 
       await recovery.saveNewPassword('a'.repeat(PASSWORD_MIN_LENGTH));
       assert.equal(recovery.isPending(), false);
-    } finally {
-      try {
-        if (verifiedRecoveryUserId && verifiedRecoveryUserId === disposableUserId) {
-          const { error } = await testClient.auth.updateUser({ password: initialPassword });
-          assert.equal(
-            error,
-            null,
-            `Das ursprüngliche Passwort des Wegwerf-Kontos konnte nicht wiederhergestellt werden${error?.message ? `: ${error.message}` : '.'}`,
-          );
-        }
-      } finally {
-        await testClient.auth.signOut();
-        await testClient.auth.dispose();
-      }
-    }
+    });
   },
 );
