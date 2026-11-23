@@ -1029,6 +1029,30 @@ test('öffnet nach einem abgelaufenen Reset direkt die Linkanfrage und sendet an
   });
 });
 
+test('öffnet bei aktualisiertem Routenparameter die Linkanfrage und entfernt den alten Konto-Fehler', async () => {
+  const view = await openSettings();
+
+  await fireEvent.press(view.getByTestId('auth-submit-button'));
+  expect(await view.findByTestId('auth-error-message')).toBeTruthy();
+
+  mockRouteParams.authMode = 'forgot-password';
+  await view.rerender(<SettingsScreen />);
+
+  await waitFor(() => {
+    expect(view.getByText('Passwort zurücksetzen')).toBeTruthy();
+    expect(view.queryByTestId('auth-error-message')).toBeNull();
+    expect(view.queryByTestId('auth-password-input')).toBeNull();
+  });
+
+  await fireEvent.changeText(view.getByTestId('auth-email-input'), 'test@example.invalid');
+  await fireEvent.press(view.getByTestId('auth-submit-button'));
+
+  expect(await view.findByTestId('auth-success-message')).toBeTruthy();
+  expect(auth.resetPasswordForEmail).toHaveBeenCalledWith('test@example.invalid', {
+    redirectTo: 'cupcal-test://auth/reset?flow=cupcal-password-reset',
+  });
+});
+
 test('zeigt im direkt geöffneten Wiederherstellungsmodus den Fehler einer neuen Linkanfrage verständlich an', async () => {
   mockRouteParams.authMode = 'forgot-password';
   auth.resetPasswordForEmail.mockResolvedValue({
