@@ -99,19 +99,30 @@ export function resolvePublicFile(root, pathname) {
   return filePath;
 }
 
-async function getRepresentation(filePath, encoding, original) {
+async function compressRepresentation(original, encoding) {
+  if (encoding === 'br') {
+    return brotliAsync(original, {
+      params: { [constants.BROTLI_PARAM_QUALITY]: 5 },
+    });
+  }
+  if (encoding === 'gzip') {
+    return gzipAsync(original, { level: 6 });
+  }
+  return original;
+}
+
+async function getRepresentation(
+  filePath,
+  encoding,
+  original,
+  compress = compressRepresentation,
+) {
   const cacheKey = `${filePath}:${encoding || 'identity'}`;
   if (bodyCache.has(cacheKey)) return bodyCache.get(cacheKey);
 
-  let representation = original;
-
-  if (encoding === 'br') {
-    representation = await brotliAsync(original, {
-      params: { [constants.BROTLI_PARAM_QUALITY]: 5 },
-    });
-  } else if (encoding === 'gzip') {
-    representation = await gzipAsync(original, { level: 6 });
-  }
+  const representation = encoding
+    ? await compress(original, encoding)
+    : original;
 
   bodyCache.set(cacheKey, representation);
   return representation;
@@ -130,10 +141,15 @@ function cacheControlFor(pathname, isHtml) {
 export function createStaticServer({
   root = publicRoot,
   basePath = process.env.BASE_PATH || '/',
-  getCompressedRepresentation = getRepresentation,
+  compress = compressRepresentation,
+  getCompressedRepresentation,
 } = {}) {
   const normalizedBasePath =
     basePath === '/' ? '' : `/${basePath.replace(/^\/+|\/+$/g, '')}`;
+  const getRepresentationForRequest =
+    getCompressedRepresentation ||
+    ((filePath, encoding, original) =>
+      getRepresentation(filePath, encoding, original, compress));
 
   return createServer(async (request, response) => {
     if (request.method !== 'GET' && request.method !== 'HEAD') {
@@ -242,7 +258,7 @@ export function createStaticServer({
     let body;
     try {
       body = encoding
-        ? await getCompressedRepresentation(filePath, encoding, original)
+        ? await getRepresentationForRequest(filePath, encoding, original)
         : original;
     } catch (error) {
       console.error('Static file compression failed:', error.message);

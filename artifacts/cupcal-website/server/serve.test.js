@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { brotliDecompressSync, gunzipSync } from 'node:zlib';
+import { brotliDecompressSync, gunzipSync, gzipSync } from 'node:zlib';
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -272,6 +272,65 @@ test('falls back to the original page and asset when compression fails', async (
   } finally {
     await new Promise((resolve) => fallbackServer.close(resolve));
     await rm(fallbackRoot, { recursive: true, force: true });
+  }
+});
+
+test('retries a failed compression and caches only the successful response', async () => {
+  const original = `<main>${'CupCal tournament calendar '.repeat(100)}</main>`;
+  const retryRoot = await mkdtemp(join(tmpdir(), 'cupcal-static-retry-'));
+  await writeFile(join(retryRoot, 'index.html'), original);
+  let compressionAttempts = 0;
+
+  const retryServer = createStaticServer({
+    root: retryRoot,
+    basePath: '/',
+    compress: async (body, encoding) => {
+      assert.equal(encoding, 'gzip');
+      compressionAttempts += 1;
+      if (compressionAttempts === 1) {
+        throw new Error('simulated temporary compression failure');
+      }
+      return gzipSync(body);
+    },
+  });
+  await new Promise((resolve, reject) => {
+    retryServer.once('error', reject);
+    retryServer.listen(0, '127.0.0.1', resolve);
+  });
+  const retryOrigin = `http://127.0.0.1:${retryServer.address().port}`;
+
+  try {
+    const failedAttempt = await getResponse(
+      '/',
+      { 'accept-encoding': 'gzip' },
+      retryOrigin,
+    );
+    assert.equal(failedAttempt.status, 200);
+    assert.equal(failedAttempt.headers['content-encoding'], undefined);
+    assert.equal(failedAttempt.headers['content-length'], String(Buffer.byteLength(original)));
+    assert.equal(failedAttempt.body.toString(), original);
+
+    const successfulRetry = await getResponse(
+      '/',
+      { 'accept-encoding': 'gzip' },
+      retryOrigin,
+    );
+    assert.equal(successfulRetry.status, 200);
+    assert.equal(successfulRetry.headers['content-encoding'], 'gzip');
+    assert.equal(gunzipSync(successfulRetry.body).toString(), original);
+    assert.equal(compressionAttempts, 2);
+
+    const cachedSuccess = await getResponse(
+      '/',
+      { 'accept-encoding': 'gzip' },
+      retryOrigin,
+    );
+    assert.equal(cachedSuccess.headers['content-encoding'], 'gzip');
+    assert.deepEqual(cachedSuccess.body, successfulRetry.body);
+    assert.equal(compressionAttempts, 2);
+  } finally {
+    await new Promise((resolve) => retryServer.close(resolve));
+    await rm(retryRoot, { recursive: true, force: true });
   }
 });
 
