@@ -933,6 +933,86 @@ test('öffnet den Passwort-zurücksetzen-Modus und fordert den Link mit einer an
   });
 });
 
+test.each(['ios', 'android'] as const)(
+  'benennt Eingabe, Linkanfrage und Zurück für Screenreader auf %s',
+  async (platform) => {
+    const originalPlatformOS = Platform.OS;
+    Object.defineProperty(Platform, 'OS', { configurable: true, value: platform });
+
+    try {
+      const view = await openSettings();
+      await fireEvent.press(view.getByTestId('forgot-password-button'));
+
+      const emailInput = view.getByTestId('auth-email-input');
+      const requestButton = view.getByTestId('auth-submit-button');
+      const backButton = view.getByTestId('auth-mode-toggle');
+
+      expect(emailInput.props.accessibilityLabel).toBe('E-Mail-Adresse');
+      expect(emailInput.props.accessibilityHint).toBe(
+        'Gib die E-Mail-Adresse für den Wiederherstellungslink ein.',
+      );
+      expect(requestButton.props.accessibilityRole).toBe('button');
+      expect(requestButton.props.accessibilityLabel).toBe('Link anfordern');
+      expect(requestButton.props.accessibilityHint).toBe(
+        'Sendet einen Link an die angegebene E-Mail-Adresse.',
+      );
+      expect(requestButton.props.accessibilityState).toMatchObject({
+        disabled: false,
+        busy: false,
+      });
+      expect(backButton.props.accessibilityRole).toBe('button');
+      expect(backButton.props.accessibilityLabel).toBe('Zurück zur Anmeldung');
+      expect(backButton.props.accessibilityHint).toBe('Kehrt zur Anmeldung zurück.');
+      expect(backButton.props.accessibilityState?.disabled).not.toBe(true);
+
+      sendAccessibilityFocus.mockClear();
+      await fireEvent.press(backButton);
+      expect(view.getByText('Bei CupCal anmelden')).toBeTruthy();
+      await waitFor(() => expect(sendAccessibilityFocus).toHaveBeenCalledTimes(1));
+      const [focusTarget, focusEvent] = sendAccessibilityFocus.mock.calls[0]!;
+      expect(focusEvent).toBe('focus');
+      expect((focusTarget as { props?: { children?: string; testID?: string } }).props)
+        .toMatchObject({
+          children: 'Bei CupCal anmelden',
+          testID: 'account-session-status',
+        });
+    } finally {
+      Object.defineProperty(Platform, 'OS', { configurable: true, value: originalPlatformOS });
+    }
+  },
+);
+
+test.each(['ios', 'android'] as const)(
+  'meldet den erfolgreichen Wiederherstellungsversand auf %s an, ohne den Fokus zu verschieben',
+  async (platform) => {
+    const originalPlatformOS = Platform.OS;
+    Object.defineProperty(Platform, 'OS', { configurable: true, value: platform });
+
+    try {
+      const view = await openSettings();
+      await fireEvent.press(view.getByTestId('forgot-password-button'));
+      await fireEvent.changeText(view.getByTestId('auth-email-input'), 'test@example.invalid');
+      sendAccessibilityFocus.mockClear();
+      announceForAccessibility.mockClear();
+
+      await fireEvent.press(view.getByTestId('auth-submit-button'));
+
+      const successMessage = await view.findByTestId('auth-success-message');
+      expect(successMessage.props.accessible).toBe(true);
+      expect(successMessage.props.accessibilityRole).toBe('alert');
+      expect(successMessage.props.accessibilityLiveRegion).toBe('polite');
+      expect(successMessage.props.children).toContain(
+        'erhältst du in Kürze einen Wiederherstellungslink.',
+      );
+      expect(sendAccessibilityFocus).not.toHaveBeenCalled();
+      expect(announceForAccessibility).not.toHaveBeenCalled();
+      expect(view.getByTestId('auth-submit-button').props.accessibilityLabel).toBe('Link anfordern');
+    } finally {
+      Object.defineProperty(Platform, 'OS', { configurable: true, value: originalPlatformOS });
+    }
+  },
+);
+
 test('öffnet nach einem abgelaufenen Reset direkt die Linkanfrage und sendet an die Reset-Rücksprungadresse', async () => {
   mockRouteParams.authMode = 'forgot-password';
   mockRouteParams.focusAccount = 'true';

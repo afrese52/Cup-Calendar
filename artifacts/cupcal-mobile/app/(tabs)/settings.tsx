@@ -851,6 +851,11 @@ export default function SettingsScreen() {
                         : 'Registrierung läuft'
                     : authSubmitLabel
                 }
+                accessibilityHint={
+                  authMode === 'forgot-password'
+                    ? 'Sendet einen Link an die angegebene E-Mail-Adresse.'
+                    : undefined
+                }
                 accessibilityState={{
                   disabled: isSubmittingAuth,
                   busy: submittingAction === 'submit',
@@ -927,6 +932,18 @@ export default function SettingsScreen() {
               ) : null}
               <Pressable
                 accessibilityRole="button"
+                accessibilityLabel={
+                  authMode === 'forgot-password'
+                    ? 'Zurück zur Anmeldung'
+                    : authMode === 'sign-up'
+                      ? 'Schon ein Konto? Anmelden'
+                      : 'Noch kein Konto? Registrieren'
+                }
+                accessibilityHint={
+                  authMode === 'forgot-password'
+                    ? 'Kehrt zur Anmeldung zurück.'
+                    : undefined
+                }
                 accessibilityState={{ disabled: isSubmittingAuth }}
                 testID="auth-mode-toggle"
                 disabled={isSubmittingAuth}
