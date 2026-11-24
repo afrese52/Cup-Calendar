@@ -26,24 +26,31 @@ function createAuth(overrides = {}) {
 }
 
 async function runDisposablePasswordTest(
-  { testClient, shouldRestorePassword, restorePassword, shouldSignOut = () => true },
+  {
+    testClient,
+    shouldRestorePassword,
+    restorePassword,
+    shouldSignOut = () => true,
+    reportRestoration = () => {},
+  },
   runTest,
 ) {
   let testError;
+  let restorationStatus = 'unchanged';
   try {
     await runTest();
-  } catch (error) {
-    testError = error;
+  } catch {
+    testError = new Error(
+      'Der Live-Test ist fehlgeschlagen; Fehlerdetails wurden aus Sicherheitsgründen ausgeblendet.',
+    );
   }
 
   const cleanupErrors = [];
   const captureCleanupError = async (description, operation) => {
     try {
       await operation();
-    } catch (error) {
-      const detail = error?.message ?? (error == null ? '' : String(error));
-      const message = detail ? `: ${detail}` : '.';
-      cleanupErrors.push(new Error(`${description}${message}`, { cause: error }));
+    } catch {
+      cleanupErrors.push(new Error(description));
     }
   };
 
@@ -51,11 +58,14 @@ async function runDisposablePasswordTest(
     'Das ursprüngliche Passwort des Wegwerf-Kontos konnte nicht wiederhergestellt werden',
     async () => {
       if (shouldRestorePassword()) {
+        restorationStatus = 'failed';
         const result = await restorePassword();
         if (result?.error) throw result.error;
+        restorationStatus = 'restored';
       }
     },
   );
+  reportRestoration(restorationStatus);
 
   await captureCleanupError(
     'Der Supabase-Testclient konnte nicht abgemeldet werden',
@@ -97,6 +107,7 @@ function assertDisposableRecoverySession(session, disposableUserId) {
 
 test('stellt das Wegwerf-Passwort nach einem fehlgeschlagenen Grenzfall wieder her', async () => {
   const cleanup = [];
+  const restorationStatuses = [];
   const testClient = {
     auth: {
       signOut: async () => cleanup.push('signOut'),
@@ -112,16 +123,19 @@ test('stellt das Wegwerf-Passwort nach einem fehlgeschlagenen Grenzfall wieder h
         cleanup.push('restore');
         return { error: null };
       },
+      reportRestoration: (status) => restorationStatuses.push(status),
     }, async () => {
       throw new Error('absichtlich fehlgeschlagener Grenzfall');
     }),
-    /absichtlich fehlgeschlagener Grenzfall/,
+    /Fehlerdetails wurden aus Sicherheitsgründen ausgeblendet/,
   );
   assert.deepEqual(cleanup, ['restore', 'signOut', 'dispose']);
+  assert.deepEqual(restorationStatuses, ['restored']);
 });
 
 test('meldet ein nicht freigegebenes Testkonto ab, ohne sein Passwort zu ändern', async () => {
   const cleanup = [];
+  const restorationStatuses = [];
   const testClient = {
     auth: {
       signOut: async () => cleanup.push('signOut'),
@@ -137,12 +151,14 @@ test('meldet ein nicht freigegebenes Testkonto ab, ohne sein Passwort zu ändern
         cleanup.push('restore');
         return { error: null };
       },
+      reportRestoration: (status) => restorationStatuses.push(status),
     }, async () => {
       throw new Error('Das angemeldete Konto ist nicht als Wegwerf-Konto markiert.');
     }),
-    /nicht als Wegwerf-Konto markiert/,
+    /Fehlerdetails wurden aus Sicherheitsgründen ausgeblendet/,
   );
   assert.deepEqual(cleanup, ['signOut', 'dispose']);
+  assert.deepEqual(restorationStatuses, ['unchanged']);
 });
 
 test('meldet Wiederherstellungsfehler und schließt den Client trotz Abmeldefehler', async () => {
@@ -166,8 +182,9 @@ test('meldet Wiederherstellungsfehler und schließt den Client trotz Abmeldefehl
     }, async () => {}),
     (error) => {
       assert.ok(error instanceof AggregateError);
-      assert.match(error.message, /ursprüngliche Passwort.*Supabase hat die Änderung abgelehnt/i);
-      assert.match(error.message, /Testclient konnte nicht abgemeldet werden.*Abmeldung fehlgeschlagen/i);
+      assert.match(error.message, /ursprüngliche Passwort des Wegwerf-Kontos konnte nicht wiederhergestellt/i);
+      assert.match(error.message, /Testclient konnte nicht abgemeldet werden/i);
+      assert.doesNotMatch(error.message, /Supabase hat die Änderung abgelehnt|Abmeldung fehlgeschlagen/i);
       return true;
     },
   );
@@ -201,7 +218,7 @@ test('weist fremde und nicht zuordenbare Recovery-Sitzungen vor jedem Update ab'
           assertDisposableRecoverySession(session, 'disposable-account');
           updateCalls += 1;
         }),
-        /fremde oder nicht zuordenbare Recovery-Link wurde vor dem Passwortwechsel abgewiesen/i,
+        /Fehlerdetails wurden aus Sicherheitsgründen ausgeblendet/i,
       );
 
       assert.equal(updateCalls, 0);
@@ -1045,7 +1062,7 @@ function isPrivilegedSupabaseKey(key) {
 test(
   'vergleicht die Unicode-Mindestlänge mit Supabase über ein entbehrliches Testkonto',
   { skip: !livePasswordTestEnabled },
-  async () => {
+  async (t) => {
     const supabaseUrl = (
       process.env.SUPABASE_URL ??
       process.env.EXPO_PUBLIC_SUPABASE_URL ??
@@ -1089,6 +1106,7 @@ test(
       shouldRestorePassword: () => signedInDisposableAccount,
       shouldSignOut: () => signedInAccount,
       restorePassword: () => testClient.auth.updateUser({ password: initialPassword }),
+      reportRestoration: (status) => t.diagnostic(`CUPCAL_RESTORE_STATUS: ${status}`),
     }, async () => {
       const { data: signedIn, error: signInError } = await testClient.auth.signInWithPassword({
         email,
@@ -1203,7 +1221,7 @@ test(
 test(
   'prüft die Unterscheidung von NFC- und NFD-Passwörtern mit einem entbehrlichen Supabase-Konto',
   { skip: !livePasswordTestEnabled },
-  async () => {
+  async (t) => {
     const supabaseUrl = (
       process.env.SUPABASE_URL ??
       process.env.EXPO_PUBLIC_SUPABASE_URL ??
@@ -1258,6 +1276,7 @@ test(
         await signInAsDisposableAccount(currentPassword);
         return testClient.auth.updateUser({ password: initialPassword });
       },
+      reportRestoration: (status) => t.diagnostic(`CUPCAL_RESTORE_STATUS: ${status}`),
     }, async () => {
       const { data: initialSignIn, error: initialSignInError } =
         await testClient.auth.signInWithPassword({ email, password: initialPassword });
@@ -1314,7 +1333,7 @@ const livePasswordRecoveryTestEnabled =
 test(
   'prüft die Passwortgrenze in einer echten Supabase-Wiederherstellungssitzung',
   { skip: !livePasswordRecoveryTestEnabled },
-  async () => {
+  async (t) => {
     const supabaseUrl = (
       process.env.SUPABASE_URL ??
       process.env.EXPO_PUBLIC_SUPABASE_URL ??
@@ -1361,6 +1380,7 @@ test(
       shouldRestorePassword: () =>
         Boolean(verifiedRecoveryUserId && verifiedRecoveryUserId === disposableUserId),
       restorePassword: () => testClient.auth.updateUser({ password: initialPassword }),
+      reportRestoration: (status) => t.diagnostic(`CUPCAL_RESTORE_STATUS: ${status}`),
     }, async () => {
       const { data: signedIn, error: signInError } = await testClient.auth.signInWithPassword({
         email,

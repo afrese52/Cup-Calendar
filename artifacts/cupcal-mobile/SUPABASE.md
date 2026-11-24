@@ -249,61 +249,44 @@ nur die Code-Verarbeitung; sie sind kein Nachweis für den Geräte-Rücksprung.
 | iOS | CupCal bereits geöffnet | Link navigiert zur Bestätigungsroute; Sitzung bleibt gespeichert |
 | Android und iOS | Link abgelaufen oder erneut verwendet | Deutsche Meldung fordert einen neuen Bestätigungslink an |
 
-### Opt-in-Grenztest für Supabase-Passwörter
+### Manuelle Supabase-Passwort- und Recovery-Live-Prüfung
 
-Der normale Testlauf überspringt den Live-Grenztest. Für einen isolierten Lauf
+Der normale Testlauf überspringt die Live-Prüfungen. Für einen isolierten Lauf
 lege ein separates, bestätigtes Supabase-Konto an und setze in dessen
 `user_metadata` den booleschen Wert `cupcal_disposable_password_test` auf `true`.
 Das Konto darf nicht regulär verwendet werden. Hinterlege seine E-Mail und sein
-aktuelles Passwort ausschließlich als geschützte Umgebungsvariablen:
+aktuelles Passwort ausschließlich im Replit-Secrets-Speicher:
 
 - `CUPCAL_SUPABASE_PASSWORD_TEST_EMAIL`
 - `CUPCAL_SUPABASE_PASSWORD_TEST_PASSWORD`
+- `CUPCAL_SUPABASE_PASSWORD_RECOVERY_TEST_LINK`
+
+Hinterlege die Supabase-Projekt-URL sowie ausschließlich den öffentlichen
+Publishable-/Anon-Key ebenfalls im Secrets-Speicher:
+
 - `SUPABASE_URL` (oder `EXPO_PUBLIC_SUPABASE_URL`)
 - `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (oder `SUPABASE_ANON_KEY`)
 
-Starte dann im Workspace:
+Fordere über CupCal einen Passwortlink für das Wegwerf-Konto an und kopiere den
+noch nicht geöffneten Link in `CUPCAL_SUPABASE_PASSWORD_RECOVERY_TEST_LINK`.
+Führe anschließend im Workspace den kombinierten manuellen Lauf aus:
 
 ```sh
 pnpm --filter @workspace/cupcal-mobile run test:supabase-password-live
 ```
 
-Der Test meldet sich mit dem öffentlichen Publishable-/Anon-Key am markierten
-Wegwerf-Konto an, prüft die Passwortgrenzen und stellt anschließend das zuvor
-gesetzte Passwort wieder her. Er akzeptiert keine Service-Role- oder Secret-
-Keys, erstellt und löscht keine Konten und läuft nicht mit dem normalen
-Testsammelbefehl.
+Der Lauf prüft Unicode-Passwortgrenzen, NFC-/NFD-Unterscheidung und die
+Passwortgrenze in einer echten Recovery-Sitzung. Er verwendet ausschließlich
+das markierte Wegwerf-Konto und einen öffentlichen Publishable-/Anon-Key;
+Service-Role- und Secret-Keys werden abgewiesen. Er erstellt oder löscht keine
+Konten. Die Ausgabe unterdrückt Testfehlerdetails, damit weder Passwörter noch
+Recovery-Links in Protokollen oder Terminalausgaben erscheinen. Nach jedem
+verändernden Test wird das ursprüngliche Passwort wiederhergestellt; der Befehl
+meldet ausdrücklich, ob dies bestätigt wurde. Die Recovery-Prüfung braucht
+einen gültigen, noch nicht verwendeten Link.
 
-### Passwortgrenze in einer echten Wiederherstellungssitzung
-
-Für den separaten Recovery-Live-Test wird dasselbe ausschließlich dafür
-vorgesehene und markierte Wegwerf-Konto verwendet. Fordere über CupCal einen
-Passwortlink für dieses Konto an. Kopiere den noch nicht geöffneten Link aus
-der E-Mail (oder die von Supabase zurückgeleitete CupCal-Adresse mit dem
-Sitzungscode) und setze ihn ausschließlich als geschützte
-Umgebungsvariable `CUPCAL_SUPABASE_PASSWORD_RECOVERY_TEST_LINK`. Setze außerdem
-die oben genannten E-Mail-, Passwort- und öffentlichen Supabase-Variablen.
-
-Starte den isolierten Test mit:
-
-```sh
-pnpm --filter @workspace/cupcal-mobile run test:supabase-password-recovery-live
-```
-
-Der Test tauscht den echten Recovery-Link gegen eine Supabase-Sitzung,
-verifiziert, dass sie zum markierten Wegwerf-Konto gehört, weist fünf Zeichen
-zurück und setzt anschließend genau sechs Zeichen. Im `finally`-Aufräumpfad
-stellt er das Ausgangspasswort wieder her. Ein verbrauchter, abgelaufener oder
-zu einem anderen Konto gehörender Link schlägt fehl; reguläre Konten werden
-nicht verändert.
-
-Der Testbefehl führt zusätzlich einen Fremdlink-Test aus. Setze dafür
-`CUPCAL_SUPABASE_FOREIGN_PASSWORD_RECOVERY_TEST_LINK` auf einen noch gültigen
-Recovery-Link eines anderen Kontos. Dieser Teil meldet sich zuerst am markierten
-Wegwerf-Konto an, weist den fremden oder nicht zuordenbaren Link vor jedem
-Passwortwechsel ab und meldet den Testclient danach ab und schließt ihn. Der
-Test blockiert Passwortänderungen zusätzlich technisch und ändert das fremde
-Konto nicht.
+Für die Recovery-Prüfung allein gibt es außerdem
+`pnpm --filter @workspace/cupcal-mobile run test:supabase-password-recovery-live`.
 
 Für die kontobasierte Merkliste müssen die Migrationen `0002`, `0003` und
 `0004` in dieser Reihenfolge aus `artifacts/api-server/supabase/migrations/`
