@@ -51,7 +51,12 @@ async function readWebEvents(): Promise<TournamentEvent[] | null> {
   }
 
   if (Date.now() - cache.savedAt > CACHE_TTL_MS) return [];
-  return cache.events.filter((event) => isEvent(event) && !event.id.startsWith('preview-'));
+  const now = Date.now();
+  return cache.events.filter((event) =>
+    isEvent(event) &&
+    !event.id.startsWith('preview-') &&
+    Date.parse(event.endTime) > now,
+  );
 }
 
 export async function loadCachedEvents(): Promise<TournamentEvent[] | null> {
@@ -62,7 +67,9 @@ export async function saveEventsToCache(events: TournamentEvent[]): Promise<void
   const savedAt = Date.now();
   const existing = (await readWebEvents()) ?? [];
   const merged = new Map(existing.map((event) => [event.id, event]));
-  for (const event of events) merged.set(event.id, event);
+  for (const event of events) {
+    if (Date.parse(event.endTime) > savedAt) merged.set(event.id, event);
+  }
   const cache: WebEventCache = { savedAt, events: [...merged.values()] };
   await AsyncStorage.setItem(WEB_CACHE_KEY, JSON.stringify(cache));
 }

@@ -38,6 +38,18 @@ export interface TournamentEvent {
   featured: boolean;
 }
 
+export function isEventAvailable(event: TournamentEvent, now = Date.now()): boolean {
+  const endTime = Date.parse(event.endTime);
+  return Number.isFinite(endTime) && endTime > now;
+}
+
+export function getAvailableEvents(
+  events: TournamentEvent[],
+  now = Date.now(),
+): TournamentEvent[] {
+  return events.filter((event) => isEventAvailable(event, now));
+}
+
 export function matchesEventFilter(
   event: TournamentEvent,
   categoryFilter: CalendarCategoryFilter,

@@ -10,6 +10,7 @@ import { WeekCalendarStrip } from '@/components/WeekCalendarStrip';
 import { useColors } from '@/hooks/useColors';
 import {
   calendarRegionFilters,
+  getAvailableEvents,
   matchesEventFilter,
   toLocalDateKey,
   type CalendarCategoryFilter,
@@ -264,7 +265,7 @@ export default function CalendarScreen() {
 
   const visibleEvents = useMemo(
     () =>
-      [...events]
+      getAvailableEvents(events)
         .filter((event) =>
           matchesEventFilter(event, selectedCategory, selectedGameFeature, selectedRegion),
         )

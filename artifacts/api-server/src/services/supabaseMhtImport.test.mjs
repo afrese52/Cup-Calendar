@@ -175,8 +175,8 @@ test("liefert die getrennten Felder zusätzlich zu den bisherigen API-Angaben", 
         tournament_series: "Reload",
         team_format: "Duos",
         tournament_type: "Cash Cup",
-        start_time: "2026-11-14T18:00:00.000Z",
-        end_time: "2026-11-14T20:00:00.000Z",
+        start_time: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+        end_time: new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString(),
         is_featured: false,
       };
       if (url.searchParams.get("select")?.includes("game_ruleset")) {
@@ -223,6 +223,87 @@ test("liefert die getrennten Felder zusätzlich zu den bisherigen API-Angaben", 
     assert.equal(legacyResult.data[0].gameMode, "Reload");
     assert.equal(legacyResult.data[0].gameRuleset, null);
     assert.equal(legacyResult.data[0].tournamentSeries, null);
+  } finally {
+    if (apiServer?.listening) await closeServer(apiServer);
+    if (fakeSupabase.listening) await closeServer(fakeSupabase);
+    if (tempDir) await rm(tempDir, { recursive: true, force: true });
+    for (const [key, value] of originalEnv) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+});
+
+test("liefert standardmäßig nur noch laufende und zukünftige Termine", async () => {
+  const originalEnv = new Map(
+    ["NODE_ENV", "SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY"]
+      .map((key) => [key, process.env[key]]),
+  );
+  const now = Date.now();
+  const rows = [
+    {
+      id: "expired-event",
+      title: "Abgelaufenes Turnier",
+      description: "",
+      region: "EU",
+      game_mode: "Battle Royale",
+      team_format: "Solo",
+      tournament_type: "Cash Cup",
+      start_time: new Date(now - 4 * 60 * 60 * 1000).toISOString(),
+      end_time: new Date(now - 2 * 60 * 60 * 1000).toISOString(),
+      is_featured: false,
+    },
+    {
+      id: "available-event",
+      title: "Verfügbares Turnier",
+      description: "",
+      region: "EU",
+      game_mode: "Battle Royale",
+      team_format: "Duos",
+      tournament_type: "Cash Cup",
+      start_time: new Date(now + 60 * 60 * 1000).toISOString(),
+      end_time: new Date(now + 3 * 60 * 60 * 1000).toISOString(),
+      is_featured: false,
+    },
+  ];
+  let requestedEndTimeFilter = null;
+  const fakeSupabase = createServer((request, response) => {
+    response.setHeader("Content-Type", "application/json");
+    const url = new URL(request.url, "http://supabase.test");
+    if (url.pathname === "/rest/v1/fortnite_events") {
+      requestedEndTimeFilter = url.searchParams.get("end_time");
+      const [operator, cutoff] = requestedEndTimeFilter?.split(".", 2) ?? [];
+      response.end(JSON.stringify(rows.filter((row) =>
+        operator === "gt"
+          ? Date.parse(row.end_time) > Date.parse(cutoff)
+          : Date.parse(row.end_time) >= Date.parse(cutoff),
+      )));
+      return;
+    }
+    response.statusCode = 404;
+    response.end(JSON.stringify({ message: "Unexpected test request" }));
+  });
+  let apiServer;
+  let tempDir;
+
+  try {
+    const fakeSupabaseUrl = await listen(fakeSupabase);
+    process.env["NODE_ENV"] = "production";
+    process.env["SUPABASE_URL"] = fakeSupabaseUrl;
+    process.env["SUPABASE_SERVICE_ROLE_KEY"] = "test-service-role-key";
+    const loaded = await loadApiApp();
+    tempDir = loaded.tempDir;
+    apiServer = loaded.app.listen(0, "127.0.0.1");
+    await new Promise((resolve, reject) => {
+      apiServer.once("error", reject);
+      apiServer.once("listening", resolve);
+    });
+
+    const response = await fetch(`http://127.0.0.1:${apiServer.address().port}/api/v1/events`);
+    const result = await response.json();
+    assert.equal(response.status, 200);
+    assert.match(requestedEndTimeFilter ?? "", /^gt\./);
+    assert.deepEqual(result.data.map((event) => event.id), ["available-event"]);
   } finally {
     if (apiServer?.listening) await closeServer(apiServer);
     if (fakeSupabase.listening) await closeServer(fakeSupabase);

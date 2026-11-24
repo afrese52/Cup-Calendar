@@ -82,8 +82,11 @@ export function createLocalEventStore(
     await database.runAsync('DELETE FROM events WHERE cached_at < ?', expirationCutoff);
     if (Date.now() - metadata.updated_at > CACHE_TTL_MS) return [];
 
+    const now = new Date().toISOString();
+    await database.runAsync('DELETE FROM events WHERE end_time <= ?', now);
     const rows = await database.getAllAsync<CachedEventRow>(
-      "SELECT * FROM events WHERE id NOT LIKE 'preview-%' ORDER BY start_time ASC",
+      "SELECT * FROM events WHERE id NOT LIKE 'preview-%' AND end_time > ? ORDER BY start_time ASC",
+      now,
     );
     return rows.map((row) => ({
       id: row.id,
@@ -105,8 +108,10 @@ export function createLocalEventStore(
   async function saveEventsToCache(events: TournamentEvent[]): Promise<void> {
     const database = await getDatabase();
     const savedAt = Date.now();
+    const now = new Date(savedAt).toISOString();
 
     await database.withTransactionAsync(async () => {
+      await database.runAsync('DELETE FROM events WHERE end_time <= ?', now);
       for (const event of events) {
         await database.runAsync(
           `INSERT INTO events (

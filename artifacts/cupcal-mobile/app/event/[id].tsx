@@ -7,6 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useColors } from '@/hooks/useColors';
 import { promptAccountSignIn } from '@/services/accountSignInPrompt';
 import { useCupCal } from '@/state/AppContext';
+import { isEventAvailable } from '@/data/events';
 
 export default function EventDetailsScreen() {
   const colors = useColors();
@@ -18,7 +19,7 @@ export default function EventDetailsScreen() {
     authReady,
     isAuthenticated,
   } = useCupCal();
-  const event = events.find((item) => item.id === id);
+  const event = events.find((item) => item.id === id && isEventAvailable(item));
   const headerBookmarkRef = useRef<React.ComponentRef<typeof Pressable>>(null);
   const saveButtonRef = useRef<React.ComponentRef<typeof Pressable>>(null);
   const isBookmarked = event ? bookmarkedIds.includes(event.id) : false;
@@ -119,7 +120,7 @@ export default function EventDetailsScreen() {
             <Feather name="zap" size={20} color={colors.primary} />
           </View>
           <Text allowFontScaling style={[styles.heroEyebrow, { color: colors.heroMeta }]}>
-            BEISPIELTERMIN · {event.region}
+            TURNIER · {event.region}
           </Text>
           <Text allowFontScaling style={[styles.title, { color: colors.heroForeground }]}>{event.title}</Text>
           <Text allowFontScaling style={[styles.heroCopy, { color: colors.heroMeta }]}>{event.description}</Text>
@@ -138,7 +139,7 @@ export default function EventDetailsScreen() {
         <View style={[styles.notice, { backgroundColor: colors.surfaceRaised, borderColor: colors.border }]}>
           <Feather name="info" size={17} color={colors.warning} />
           <Text allowFontScaling style={[styles.noticeText, { color: colors.mutedForeground }]}>
-            Das sind Beispieldaten. Aktuelle offizielle Turniertermine werden angezeigt, sobald die Live-Datenquelle verbunden ist.
+            Quelle: CupCals Turnierdatenbank. Zeiten und Angaben können sich kurzfristig ändern.
           </Text>
         </View>
 

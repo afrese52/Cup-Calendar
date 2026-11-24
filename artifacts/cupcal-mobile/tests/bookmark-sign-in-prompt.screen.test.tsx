@@ -199,6 +199,40 @@ test('zeigt den nativen Favoritenspeicherfehler in der Merkliste', async () => {
   ).toBeTruthy();
 });
 
+test('zeigt in der Agenda nur verfügbare Termine und kennzeichnet sie nicht als Beispieldaten', async () => {
+  const expiredEvent: TournamentEvent = {
+    ...event,
+    id: 'expired-event',
+    title: 'Abgelaufenes Turnier',
+    startTime: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(),
+    endTime: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+  };
+  mockContext.current.events = [expiredEvent, event];
+
+  const view = await render(<SavedScreen />);
+
+  expect(view.getByText('1 verfügbarer Termin')).toBeTruthy();
+  expect(view.getByText(event.title)).toBeTruthy();
+  expect(view.queryByText(expiredEvent.title)).toBeNull();
+  expect(view.queryByText(/Beispieltermine/)).toBeNull();
+});
+
+test('zeigt im Kalender keine abgelaufenen Termine oder Terminmarker', async () => {
+  const expiredEvent: TournamentEvent = {
+    ...event,
+    id: 'expired-calendar-event',
+    title: 'Abgelaufenes Kalenderturnier',
+    startTime: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(),
+    endTime: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+  };
+  mockContext.current.events = [expiredEvent, event];
+
+  const view = await render(<CalendarScreen />);
+
+  expect(view.queryByText(expiredEvent.title)).toBeNull();
+  expect(view.queryByTestId(`calendar-week-marker-${toLocalDateKey(new Date(expiredEvent.startTime))}-Turnier`)).toBeNull();
+});
+
 test('zeigt die Wochenleiste standardmäßig und öffnet den Monatskalender auf Wunsch', async () => {
   const today = new Date();
   const view = await render(<CalendarScreen />);
@@ -215,22 +249,22 @@ test('zeigt die Wochenleiste standardmäßig und öffnet den Monatskalender auf 
 
 test('zeigt farbige Terminmarker in der Wochenleiste und aktualisiert die Tagesagenda', async () => {
   const today = new Date();
-  const nextDay = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1, 12);
+  const nextDay = new Date(Date.now() + 24 * 60 * 60 * 1000);
   const todayEvent: TournamentEvent = {
     ...event,
     id: 'today-tournament',
     title: 'Heutiges Turnier',
     category: 'Turnier',
-    startTime: new Date(today.getFullYear(), today.getMonth(), today.getDate(), 12).toISOString(),
-    endTime: new Date(today.getFullYear(), today.getMonth(), today.getDate(), 14).toISOString(),
+    startTime: new Date().toISOString(),
+    endTime: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
   };
   const nextDayEvent: TournamentEvent = {
     ...event,
     id: 'next-day-league',
     title: 'Liga morgen',
     category: 'Liga',
-    startTime: nextDay.toISOString(),
-    endTime: new Date(nextDay.getTime() + 2 * 60 * 60 * 1000).toISOString(),
+    startTime: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+    endTime: new Date(Date.now() + 26 * 60 * 60 * 1000).toISOString(),
   };
   mockContext.current = {
     authReady: true,
@@ -409,7 +443,6 @@ test.each(['android', 'ios'] as const)(
 );
 
 test('setzt die Gerätestandort-Region automatisch und lässt globale Turniere sichtbar', async () => {
-  const today = new Date();
   const makeRegionEvent = (
     base: TournamentEvent,
     id: string,
@@ -420,8 +453,8 @@ test('setzt die Gerätestandort-Region automatisch und lässt globale Turniere s
     id,
     title,
     region,
-    startTime: new Date(today.getFullYear(), today.getMonth(), today.getDate(), 12).toISOString(),
-    endTime: new Date(today.getFullYear(), today.getMonth(), today.getDate(), 14).toISOString(),
+    startTime: new Date().toISOString(),
+    endTime: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
   });
   mockContext.current.events = [
     makeRegionEvent(event, 'event-eu', 'EU-Turnier', 'EU'),
@@ -512,8 +545,8 @@ test.each([
       gameMode,
       gameRuleset,
       tournamentSeries,
-      startTime: new Date(today.getFullYear(), today.getMonth(), today.getDate(), 12).toISOString(),
-      endTime: new Date(today.getFullYear(), today.getMonth(), today.getDate(), 14).toISOString(),
+      startTime: new Date().toISOString(),
+      endTime: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
     });
     const matchingEvents = [
       makeEvent('reload-league', 'Reload Liga', 'Liga', 'Reload', 'Battle Royale', 'Reload'),
@@ -562,7 +595,6 @@ test.each([
 );
 
 test('zeigt ältere Reload- und Zero-Build-Termine mit den passenden Filtern', async () => {
-  const today = new Date();
   const makeTodayEvent = (
     base: TournamentEvent,
     id: string,
@@ -572,8 +604,8 @@ test('zeigt ältere Reload- und Zero-Build-Termine mit den passenden Filtern', a
     id,
     title,
     category: 'Liga',
-    startTime: new Date(today.getFullYear(), today.getMonth(), today.getDate(), 12).toISOString(),
-    endTime: new Date(today.getFullYear(), today.getMonth(), today.getDate(), 14).toISOString(),
+    startTime: new Date().toISOString(),
+    endTime: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
   });
   const legacyReloadEvent = makeTodayEvent(
     makeLegacyEvent('Reload'),
@@ -643,6 +675,22 @@ test('zeigt Regelwerk und Turnierserie getrennt in den Turnierdetails', async ()
   expect(view.getByText('SERIE')).toBeTruthy();
   expect(view.getByText('Zero Build')).toBeTruthy();
   expect(view.getByText('Reload')).toBeTruthy();
+  expect(view.getByText('Quelle: CupCals Turnierdatenbank. Zeiten und Angaben können sich kurzfristig ändern.')).toBeTruthy();
+  expect(view.queryByText(/Beispieldaten/)).toBeNull();
+});
+
+test('öffnet abgelaufene Turniere nicht mehr als aktuelle Details', async () => {
+  const expiredEvent: TournamentEvent = {
+    ...event,
+    startTime: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(),
+    endTime: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+  };
+  mockContext.current.events = [expiredEvent];
+
+  const view = await render(<EventDetailsScreen />);
+
+  expect(view.getByText('Turnier nicht gefunden')).toBeTruthy();
+  expect(view.queryByText(expiredEvent.title)).toBeNull();
 });
 
 test.each(['android', 'ios'] as const)(

@@ -25,8 +25,8 @@ function deferred<T>() {
 jest.mock('@workspace/api-client-react', () => {
   const eventsResponse = {
     data: [
-      { id: 'turnier-neu', title: 'FNCS Challenger Cup' },
-      { id: 'turnier-zweit', title: 'FNCS Zweiter Cup' },
+      { id: 'turnier-neu', title: 'FNCS Challenger Cup', endTime: '2099-01-01T00:00:00.000Z' },
+      { id: 'turnier-zweit', title: 'FNCS Zweiter Cup', endTime: '2099-01-01T00:00:00.000Z' },
     ],
   };
   return {

@@ -3,7 +3,7 @@ import { useGetEvents } from '@workspace/api-client-react';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { AccessibilityInfo, AppState } from 'react-native';
-import type { TournamentEvent } from '@/data/events';
+import { getAvailableEvents, type TournamentEvent } from '@/data/events';
 import { loadCachedEvents, saveEventsToCache } from '@/services/localEventStore';
 import {
   getAnonymousBookmarksForImport,
@@ -79,6 +79,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
   });
   const isReady = authReady && eventsReady;
   const isAuthenticated = Boolean(userId);
+
+  useEffect(() => {
+    const expirationTimer = setInterval(() => {
+      setEvents((currentEvents) => {
+        const availableEvents = getAvailableEvents(currentEvents);
+        return availableEvents.length === currentEvents.length ? currentEvents : availableEvents;
+      });
+    }, 60_000);
+    return () => clearInterval(expirationTimer);
+  }, []);
 
   useEffect(() => {
     if (!supabase) {
@@ -354,7 +364,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       try {
         const cachedEvents = await loadCachedEvents();
         if (isMounted && cachedEvents !== null && !hasLoadedServerEvents.current) {
-          setEvents(cachedEvents);
+          setEvents(getAvailableEvents(cachedEvents));
         }
       } catch {
         if (isMounted) {
@@ -375,9 +385,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     let isMounted = true;
     if (eventsQuery.data) {
       hasLoadedServerEvents.current = true;
-      setEvents(eventsQuery.data.data);
+      const availableEvents = getAvailableEvents(eventsQuery.data.data);
+      setEvents(availableEvents);
       setEventError(null);
-      void saveEventsToCache(eventsQuery.data.data).catch(() => {
+      void saveEventsToCache(availableEvents).catch(() => {
         if (isMounted) setStorageError('Termine konnten nicht offline gespeichert werden.');
       });
     } else if (eventsQuery.isError) {

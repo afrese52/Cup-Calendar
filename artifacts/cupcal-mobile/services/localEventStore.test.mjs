@@ -58,6 +58,10 @@ function createLegacyDatabase() {
   `);
 
   const now = Date.now();
+  const futureStart = new Date(now + 8 * 24 * 60 * 60 * 1000).toISOString();
+  const futureEnd = new Date(now + 8 * 24 * 60 * 60 * 1000 + 3 * 60 * 60 * 1000).toISOString();
+  const pastStart = new Date(now - 4 * 60 * 60 * 1000).toISOString();
+  const pastEnd = new Date(now - 2 * 60 * 60 * 1000).toISOString();
   database.prepare(`
     INSERT INTO events (
       id, title, description, region, game_mode, team_format, tournament_type,
@@ -72,18 +76,37 @@ function createLegacyDatabase() {
     'Duos',
     'FNCS',
     'Turnier',
-    '2026-12-01T10:00:00.000Z',
-    '2026-12-01T13:00:00.000Z',
+    futureStart,
+    futureEnd,
     1,
+    now,
+  );
+  database.prepare(`
+    INSERT INTO events (
+      id, title, description, region, game_mode, team_format, tournament_type,
+      category, start_time, end_time, featured, cached_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    'expired-event',
+    'Abgelaufener Offline-Termin',
+    'Ist nicht mehr verfügbar',
+    'EU',
+    'Battle Royale',
+    'Solo',
+    'Cash Cup',
+    'Turnier',
+    pastStart,
+    pastEnd,
+    0,
     now,
   );
   database.prepare('INSERT INTO cache_metadata (id, updated_at) VALUES (1, ?)').run(now);
 
-  return database;
+  return { database, futureStart, futureEnd, now };
 }
 
 test('migriert alte Offline-Kalender ohne Datenverlust und speichert neue Werte', async () => {
-  const database = createLegacyDatabase();
+  const { database, futureStart, futureEnd, now } = createLegacyDatabase();
   const { loadCachedEvents, saveEventsToCache } = createLocalEventStore(
     async () => createSQLiteAdapter(database),
   );
@@ -100,8 +123,8 @@ test('migriert alte Offline-Kalender ohne Datenverlust und speichert neue Werte'
     teamFormat: 'Duos',
     tournamentType: 'FNCS',
     category: 'Turnier',
-    startTime: '2026-12-01T10:00:00.000Z',
-    endTime: '2026-12-01T13:00:00.000Z',
+    startTime: futureStart,
+    endTime: futureEnd,
     featured: true,
   }]);
   assert.deepEqual(
@@ -109,6 +132,7 @@ test('migriert alte Offline-Kalender ohne Datenverlust und speichert neue Werte'
       .filter((name) => ['game_ruleset', 'tournament_series'].includes(name)).sort(),
     ['game_ruleset', 'tournament_series'],
   );
+  assert.equal(database.prepare('SELECT id FROM events WHERE id = ?').get('expired-event'), undefined);
 
   await saveEventsToCache([{
     id: 'reload-event',
@@ -121,8 +145,8 @@ test('migriert alte Offline-Kalender ohne Datenverlust und speichert neue Werte'
     teamFormat: 'Duos',
     tournamentType: 'Cash Cup',
     category: 'Turnier',
-    startTime: '2026-12-02T10:00:00.000Z',
-    endTime: '2026-12-02T13:00:00.000Z',
+    startTime: new Date(now + 9 * 24 * 60 * 60 * 1000).toISOString(),
+    endTime: new Date(now + 9 * 24 * 60 * 60 * 1000 + 3 * 60 * 60 * 1000).toISOString(),
     featured: false,
   }]);
 

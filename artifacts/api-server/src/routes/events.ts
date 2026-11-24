@@ -58,6 +58,7 @@ router.get("/v1/events", async (req, res, next) => {
 
   try {
     const { region, game_mode, tournament_type, from, to } = parsedQuery.data;
+    const availableFrom = from ?? new Date().toISOString();
     const admin = getSupabaseAdmin();
     const loadEvents = async (includeNewMetadata: boolean): Promise<{
       data: EventRow[] | null;
@@ -74,7 +75,8 @@ router.get("/v1/events", async (req, res, next) => {
       if (tournament_type && tournament_type !== "ALL") {
         query = query.eq("tournament_type", tournament_type);
       }
-      if (from) query = query.gte("end_time", from);
+      if (from) query = query.gte("end_time", availableFrom);
+      else query = query.gt("end_time", availableFrom);
       if (to) query = query.lte("start_time", to);
       return await query as unknown as {
         data: EventRow[] | null;

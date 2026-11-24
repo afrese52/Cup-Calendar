@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { EventCard } from '@/components/EventCard';
+import { getAvailableEvents } from '@/data/events';
 import { useColors } from '@/hooks/useColors';
 import { useCupCal } from '@/state/AppContext';
 
@@ -29,7 +30,7 @@ export default function SavedScreen() {
   const [savedOnly, setSavedOnly] = useState(false);
   const agendaEvents = useMemo(
     () =>
-      events
+      getAvailableEvents(events)
         .filter((event) => !savedOnly || bookmarkedIds.includes(event.id))
         .sort((a, b) => a.startTime.localeCompare(b.startTime)),
     [events, bookmarkedIds, savedOnly],
@@ -62,7 +63,9 @@ export default function SavedScreen() {
             <Text style={[styles.eyebrow, { color: colors.primary }]}>DEIN KALENDER</Text>
             <Text style={[styles.title, { color: colors.foreground }]}>Agenda</Text>
             <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
-              {savedOnly ? `${agendaEvents.length} vorgemerkte Termine` : `${agendaEvents.length} Beispieltermine`}
+              {savedOnly
+                ? `${agendaEvents.length} vorgemerkte Termine`
+                : `${agendaEvents.length} ${agendaEvents.length === 1 ? 'verfügbarer Termin' : 'verfügbare Termine'}`}
             </Text>
             <View style={[styles.segment, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <Pressable
