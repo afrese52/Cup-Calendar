@@ -10,6 +10,8 @@ const gzipAsync = promisify(gzip);
 const publicRoot = resolve(fileURLToPath(new URL('../dist/public/', import.meta.url)));
 const MINIMUM_COMPRESS_BYTES = 512;
 const NOT_ACCEPTABLE_BODY = 'Not Acceptable';
+const COMPRESSION_WARNING_THRESHOLD = 5;
+const COMPRESSION_WARNING_WINDOW_MS = 60_000;
 const bodyCache = new Map();
 
 const MIME_TYPES = {
@@ -41,6 +43,10 @@ const COMPRESSIBLE_TYPES = new Set([
 
 function writeCompressionFailureEvent(event) {
   console.error(JSON.stringify(event));
+}
+
+function writeCompressionWarningEvent(event) {
+  console.warn(JSON.stringify(event));
 }
 
 function parseAcceptEncoding(header = '') {
@@ -148,6 +154,7 @@ export function createStaticServer({
   compress = compressRepresentation,
   getCompressedRepresentation,
   reportCompressionFailure = writeCompressionFailureEvent,
+  reportCompressionWarning = writeCompressionWarningEvent,
 } = {}) {
   const normalizedBasePath =
     basePath === '/' ? '' : `/${basePath.replace(/^\/+|\/+$/g, '')}`;
@@ -156,6 +163,42 @@ export function createStaticServer({
     ((filePath, encoding, original) =>
       getRepresentation(filePath, encoding, original, compress));
   let compressionFailureCount = 0;
+  let recentCompressionFailures = [];
+  let compressionWarningActive = false;
+
+  const monitorCompressionFailure = () => {
+    const now = Date.now();
+    recentCompressionFailures = recentCompressionFailures.filter(
+      (timestamp) => now - timestamp < COMPRESSION_WARNING_WINDOW_MS,
+    );
+    if (recentCompressionFailures.length === 0) {
+      compressionWarningActive = false;
+    }
+    recentCompressionFailures.push(now);
+
+    if (
+      recentCompressionFailures.length < COMPRESSION_WARNING_THRESHOLD ||
+      compressionWarningActive
+    ) {
+      return;
+    }
+
+    compressionWarningActive = true;
+    try {
+      const reportingResult = reportCompressionWarning({
+        event: 'cupcal.static_compression.warning',
+        version: 1,
+        failureCount: recentCompressionFailures.length,
+        threshold: COMPRESSION_WARNING_THRESHOLD,
+        windowSeconds: COMPRESSION_WARNING_WINDOW_MS / 1000,
+      });
+      if (reportingResult && typeof reportingResult.then === 'function') {
+        void Promise.resolve(reportingResult).catch(() => {});
+      }
+    } catch {
+      // Monitoring must never interrupt the uncompressed response fallback.
+    }
+  };
 
   return createServer(async (request, response) => {
     if (request.method !== 'GET' && request.method !== 'HEAD') {
@@ -268,6 +311,7 @@ export function createStaticServer({
         : original;
     } catch (error) {
       compressionFailureCount += 1;
+      monitorCompressionFailure();
       try {
         const reportingResult = reportCompressionFailure({
           event: 'cupcal.static_compression.failure',

@@ -236,11 +236,13 @@ test('falls back to the original page and asset when compression fails', async (
   await writeFile(join(fallbackRoot, 'index.html'), originalPage);
   await writeFile(join(fallbackRoot, 'assets', 'app.js'), originalScript);
   const compressionFailureEvents = [];
+  const compressionWarnings = [];
 
   const fallbackServer = createStaticServer({
     root: fallbackRoot,
     basePath: '/',
     reportCompressionFailure: (event) => compressionFailureEvents.push(event),
+    reportCompressionWarning: (event) => compressionWarnings.push(event),
     getCompressedRepresentation: async (_filePath, encoding) => {
       throw new Error(`simulated ${encoding} compression failure`);
     },
@@ -290,9 +292,62 @@ test('falls back to the original page and asset when compression fails', async (
       JSON.stringify(compressionFailureEvents).includes(fallbackRoot),
       false,
     );
+    assert.deepEqual(compressionWarnings, []);
   } finally {
     await new Promise((resolve) => fallbackServer.close(resolve));
     await rm(fallbackRoot, { recursive: true, force: true });
+  }
+});
+
+test('warns once when compression failures reach the threshold without exposing request data', async () => {
+  const original = `<main>${'CupCal tournament calendar '.repeat(100)}</main>`;
+  const monitoringRoot = await mkdtemp(join(tmpdir(), 'cupcal-static-monitor-'));
+  await writeFile(join(monitoringRoot, 'index.html'), original);
+  const compressionWarnings = [];
+  const monitoringServer = createStaticServer({
+    root: monitoringRoot,
+    reportCompressionWarning: (event) => compressionWarnings.push(event),
+    getCompressedRepresentation: async () => {
+      throw new Error('sensitive compression failure detail');
+    },
+  });
+  await new Promise((resolve, reject) => {
+    monitoringServer.once('error', reject);
+    monitoringServer.listen(0, '127.0.0.1', resolve);
+  });
+  const monitoringOrigin = `http://127.0.0.1:${monitoringServer.address().port}`;
+
+  try {
+    for (let attempt = 0; attempt < 6; attempt += 1) {
+      const response = await getResponse(
+        `/?private-path-marker=${attempt}`,
+        {
+          'accept-encoding': 'gzip',
+          authorization: 'Bearer private-header-marker',
+        },
+        monitoringOrigin,
+      );
+      assert.equal(response.status, 200);
+      assert.equal(response.headers['content-encoding'], undefined);
+      assert.equal(response.body.toString(), original);
+    }
+
+    assert.deepEqual(compressionWarnings, [
+      {
+        event: 'cupcal.static_compression.warning',
+        version: 1,
+        failureCount: 5,
+        threshold: 5,
+        windowSeconds: 60,
+      },
+    ]);
+    const warningText = JSON.stringify(compressionWarnings);
+    assert.equal(warningText.includes('private-path-marker'), false);
+    assert.equal(warningText.includes('private-header-marker'), false);
+    assert.equal(warningText.includes('sensitive compression failure detail'), false);
+  } finally {
+    await new Promise((resolve) => monitoringServer.close(resolve));
+    await rm(monitoringRoot, { recursive: true, force: true });
   }
 });
 
