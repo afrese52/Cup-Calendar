@@ -98,3 +98,17 @@ mtime_ms = 1795451579566
 storage_uri = "gcs://replit-rams-assets-archer/rams/assets/repl:fba06988-5dc0-49ce-a88d-6c2b15091cfa/76b830a0-db43-4745-8c99-b7430da6214c/e366ebaa-5f2b-4791-bbd7-7eb42d6656e2"
 storage_version_token = "1795451579902953"
 content_type = "text/html;profile=replit-chart"
+
+[[outputs]]
+id = "qPmup6dyGc0XDCHYdVXCl"
+uri = "file://generated-artifacts/cupcal-upload-certificate.pem"
+type = "unspecified"
+title = "CupCal-Upload-Zertifikat"
+description = "Öffentliches Zertifikat des aktuellen EAS-AABs für die Anfrage zum Google-Play-Upload-Schlüssel-Reset."
+logical_id = "cb7963ee-bb31-4b06-af83-6bde9e66b5ad"
+content_hash = "sha256:350465e8971e67f1720664c92f1a5c14e06df31045c0fa6c8d47875b91859a16"
+size = 1164
+mtime_ms = 1795563933859
+storage_uri = "gcs://replit-rams-assets-archer/rams/assets/repl:fba06988-5dc0-49ce-a88d-6c2b15091cfa/cb7963ee-bb31-4b06-af83-6bde9e66b5ad/3cb3b65c-8f07-434e-8bcb-85a90f9eb4e3"
+storage_version_token = "1795563948642249"
+content_type = "application/octet-stream"
