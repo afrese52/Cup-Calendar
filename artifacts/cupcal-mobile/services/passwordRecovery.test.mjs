@@ -87,6 +87,14 @@ async function runDisposablePasswordTest(
   if (testError) throw testError;
 }
 
+function assertDisposableRecoverySession(session, disposableUserId) {
+  assert.equal(
+    session?.user?.id,
+    disposableUserId,
+    'Der fremde oder nicht zuordenbare Recovery-Link wurde vor dem Passwortwechsel abgewiesen.',
+  );
+}
+
 test('stellt das Wegwerf-Passwort nach einem fehlgeschlagenen Grenzfall wieder her', async () => {
   const cleanup = [];
   const testClient = {
@@ -164,6 +172,42 @@ test('meldet Wiederherstellungsfehler und schließt den Client trotz Abmeldefehl
     },
   );
   assert.equal(disposed, true);
+});
+
+test('weist fremde und nicht zuordenbare Recovery-Sitzungen vor jedem Update ab', async (t) => {
+  const cases = [
+    ['fremdes Konto', { user: { id: 'foreign-account' } }],
+    ['fehlende Konto-ID', { user: {} }],
+    ['fehlende Sitzung', null],
+  ];
+
+  for (const [name, session] of cases) {
+    await t.test(name, async () => {
+      const cleanup = [];
+      let updateCalls = 0;
+      const testClient = {
+        auth: {
+          signOut: async () => cleanup.push('signOut'),
+          dispose: async () => cleanup.push('dispose'),
+        },
+      };
+
+      await assert.rejects(
+        runDisposablePasswordTest({
+          testClient,
+          shouldRestorePassword: () => false,
+          restorePassword: async () => assert.fail('Das fremde Konto darf nicht wiederhergestellt werden.'),
+        }, async () => {
+          assertDisposableRecoverySession(session, 'disposable-account');
+          updateCalls += 1;
+        }),
+        /fremde oder nicht zuordenbare Recovery-Link wurde vor dem Passwortwechsel abgewiesen/i,
+      );
+
+      assert.equal(updateCalls, 0);
+      assert.deepEqual(cleanup, ['signOut', 'dispose']);
+    });
+  }
 });
 
 test('weist ungültige Wiederherstellungslinks ab und sperrt den Passwortwechsel', async () => {
@@ -1378,5 +1422,126 @@ test(
       await recovery.saveNewPassword('a'.repeat(PASSWORD_MIN_LENGTH));
       assert.equal(recovery.isPending(), false);
     });
+  },
+);
+
+test(
+  'weist einen fremden Recovery-Link vor dem Passwortwechsel ab',
+  { skip: !livePasswordRecoveryTestEnabled },
+  async () => {
+    const supabaseUrl = (
+      process.env.SUPABASE_URL ??
+      process.env.EXPO_PUBLIC_SUPABASE_URL ??
+      ''
+    ).trim();
+    const publishableKey =
+      process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
+      process.env.SUPABASE_PUBLISHABLE_KEY ??
+      process.env.SUPABASE_ANON_KEY;
+    const foreignRecoveryLink =
+      process.env.CUPCAL_SUPABASE_FOREIGN_PASSWORD_RECOVERY_TEST_LINK?.trim();
+    const email = process.env.CUPCAL_SUPABASE_PASSWORD_TEST_EMAIL?.trim();
+    const initialPassword = process.env.CUPCAL_SUPABASE_PASSWORD_TEST_PASSWORD;
+    const missingEnv = [
+      !supabaseUrl && 'SUPABASE_URL or EXPO_PUBLIC_SUPABASE_URL',
+      !email && 'CUPCAL_SUPABASE_PASSWORD_TEST_EMAIL',
+      !initialPassword && 'CUPCAL_SUPABASE_PASSWORD_TEST_PASSWORD',
+      !foreignRecoveryLink && 'CUPCAL_SUPABASE_FOREIGN_PASSWORD_RECOVERY_TEST_LINK',
+      !publishableKey?.trim() && 'EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY or SUPABASE_ANON_KEY',
+    ].filter(Boolean);
+    assert.deepEqual(
+      missingEnv,
+      [],
+      `Für den opt-in Fremdlink-Live-Test fehlen: ${missingEnv.join(', ')}`,
+    );
+    assert.equal(
+      isPrivilegedSupabaseKey(publishableKey.trim()),
+      false,
+      'Der Live-Test akzeptiert ausschließlich einen öffentlichen Publishable- oder Anon-Key, keinen Service-Role- oder Secret-Key.',
+    );
+
+    const testClient = createClient(
+      supabaseUrl,
+      publishableKey.trim(),
+      { auth: { autoRefreshToken: false, persistSession: false } },
+    );
+    const auth = testClient.auth;
+    const recovery = createPasswordRecovery(auth);
+    let disposableUserId = null;
+    let passwordUpdateAttempts = 0;
+    let signOutCalls = 0;
+    let disposeCalls = 0;
+
+    const signOut = auth.signOut.bind(auth);
+    auth.signOut = async (...args) => {
+      signOutCalls += 1;
+      return signOut(...args);
+    };
+    const dispose = auth.dispose.bind(auth);
+    auth.dispose = (...args) => {
+      disposeCalls += 1;
+      return dispose(...args);
+    };
+    auth.updateUser = async () => {
+      passwordUpdateAttempts += 1;
+      throw new Error('Der Fremdlink-Live-Test blockiert Passwortänderungen.');
+    };
+
+    await assert.rejects(
+      runDisposablePasswordTest({
+        testClient,
+        shouldRestorePassword: () => false,
+        restorePassword: async () => {
+          assert.fail('Der Fremdlink-Live-Test darf kein Passwort wiederherstellen.');
+        },
+      }, async () => {
+        const { data: signedIn, error: signInError } =
+          await auth.signInWithPassword({ email, password: initialPassword });
+        assert.ifError(signInError);
+        assert.equal(
+          signedIn.user?.user_metadata?.cupcal_disposable_password_test,
+          true,
+          'Das angemeldete Konto ist nicht als cupcal_disposable_password_test markiert. Verwende ausschließlich ein eigens dafür angelegtes Wegwerf-Konto.',
+        );
+        disposableUserId = signedIn.user.id;
+        await auth.signOut();
+
+        const parsedLink = new URL(foreignRecoveryLink);
+        const query = parsedLink.searchParams;
+        const fragment = new URLSearchParams(parsedLink.hash.replace(/^#/, ''));
+        const getParameter = (name) => query.get(name) ?? fragment.get(name);
+        const token = getParameter('token_hash') ?? getParameter('token');
+        const linkType = getParameter('type');
+
+        if (token && linkType === 'recovery') {
+          const { error } = await auth.verifyOtp({
+            token_hash: token,
+            type: 'recovery',
+          });
+          assert.ifError(error);
+          recovery.markRecoverySession(true);
+        } else {
+          assert.equal(
+            await recovery.handlePasswordResetUrl(foreignRecoveryLink),
+            true,
+            'Der Fremdlink muss ein echter Supabase-Recovery-Link oder eine CupCal-Wiederherstellungsadresse mit Sitzungscode sein.',
+          );
+        }
+
+        const { data: recoverySession, error: sessionError } = await auth.getSession();
+        assert.ifError(sessionError);
+        assert.ok(recoverySession.session, 'Der Recovery-Link hat keine Sitzung erzeugt.');
+        assertDisposableRecoverySession(recoverySession.session, disposableUserId);
+      }),
+      /fremde oder nicht zuordenbare Recovery-Link wurde vor dem Passwortwechsel abgewiesen/i,
+    );
+
+    assert.equal(
+      passwordUpdateAttempts,
+      0,
+      'Der Live-Test darf keine Passwortänderung an das Konto des Fremdlinks senden.',
+    );
+    assert.equal(signOutCalls, 2, 'Der Testclient muss vor und nach der Ablehnung abgemeldet werden.');
+    assert.equal(disposeCalls, 1, 'Der Testclient muss nach der Ablehnung geschlossen werden.');
   },
 );

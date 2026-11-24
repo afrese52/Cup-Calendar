@@ -297,6 +297,14 @@ stellt er das Ausgangspasswort wieder her. Ein verbrauchter, abgelaufener oder
 zu einem anderen Konto gehörender Link schlägt fehl; reguläre Konten werden
 nicht verändert.
 
+Der Testbefehl führt zusätzlich einen Fremdlink-Test aus. Setze dafür
+`CUPCAL_SUPABASE_FOREIGN_PASSWORD_RECOVERY_TEST_LINK` auf einen noch gültigen
+Recovery-Link eines anderen Kontos. Dieser Teil meldet sich zuerst am markierten
+Wegwerf-Konto an, weist den fremden oder nicht zuordenbaren Link vor jedem
+Passwortwechsel ab und meldet den Testclient danach ab und schließt ihn. Der
+Test blockiert Passwortänderungen zusätzlich technisch und ändert das fremde
+Konto nicht.
+
 Für die kontobasierte Merkliste müssen die Migrationen `0002`, `0003` und
 `0004` in dieser Reihenfolge aus `artifacts/api-server/supabase/migrations/`
 auf dem Supabase-Projekt ausgeführt werden. Sie richten die Favoritentabelle
