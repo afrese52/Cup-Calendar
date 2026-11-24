@@ -49,24 +49,16 @@ verbunden und wird nicht von Epic Games unterstützt.
 | --- | --- | --- |
 | App-Symbol | `play-icon-512.png` | PNG, 512 × 512 px, RGBA |
 | Featuregrafik | `feature-graphic-1024x500.jpg` | JPEG, 1024 × 500 px |
-| Smartphone-Screenshot 1 | `screenshots/play-phone-01-calendar.png` | PNG, 432 × 768 px |
-| Smartphone-Screenshot 2 | `screenshots/play-phone-02-agenda.png` | PNG, 432 × 768 px |
-| Smartphone-Screenshot 3 | `screenshots/play-phone-03-account.png` | PNG, 432 × 768 px |
+| Smartphone-Screenshot 1 | `screenshots/play-phone-01-calendar.jpg` | JPEG, 1080 × 2340 px |
+| Smartphone-Screenshot 2 | `screenshots/play-phone-02-agenda.jpg` | JPEG, 1080 × 2340 px |
 
-Für einen Play-Console-Entwurf sind Kalender (1) und Info/Konto (3) die
-geeigneteren Voransichten. Die Agenda-Aufnahme (2) bleibt nur eine
-Designreferenz, da sie Beispieltermine mit vergangenen Daten zeigt.
-Die Screenshots wurden aus der aktuellen CupCal-App-Vorschau im
-Hochformat exportiert. Sie zeigen die App-Oberfläche ohne Browserleisten und
-ohne hinzugefügte Werbeaussagen. Der Agenda-Screenshot zeigt ausdrücklich
-„Beispieltermine“, darunter bereits beendete Einträge. Er ist deshalb nur eine
-Designreferenz und sollte nicht unverändert in einen öffentlichen Store-Eintrag
-übernommen werden. Vor der Veröffentlichung müssen mindestens zwei
-Screenshots aus dem Release-Build mit aktuellen und wahrheitsgemäß
-gekennzeichneten Inhalten aufgenommen werden.
-Die Kalenderaufnahme stammt aus der Browser-Vorschau und zeigt deren
-Gerätezeitzone UTC; für einen deutschen Store sollte sie auf einem Android-
-Gerät in der vorgesehenen Zeitzone neu aufgenommen werden.
+Beide Screenshots stammen aus dem installierten Android-Release auf einem
+Samsung-Gerät. Der Kalender zeigt aktuelle Termine und die
+Gerätezeitzone Europe/Berlin (UTC+01:00); die Agenda zeigt aktuelle, laufende
+und bevorstehende Turniere. Beide Originalbilder haben 1080 × 2340 px,
+enthalten keine privaten Kontodaten und wurden nicht mit Werbeaussagen
+ergänzt. Der frühere Konto-Vorschausscreenshot wurde aus dem Store-Paket
+entfernt, damit dort nur geprüfte Android-Aufnahmen verbleiben.
 
 ## Vor dem Veröffentlichen in Play Console
 
