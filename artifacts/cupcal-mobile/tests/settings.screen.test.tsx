@@ -881,7 +881,7 @@ test('sendet nach geänderter E-Mail-Adresse weiter an die registrierte Adresse'
 });
 
 test.each(['ios', 'android'] as const)(
-  'sperrt erneute Bestätigungsanfragen auf %s mit Countdown und gibt sie danach frei',
+  'kündigt das Ende der Bestätigungswartezeit auf %s an, ohne den Fokus zu verschieben',
   async (platform) => {
     const originalPlatformOS = Platform.OS;
     Object.defineProperty(Platform, 'OS', { configurable: true, value: platform });
@@ -944,9 +944,13 @@ test.each(['ios', 'android'] as const)(
       });
 
       expect(button.props.accessibilityState).toMatchObject({ disabled: false, busy: false });
+      expect(button.props.accessibilityRole).toBe('button');
       expect(button.props.accessibilityLabel).toBe('Bestätigungslink erneut senden');
+      expect(button.props.accessibilityLiveRegion).toBe('none');
       expect(view.getByText('Bestätigungslink erneut senden')).toBeTruthy();
       const completionStatus = view.getByTestId('confirmation-resend-cooldown-status');
+      expect(completionStatus.props.accessible).toBe(true);
+      expect(completionStatus.props.accessibilityRole).toBe('text');
       expect(completionStatus.props.children)
         .toBe('Die Wartezeit ist vorbei. Du kannst jetzt einen neuen Bestätigungslink anfordern.');
       if (platform === 'ios') {
@@ -966,6 +970,10 @@ test.each(['ios', 'android'] as const)(
       });
       if (platform === 'ios') expect(announceForAccessibility).toHaveBeenCalledTimes(2);
       else expect(announceForAccessibility).not.toHaveBeenCalled();
+      expect(sendAccessibilityFocus).not.toHaveBeenCalled();
+
+      await fireEvent.press(button);
+      await waitFor(() => expect(mockedSupabase.requestEmailConfirmation).toHaveBeenCalledTimes(2));
       expect(sendAccessibilityFocus).not.toHaveBeenCalled();
     } finally {
       await act(async () => {
