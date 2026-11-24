@@ -1413,7 +1413,7 @@ test('hält Erklärung und Aktionen des Löschdialogs bei großer Schrift erreic
   });
 
   expect(compactScreen.getByTestId('delete-account-confirm-button')).toBeTruthy();
-  const confirmLabel = compactScreen.getByText('Bestätigungslink senden');
+  const confirmLabel = compactScreen.getByText('Löschbestätigungslink anfordern');
   const cancelButton = compactScreen.getByTestId('delete-account-cancel-button');
   const cancelLabel = compactScreen.getByText('Abbrechen');
   expect(confirmLabel.props.allowFontScaling).not.toBe(false);
@@ -2234,7 +2234,7 @@ test('sendet nach Bestätigung einen zeitlich befristeten Löschlink an das ange
 });
 
 test.each(['ios', 'android'] as const)(
-  'macht Bestätigung, Abbruch und laufende Löschlinkanfrage auf %s zugänglich',
+  'ordnet den Löschdialog und seine Rückmeldungen für %s zugänglich',
   async (platform) => {
     const originalPlatformOS = Platform.OS;
     Object.defineProperty(Platform, 'OS', { configurable: true, value: platform });
@@ -2262,19 +2262,31 @@ test.each(['ios', 'android'] as const)(
       const description = view.getByTestId('delete-account-confirmation-description');
       const confirmButton = view.getByTestId('delete-account-confirm-button');
       const cancelButton = view.getByTestId('delete-account-cancel-button');
+      const dialog = view.getByTestId('delete-account-confirmation-dialog');
+      expect(dialog.props.accessibilityViewIsModal).toBe(platform === 'ios');
+      expect(dialog.props.importantForAccessibility).toBe(platform === 'android' ? 'yes' : 'auto');
+      expect(dialog.props.children.map((child: { props: { testID?: string } }) => child.props.testID)).toEqual([
+        'delete-account-confirmation-title',
+        'delete-account-confirmation-description',
+        'delete-account-confirm-button',
+        'delete-account-cancel-button',
+      ]);
       expect(title.props.accessible).toBe(true);
       expect(title.props.accessibilityRole).toBe('header');
       expect(description.props.accessible).toBe(true);
       expect(description.props.accessibilityRole).toBe('text');
+      await waitFor(() => {
+        const focusedTitle = sendAccessibilityFocus.mock.calls.find(([target]) =>
+          (target as { props?: { testID?: string } }).props?.testID === 'delete-account-confirmation-title');
+        expect(focusedTitle?.[1]).toBe('focus');
+      });
       expect(confirmButton.props.accessibilityRole).toBe('button');
-      expect(confirmButton.props.accessibilityLabel).toBe('Bestätigungslink senden');
+      expect(confirmButton.props.accessibilityLabel).toBe('Löschbestätigungslink anfordern');
       expect(confirmButton.props.accessibilityHint).toContain('erst gelöscht');
       expect(cancelButton.props.accessibilityRole).toBe('button');
       expect(cancelButton.props.accessibilityLabel).toBe('Abbrechen');
       expect(cancelButton.props.accessibilityHint).toContain('ohne einen Link');
-      expect(announceForAccessibility).toHaveBeenCalledWith(
-        'Konto wirklich löschen? Dein Konto und deine gespeicherten Favoriten werden endgültig entfernt. Bestätigungslink senden oder Abbrechen.',
-      );
+      expect(announceForAccessibility).not.toHaveBeenCalled();
 
       await fireEvent.press(cancelButton);
       expect(view.queryByTestId('delete-account-confirmation-title')).toBeNull();
@@ -2282,6 +2294,7 @@ test.each(['ios', 'android'] as const)(
         'Abgebrochen. Es wurde kein Bestätigungslink angefordert.',
       );
       expect(mockedApi.__requestAccountDeletion).not.toHaveBeenCalled();
+      announceForAccessibility.mockClear();
 
       await fireEvent.press(view.getByTestId('delete-account-button'));
       const rapidPressButton = view.getByTestId('delete-account-confirm-button');
@@ -2291,14 +2304,19 @@ test.each(['ios', 'android'] as const)(
       });
       const pendingButton = view.getByTestId('delete-account-confirm-button');
       expect(mockedApi.__requestAccountDeletion).toHaveBeenCalledTimes(1);
-      expect(pendingButton.props.accessibilityLabel).toBe('Bestätigungslink wird angefordert');
+      expect(pendingButton.props.accessibilityLabel).toBe('Löschbestätigungslink wird angefordert');
+      expect(pendingButton.props.accessibilityLiveRegion).toBe(platform === 'android' ? 'polite' : 'none');
       expect(pendingButton.props.accessibilityState).toMatchObject({
         disabled: true,
         busy: true,
       });
-      expect(announceForAccessibility).toHaveBeenLastCalledWith(
-        'Die Anfrage für den Bestätigungslink läuft.',
-      );
+      if (platform === 'ios') {
+        expect(announceForAccessibility).toHaveBeenLastCalledWith(
+          'Die Anfrage für den Bestätigungslink läuft.',
+        );
+      } else {
+        expect(announceForAccessibility).not.toHaveBeenCalled();
+      }
 
       await act(async () => finishDeletionRequest({
         confirmationToken: 'signed.confirmation.token',

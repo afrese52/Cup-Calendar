@@ -150,6 +150,7 @@ export default function SettingsScreen() {
   const announcedResendCooldownCompletionRef = useRef<number | null>(null);
   const sessionRef = useRef<Session | null>(session);
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
+  const deleteConfirmationTitleRef = useRef<React.ComponentRef<typeof Text>>(null);
   const accountDeletionRequest = useRequestAccountDeletion();
   const reportAuthError = (message: string, recoveryEmail: string | null = null) => {
     recoveryErrorEmailRef.current = recoveryEmail;
@@ -243,6 +244,12 @@ export default function SettingsScreen() {
     if (Platform.OS === 'web' || !accountFocusRef.current) return;
     AccessibilityInfo.sendAccessibilityEvent(accountFocusRef.current, 'focus');
   }, [authMode]);
+
+  useEffect(() => {
+    if (!showDeleteConfirmation || Platform.OS === 'web' || !deleteConfirmationTitleRef.current) return;
+
+    AccessibilityInfo.sendAccessibilityEvent(deleteConfirmationTitleRef.current, 'focus');
+  }, [showDeleteConfirmation]);
 
   useEffect(() => {
     if (requestedAuthMode !== 'forgot-password') return;
@@ -517,7 +524,7 @@ export default function SettingsScreen() {
     setSubmittingAction('delete-account');
     setAuthError(null);
     setAuthMessage(null);
-    if (Platform.OS !== 'web') {
+    if (Platform.OS === 'ios') {
       AccessibilityInfo.announceForAccessibility('Die Anfrage für den Bestätigungslink läuft.');
     }
     try {
@@ -638,8 +645,12 @@ export default function SettingsScreen() {
                     styles.deleteConfirmation,
                     { backgroundColor: colors.destructive + '12', borderColor: colors.destructive + '66' },
                   ]}
+                  accessibilityViewIsModal={Platform.OS === 'ios'}
+                  importantForAccessibility={Platform.OS === 'android' ? 'yes' : 'auto'}
+                  testID="delete-account-confirmation-dialog"
                 >
                     <Text
+                      ref={deleteConfirmationTitleRef}
                       accessible
                       accessibilityRole="header"
                       testID="delete-account-confirmation-title"
@@ -659,10 +670,13 @@ export default function SettingsScreen() {
                     accessibilityRole="button"
                     accessibilityLabel={
                       submittingAction === 'delete-account'
-                        ? 'Bestätigungslink wird angefordert'
-                        : 'Bestätigungslink senden'
+                        ? 'Löschbestätigungslink wird angefordert'
+                        : 'Löschbestätigungslink anfordern'
                     }
                     accessibilityHint="Fordert einen Link per E-Mail an. Das Konto wird erst gelöscht, wenn du den Link öffnest."
+                    accessibilityLiveRegion={
+                      Platform.OS === 'android' && submittingAction === 'delete-account' ? 'polite' : 'none'
+                    }
                     accessibilityState={{
                       disabled: isSubmittingAuth,
                       busy: submittingAction === 'delete-account',
@@ -681,7 +695,7 @@ export default function SettingsScreen() {
                       <ActivityIndicator color={colors.primaryForeground} />
                     ) : (
                       <Text style={[styles.deleteConfirmButtonText, { color: colors.primaryForeground }]}>
-                        Bestätigungslink senden
+                        Löschbestätigungslink anfordern
                       </Text>
                     )}
                   </Pressable>
@@ -715,11 +729,6 @@ export default function SettingsScreen() {
                     setAuthError(null);
                     setAuthMessage(null);
                     setShowDeleteConfirmation(true);
-                    if (Platform.OS !== 'web') {
-                      AccessibilityInfo.announceForAccessibility(
-                        'Konto wirklich löschen? Dein Konto und deine gespeicherten Favoriten werden endgültig entfernt. Bestätigungslink senden oder Abbrechen.',
-                      );
-                    }
                   }}
                   style={({ pressed }) => [
                     styles.deleteAccountButton,
