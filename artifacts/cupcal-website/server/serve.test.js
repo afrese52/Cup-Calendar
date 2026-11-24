@@ -280,12 +280,20 @@ test('falls back to the original page and asset when compression fails', async (
         version: 1,
         encoding: 'br',
         failureCount: 1,
+        windowFailureCount: 1,
+        eligibleResponseCount: 1,
+        fallbackRatePercent: 100,
+        windowSeconds: 60,
       },
       {
         event: 'cupcal.static_compression.failure',
         version: 1,
         encoding: 'gzip',
         failureCount: 2,
+        windowFailureCount: 2,
+        eligibleResponseCount: 2,
+        fallbackRatePercent: 100,
+        windowSeconds: 60,
       },
     ]);
     assert.equal(
@@ -296,6 +304,96 @@ test('falls back to the original page and asset when compression fails', async (
   } finally {
     await new Promise((resolve) => fallbackServer.close(resolve));
     await rm(fallbackRoot, { recursive: true, force: true });
+  }
+});
+
+test('reports the fallback rate among eligible responses in the same time window', async () => {
+  const original = `<main>${'CupCal tournament calendar '.repeat(100)}</main>`;
+  const metricsRoot = await mkdtemp(join(tmpdir(), 'cupcal-static-metrics-'));
+  await writeFile(join(metricsRoot, 'index.html'), original);
+  const compressionFailureEvents = [];
+  let compressionAttempts = 0;
+  const metricsServer = createStaticServer({
+    root: metricsRoot,
+    reportCompressionFailure: (event) =>
+      compressionFailureEvents.push(event),
+    getCompressedRepresentation: async (_filePath, _encoding, body) => {
+      compressionAttempts += 1;
+      if (compressionAttempts === 3) {
+        throw new Error('sensitive compression failure detail');
+      }
+      return gzipSync(body);
+    },
+  });
+  await new Promise((resolve, reject) => {
+    metricsServer.once('error', reject);
+    metricsServer.listen(0, '127.0.0.1', resolve);
+  });
+  const metricsOrigin = `http://127.0.0.1:${metricsServer.address().port}`;
+
+  try {
+    const identityResponse = await getResponse(
+      '/',
+      { 'accept-encoding': 'identity' },
+      metricsOrigin,
+    );
+    assert.equal(identityResponse.status, 200);
+    assert.equal(identityResponse.headers['content-encoding'], undefined);
+
+    const rejectedResponse = await getResponse(
+      '/',
+      { 'accept-encoding': 'identity;q=0, gzip;q=0, br;q=0' },
+      metricsOrigin,
+    );
+    assert.equal(rejectedResponse.status, 406);
+
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const response = await getResponse(
+        `/?private-path-marker=${attempt}`,
+        {
+          'accept-encoding': 'gzip',
+          authorization: 'Bearer private-header-marker',
+        },
+        metricsOrigin,
+      );
+      assert.equal(response.status, 200);
+      assert.equal(response.headers['content-encoding'], 'gzip');
+    }
+
+    const fallbackResponse = await getResponse(
+      '/?private-path-marker=failed',
+      {
+        'accept-encoding': 'gzip',
+        authorization: 'Bearer private-header-marker',
+      },
+      metricsOrigin,
+    );
+    assert.equal(fallbackResponse.status, 200);
+    assert.equal(fallbackResponse.headers['content-encoding'], undefined);
+    assert.equal(fallbackResponse.body.toString(), original);
+    assert.deepEqual(compressionFailureEvents, [
+      {
+        event: 'cupcal.static_compression.failure',
+        version: 1,
+        encoding: 'gzip',
+        failureCount: 1,
+        windowFailureCount: 1,
+        eligibleResponseCount: 3,
+        fallbackRatePercent: (1 / 3) * 100,
+        windowSeconds: 60,
+      },
+    ]);
+    const metricText = JSON.stringify(compressionFailureEvents);
+    assert.equal(metricText.includes('private-path-marker'), false);
+    assert.equal(metricText.includes('private-header-marker'), false);
+    assert.equal(
+      metricText.includes('sensitive compression failure detail'),
+      false,
+    );
+    assert.equal(metricText.includes(metricsRoot), false);
+  } finally {
+    await new Promise((resolve) => metricsServer.close(resolve));
+    await rm(metricsRoot, { recursive: true, force: true });
   }
 });
 

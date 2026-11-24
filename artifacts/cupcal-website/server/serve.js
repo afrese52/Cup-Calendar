@@ -163,18 +163,24 @@ export function createStaticServer({
     ((filePath, encoding, original) =>
       getRepresentation(filePath, encoding, original, compress));
   let compressionFailureCount = 0;
+  let recentCompressionAttempts = [];
   let recentCompressionFailures = [];
   let compressionWarningActive = false;
 
-  const monitorCompressionFailure = () => {
-    const now = Date.now();
+  const pruneCompressionWindow = (now) => {
+    recentCompressionAttempts = recentCompressionAttempts.filter(
+      (timestamp) => now - timestamp < COMPRESSION_WARNING_WINDOW_MS,
+    );
     recentCompressionFailures = recentCompressionFailures.filter(
       (timestamp) => now - timestamp < COMPRESSION_WARNING_WINDOW_MS,
     );
+  };
+
+  const monitorCompressionFailure = (now) => {
+    pruneCompressionWindow(now);
     if (recentCompressionFailures.length === 0) {
       compressionWarningActive = false;
     }
-    recentCompressionFailures.push(now);
 
     if (
       recentCompressionFailures.length < COMPRESSION_WARNING_THRESHOLD ||
@@ -305,28 +311,48 @@ export function createStaticServer({
     }
 
     let body;
+    const compressionRequested = Boolean(encoding);
+    const requestedEncoding = encoding;
+    let compressionFailed = false;
     try {
       body = encoding
         ? await getRepresentationForRequest(filePath, encoding, original)
         : original;
-    } catch (error) {
+    } catch {
       compressionFailureCount += 1;
-      monitorCompressionFailure();
-      try {
-        const reportingResult = reportCompressionFailure({
-          event: 'cupcal.static_compression.failure',
-          version: 1,
-          encoding,
-          failureCount: compressionFailureCount,
-        });
-        if (reportingResult && typeof reportingResult.then === 'function') {
-          void Promise.resolve(reportingResult).catch(() => {});
-        }
-      } catch {
-        // Reporting must never interrupt the uncompressed response fallback.
-      }
+      compressionFailed = true;
       body = original;
       encoding = null;
+    }
+
+    if (compressionRequested) {
+      const completedAt = Date.now();
+      recentCompressionAttempts.push(completedAt);
+      if (compressionFailed) recentCompressionFailures.push(completedAt);
+      pruneCompressionWindow(completedAt);
+
+      if (compressionFailed) {
+        monitorCompressionFailure(completedAt);
+        const windowFailureCount = recentCompressionFailures.length;
+        try {
+          const reportingResult = reportCompressionFailure({
+            event: 'cupcal.static_compression.failure',
+            version: 1,
+            encoding: requestedEncoding,
+            failureCount: compressionFailureCount,
+            windowFailureCount,
+            eligibleResponseCount: recentCompressionAttempts.length,
+            fallbackRatePercent:
+              (windowFailureCount / recentCompressionAttempts.length) * 100,
+            windowSeconds: COMPRESSION_WARNING_WINDOW_MS / 1000,
+          });
+          if (reportingResult && typeof reportingResult.then === 'function') {
+            void Promise.resolve(reportingResult).catch(() => {});
+          }
+        } catch {
+          // Reporting must never interrupt the uncompressed response fallback.
+        }
+      }
     }
 
     const headers = {
