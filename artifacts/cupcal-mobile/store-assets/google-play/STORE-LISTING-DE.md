@@ -2,7 +2,7 @@
 
 Stand: 23. November 2026
 
-Android-Paketkennung aus der Projektkonfiguration: `com.cupcal.android`
+Android-Paketkennung aus der Projektkonfiguration: `de.cup.calender`
 
 ## App-Titel
 
