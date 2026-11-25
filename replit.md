@@ -31,7 +31,7 @@ Inoffizielle Android-first Begleit-App für Fortnite-Wettbewerbe mit Kalender, F
 
 ## Architecture decisions
 
-- Android-Paket-ID für den bestehenden Google-Play-Eintrag: `de.cup.calender`; nach Veröffentlichung nicht ohne ausdrückliche Freigabe ändern.
+- Neue Android-Paket-ID für einen separaten Google-Play-Eintrag: `de.cup.calendar`. Der bisherige Testeintrag `de.cup.calender` ist eine eigenständige App und erhält keine Updates aus diesem Paket.
 - Termine dürfen nur mit aktivem Benutzerkonto gespeichert oder aus der Merkliste entfernt werden; Änderungen werden lokal zwischengespeichert und mit Supabase synchronisiert.
 - Merkliste und Speichern-Schaltflächen gehören zum Kalender und zur Agenda, nicht zu Fortnite-Inhalten oder zum Infobereich. Nicht angemeldete Benutzer erhalten beim Tippen eine Anmeldeaufforderung.
 - Beispieltermine dürfen nicht als echte oder live synchronisierte Turnierdaten dargestellt werden.
