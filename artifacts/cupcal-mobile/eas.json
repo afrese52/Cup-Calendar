@@ -16,7 +16,7 @@
     },
     "production": {
       "extends": "preview",
-      "environment": "production",
+      "environment": "preview",
       "distribution": "store",
       "android": {
         "buildType": "app-bundle"

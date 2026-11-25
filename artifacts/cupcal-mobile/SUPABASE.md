@@ -11,6 +11,13 @@ Die Projekt-URL muss auf die Supabase-Projektbasis zeigen, zum Beispiel
 
 Die Variablen müssen beim Starten des Expo-Entwicklungsservers beziehungsweise beim Erstellen des Web-Bundles verfügbar sein. Falls keine `EXPO_PUBLIC_*`-Variablen gesetzt sind, übernimmt CupCal dafür `SUPABASE_URL` und `SUPABASE_ANON_KEY` aus der Replit-Umgebung. Nach einer Änderung muss der Entwicklungsserver neu gestartet oder das Bundle neu erstellt werden.
 
+Für EAS-Builds müssen `EXPO_PUBLIC_SUPABASE_URL` und
+`EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY` im Expo-Projekt unter der Umgebung
+`preview` hinterlegt sein. Sowohl das Preview-Profil als auch das Android-
+Produktionsprofil verwenden diese Umgebung, damit Vorschau und Store-Build
+dieselben Supabase-Werte erhalten. Änderungen an den Expo-Variablen wirken
+sich erst auf neu erstellte App-Builds aus.
+
 Beide Werte werden in den nativen und Web-Client eingebettet und sind öffentlich sichtbar. Verwende hier ausschließlich den Publishable Key, niemals einen Service-Role-Key. Ohne vollständige Konfiguration bleibt die App nutzbar; CupCal gibt eine verständliche Warnung in der Entwicklerkonsole aus. Der Status und die Meldung sind außerdem über `isSupabaseConfigured` und `supabaseConfigurationMessage` aus `services/supabase` verfügbar.
 
 Der Web-Client speichert Auth-Sitzungen über AsyncStorage. Auf iOS speichert
