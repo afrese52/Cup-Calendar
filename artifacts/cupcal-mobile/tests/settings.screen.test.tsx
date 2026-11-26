@@ -1734,6 +1734,44 @@ test('verwirft einen verspäteten Wiederherstellungsfehler nach Änderung der E-
   });
 });
 
+test('verwirft einen verspäteten Wiederherstellungserfolg nach Änderung der E-Mail und erlaubt einen neuen Versuch', async () => {
+  let finishReset!: (result: { error: null }) => void;
+  auth.resetPasswordForEmail
+    .mockImplementationOnce(
+      () => new Promise((resolve) => { finishReset = resolve; }),
+    )
+    .mockResolvedValueOnce({ error: null });
+  const view = await openSettings();
+  await fireEvent.press(view.getByTestId('forgot-password-button'));
+  await fireEvent.changeText(view.getByTestId('auth-email-input'), 'original@example.invalid');
+
+  await fireEvent.press(view.getByTestId('auth-submit-button'));
+
+  const emailInput = view.getByTestId('auth-email-input');
+  await fireEvent.changeText(emailInput, 'corrected@example.invalid');
+  expect(view.getByTestId('auth-email-input').props.value).toBe('corrected@example.invalid');
+
+  await act(async () => finishReset({ error: null }));
+
+  expect(view.queryByTestId('auth-success-message')).toBeNull();
+  expect(view.getByTestId('auth-email-input').props.value).toBe('corrected@example.invalid');
+  expect(view.getByTestId('auth-submit-button').props.accessibilityState).toEqual({
+    disabled: false,
+    busy: false,
+  });
+
+  await fireEvent.press(view.getByTestId('auth-submit-button'));
+
+  expect(await view.findByTestId('auth-success-message')).toBeTruthy();
+  expect(auth.resetPasswordForEmail).toHaveBeenNthCalledWith(1, 'original@example.invalid', {
+    redirectTo: 'cupcal-test://auth/reset?flow=cupcal-password-reset',
+  });
+  expect(auth.resetPasswordForEmail).toHaveBeenNthCalledWith(2, 'corrected@example.invalid', {
+    redirectTo: 'cupcal-test://auth/reset?flow=cupcal-password-reset',
+  });
+  expect(view.getAllByTestId('auth-success-message')).toHaveLength(1);
+});
+
 test('ermöglicht nach einem fehlgeschlagenen Wiederherstellungsversand einen neuen Versuch', async () => {
   auth.resetPasswordForEmail
     .mockRejectedValueOnce(new Error('Email rate limit exceeded'))
