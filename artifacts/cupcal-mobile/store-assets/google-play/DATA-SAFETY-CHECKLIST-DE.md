@@ -19,6 +19,41 @@ Verhalten dieses älteren AAB gleichzusetzen.
 
 ### Neuer Store-Eintrag `de.cup.calendar`
 
+#### Nachprüfung der manuell gepflegten Angaben
+
+Die anschließende rein lesende Console-Prüfung am 26. November ergab:
+
+- Aktiver interner Test: Version `1.0.0`, Versionscode `2`. Das entspricht
+  Version und Paketkennung des geprüften AAB; es ist kein binärer
+  Gleichheitsnachweis.
+- Beide öffentlichen URLs sind in der Formularvorschau korrekt vorhanden.
+- Google zeigt Datensicherheit als „Abgeschlossen“. Dieser UI-Status
+  bestätigt nicht die fachliche Richtigkeit.
+- E-Mail ist als erhoben, nicht geteilt, optional und **sitzungsspezifisch**
+  markiert; Zwecke sind App-Funktionen und Kontoverwaltung.
+- Ungefährer Standort ist ebenfalls als erhoben, optional und
+  sitzungsspezifisch markiert; Zweck sind App-Funktionen.
+- Nutzer-IDs sind nicht gewählt; die kontosynchronisierten Favoriten
+  wurden nicht als eigene App-Aktivität deklariert.
+- Die Vorschau zeigt „Keine Datenerfassung angegeben“. Nach Googles
+  Definition können sitzungsspezifische Daten in der öffentlichen
+  Erhebungsdarstellung entfallen. Die Anzeige ist daher nicht für sich
+  ein Nachweis eines Console-Fehlers.
+
+**Der fachliche Gesamtabgleich ist nicht bestanden:** Kontobezogene
+E-Mail-Adressen und Favoriten werden dauerhaft serverseitig verarbeitet,
+nicht ausschließlich im Arbeitsspeicher für eine Echtzeitanfrage.
+Die Markierung als sitzungsspezifisch ist für die E-Mail daher nicht
+zutreffend. Nutzer-IDs und Favoriten müssen in den passenden Kategorien
+berücksichtigt werden. Die Standortdeklaration ist mit der ausschließlich
+lokalen GPS-Verarbeitung abzugleichen; eine etwaige zusätzliche
+Standortableitung durch andere Dienste ist dabei separat zu betrachten.
+
+Bei dieser Nachprüfung wurden keine Angaben geändert, gespeichert,
+eingereicht oder veröffentlicht. Die nachfolgende Dokumentation beschreibt
+die frühere Teilbearbeitung, bevor der Betreiber die restlichen Angaben
+manuell gepflegt hat.
+
 Am 26. November 2026 wurden im direkten Play-Console-Browserzugriff folgende
 Werte gespeichert und nach erneutem Laden bestätigt:
 
