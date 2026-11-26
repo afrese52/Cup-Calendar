@@ -50,8 +50,10 @@ export type SearchConsoleQueryComparison = {
   query: string;
   currentClicks: number | null;
   currentImpressions: number | null;
+  currentPosition: number | null;
   comparisonClicks: number | null;
   comparisonImpressions: number | null;
+  comparisonPosition: number | null;
   status: "both" | "new" | "not_visible";
 };
 
@@ -402,8 +404,10 @@ export function createSearchConsoleClient(options: {
             query,
             currentClicks: current?.clicks ?? null,
             currentImpressions: current?.impressions ?? null,
+            currentPosition: current?.position ?? null,
             comparisonClicks: comparison?.clicks ?? null,
             comparisonImpressions: comparison?.impressions ?? null,
+            comparisonPosition: comparison?.position ?? null,
             status: current && comparison ? "both" : current ? "new" : "not_visible",
           };
         }).sort((a, b) =>

@@ -578,10 +578,12 @@ components:
         query: { type: string }
         currentClicks: { type: ["number", "null"] }
         currentImpressions: { type: ["number", "null"] }
+        currentPosition: { type: ["number", "null"] }
         comparisonClicks: { type: ["number", "null"] }
         comparisonImpressions: { type: ["number", "null"] }
+        comparisonPosition: { type: ["number", "null"] }
         status: { type: string, enum: [both, new, not_visible] }
-      required: [query, currentClicks, currentImpressions, comparisonClicks, comparisonImpressions, status]
+      required: [query, currentClicks, currentImpressions, currentPosition, comparisonClicks, comparisonImpressions, comparisonPosition, status]
     SearchConsoleCountry:
       type: object
       properties:

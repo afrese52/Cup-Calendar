@@ -3,11 +3,14 @@ import {
   useGetSearchConsoleReport,
   useGetSearchConsoleStatus,
 } from '@workspace/api-client-react';
+import { File as ExpoFile, Paths } from 'expo-file-system';
 import { Stack, useRouter } from 'expo-router';
+import * as Sharing from 'expo-sharing';
 import React, { useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useColors } from '@/hooks/useColors';
+import { buildSearchConsoleCsv, type SearchConsoleCsvPeriods } from '@/services/search-console-csv';
 
 const DEFAULT_URL = 'https://cupcal.af-software.app/';
 
@@ -55,22 +58,66 @@ export default function SearchConsoleScreen() {
   const [endDate, setEndDate] = useState(() => defaultDate(1));
   const [comparisonStartDate, setComparisonStartDate] = useState(() => defaultDate(56));
   const [comparisonEndDate, setComparisonEndDate] = useState(() => defaultDate(29));
+  const [loadedPeriods, setLoadedPeriods] = useState<SearchConsoleCsvPeriods | null>(null);
+  const [exporting, setExporting] = useState(false);
 
   const loadReport = async () => {
     if (loading) return;
     reportMutation.reset();
+    setLoadedPeriods(null);
+    const requestPeriods = {
+      startDate,
+      endDate,
+      comparisonStartDate,
+      comparisonEndDate,
+    };
     try {
       await reportMutation.mutateAsync({
         data: {
             urls: urls.split('\n').map((url) => url.trim()).filter(Boolean),
-            startDate,
-            endDate,
-            comparisonStartDate,
-            comparisonEndDate,
+            ...requestPeriods,
         },
       });
+      setLoadedPeriods(requestPeriods);
     } catch {
       // React Query exposes the request error to the error notice below.
+    }
+  };
+
+  const exportReport = async () => {
+    const report = reportMutation.data;
+    if (!report || !loadedPeriods || exporting) return;
+
+    setExporting(true);
+    try {
+      const csv = buildSearchConsoleCsv(report.data, loadedPeriods);
+      const filename = `cupcal-suchbegriffe-${loadedPeriods.startDate}-${loadedPeriods.endDate}.csv`;
+      if (Platform.OS === 'web') {
+        const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      } else {
+        const file = new ExpoFile(Paths.cache, filename);
+        file.create({ overwrite: true });
+        await file.write(csv);
+        await Sharing.shareAsync(file.uri, {
+          dialogTitle: 'CupCal-Suchbegriffe exportieren',
+          mimeType: 'text/csv',
+          UTI: 'public.comma-separated-values-text',
+        });
+      }
+    } catch {
+      Alert.alert(
+        'Export fehlgeschlagen',
+        'Der Suchbegriffsbericht konnte nicht als CSV exportiert werden.',
+      );
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -194,6 +241,29 @@ export default function SearchConsoleScreen() {
           <Text accessibilityRole="alert" style={[styles.notice, { color: colors.destructive, borderColor: colors.destructive }]}>
             {error}
           </Text>
+        ) : null}
+
+        {reportMutation.data && loadedPeriods ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Suchbegriffsbericht als CSV exportieren"
+            accessibilityState={{ disabled: exporting, busy: exporting }}
+            disabled={exporting}
+            onPress={() => void exportReport()}
+            style={({ pressed }) => [
+              styles.exportButton,
+              { backgroundColor: colors.card, borderColor: colors.border },
+              pressed && styles.pressed,
+              exporting && styles.disabled,
+            ]}
+          >
+            {exporting
+              ? <ActivityIndicator color={colors.primary} />
+              : <Feather name="download" size={17} color={colors.primary} />}
+            <Text style={[styles.exportButtonText, { color: colors.foreground }]}>
+              {exporting ? 'CSV wird vorbereitet …' : 'Suchbegriffsbericht als CSV exportieren'}
+            </Text>
+          </Pressable>
         ) : null}
 
         {results.map((result) => (
@@ -327,6 +397,8 @@ const styles = StyleSheet.create({
   dateSeparator: { fontSize: 12, marginTop: 8 },
   primaryButton: { minHeight: 48, borderRadius: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 9, marginTop: 16 },
   primaryButtonText: { fontSize: 14, fontWeight: '700' },
+  exportButton: { minHeight: 48, borderRadius: 12, borderWidth: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 9, marginBottom: 14 },
+  exportButtonText: { fontSize: 13, fontWeight: '700' },
   pressed: { opacity: 0.8 },
   disabled: { opacity: 0.55 },
   notice: { borderWidth: 1, borderRadius: 14, padding: 13, fontSize: 13, lineHeight: 19, marginBottom: 14 },

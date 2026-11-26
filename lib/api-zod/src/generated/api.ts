@@ -221,8 +221,10 @@ export const GetSearchConsoleReportResponse = zod.object({
   "query": zod.string(),
   "currentClicks": zod.number().nullable(),
   "currentImpressions": zod.number().nullable(),
+  "currentPosition": zod.number().nullable(),
   "comparisonClicks": zod.number().nullable(),
   "comparisonImpressions": zod.number().nullable(),
+  "comparisonPosition": zod.number().nullable(),
   "status": zod.enum(['both', 'new', 'not_visible'])
 })).describe('Sichtbare Suchbegriffe beider Zeiträume; fehlende Zeilen können durch Googles Anonymisierung entstehen.'),
   "countries": zod.array(zod.object({

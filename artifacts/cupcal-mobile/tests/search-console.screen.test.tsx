@@ -3,6 +3,7 @@ import { afterEach, beforeEach, expect, jest, test } from '@jest/globals';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { setAuthTokenGetter, setBaseUrl } from '@workspace/api-client-react';
+import * as Sharing from 'expo-sharing';
 import SearchConsoleScreen from '../app/admin/search-console';
 
 const mockRouter = { back: jest.fn() };
@@ -10,6 +11,15 @@ const mockFetch = jest.fn<typeof fetch>();
 const originalDomain = process.env.EXPO_PUBLIC_DOMAIN;
 
 jest.mock('@expo/vector-icons', () => ({ Feather: () => null }));
+jest.mock('expo-file-system', () => ({
+  File: jest.fn().mockImplementation(() => ({
+    uri: 'file:///cache/cupcal-suchbegriffe.csv',
+    create: jest.fn(),
+    write: jest.fn(),
+  })),
+  Paths: { cache: {} },
+}));
+jest.mock('expo-sharing', () => ({ shareAsync: jest.fn(async () => undefined) }));
 jest.mock('expo-router', () => ({
   Stack: { Screen: () => null },
   useRouter: () => mockRouter,
@@ -40,6 +50,8 @@ beforeEach(() => {
   setAuthTokenGetter(() => 'cupcal-session-token');
   globalThis.fetch = mockFetch as unknown as typeof fetch;
   mockFetch.mockReset();
+  jest.mocked(Sharing.shareAsync).mockClear();
+  (jest.requireMock('expo-file-system') as { File: jest.Mock }).File.mockClear();
 });
 
 afterEach(() => {
@@ -116,16 +128,20 @@ test('lädt Indexstatus und Suchleistung mit der CupCal-Admin-Sitzung', async ()
             query: 'cupcal kalender',
             currentClicks: 8,
             currentImpressions: 100,
+            currentPosition: 4.5,
             comparisonClicks: 3,
             comparisonImpressions: 50,
+            comparisonPosition: 5.5,
             status: 'both',
           },
           {
             query: 'neuer cupcal begriff',
             currentClicks: 2,
             currentImpressions: 30,
+            currentPosition: 7.1,
             comparisonClicks: null,
             comparisonImpressions: null,
+            comparisonPosition: null,
             status: 'new',
           },
         ],
@@ -160,6 +176,28 @@ test('lädt Indexstatus und Suchleistung mit der CupCal-Admin-Sitzung', async ()
       comparisonEndDate: expect.any(String),
     });
   });
+
+  await fireEvent.press(view.getByLabelText('Suchbegriffsbericht als CSV exportieren'));
+  await waitFor(() => {
+    expect(Sharing.shareAsync).toHaveBeenCalledWith(
+      'file:///cache/cupcal-suchbegriffe.csv',
+      expect.objectContaining({ mimeType: 'text/csv' }),
+    );
+  });
+  const mockedFile = (jest.requireMock('expo-file-system') as { File: jest.Mock }).File;
+  const fileInstance = mockedFile.mock.results.at(-1)?.value as { write: jest.Mock };
+  expect(fileInstance.write).toHaveBeenCalledWith(expect.stringContaining(
+    '"Seite";"Zeitraum";"Suchbegriff";"Klicks";"Impressionen";"Position"',
+  ));
+  expect(fileInstance.write).toHaveBeenCalledWith(expect.stringContaining(
+    '"Aktuell: ',
+  ));
+  expect(fileInstance.write).toHaveBeenCalledWith(expect.stringContaining(
+    '"cupcal kalender";"8";"100";"4.5"',
+  ));
+  expect(fileInstance.write).toHaveBeenCalledWith(expect.stringContaining(
+    'Google blendet seltene oder anonymisierte Suchanfragen möglicherweise aus.',
+  ));
 });
 
 test('erklärt, wenn für eine Seite keine sichtbaren Suchbegriffe vorliegen', async () => {

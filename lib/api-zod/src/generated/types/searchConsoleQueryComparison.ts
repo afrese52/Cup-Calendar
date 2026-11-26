@@ -14,8 +14,12 @@ export interface SearchConsoleQueryComparison {
   /** @nullable */
   currentImpressions: number | null;
   /** @nullable */
+  currentPosition: number | null;
+  /** @nullable */
   comparisonClicks: number | null;
   /** @nullable */
   comparisonImpressions: number | null;
+  /** @nullable */
+  comparisonPosition: number | null;
   status: SearchConsoleQueryComparisonStatus;
 }
