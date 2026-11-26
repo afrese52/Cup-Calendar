@@ -17,7 +17,29 @@ Verhalten dieses älteren AAB gleichzusetzen.
 
 ## Bearbeitungsstand in Google Play
 
-Im geprüften Store-Eintrag `de.cup.calender` wurden folgende Angaben
+### Neuer Store-Eintrag `de.cup.calendar`
+
+Am 26. November 2026 wurden im direkten Play-Console-Browserzugriff folgende
+Werte gespeichert und nach erneutem Laden bestätigt:
+
+- Datenschutzerklärung: `https://cupcal.af-software.app/datenschutz/`
+- Kontolöschseite: `https://cupcal.af-software.app/konto-loeschen/`
+- Datenerhebung bzw. Weitergabe (gemeinsame Eingangsfrage): „Ja“, da
+  Konto- und Favoritendaten übertragen werden.
+- Kontoerstellung: ausschließlich „Nutzername und Passwort“ für
+  die E-Mail-/Passwortanmeldung.
+
+Die Datensicherheit ist ein **unvollständiger gespeicherter Entwurf**.
+Es wurde nichts eingereicht oder veröffentlicht. Die Pflichtfrage zur
+Verschlüsselung aller übertragenen Nutzerdaten ist bewusst unbeantwortet:
+Eine umfassende Prüfung des korrigierten Release-AAB steht noch aus.
+Dadurch ist „Weiter“ deaktiviert; Datentypen, Datennutzung und Vorschau
+(Schritte 3–5) wurden noch nicht ausgefüllt. Die optionale Frage nach
+Datenlöschung ohne Kontolöschung blieb ebenfalls unbeantwortet.
+
+### Früherer Store-Eintrag `de.cup.calender`
+
+Im früher geprüften Store-Eintrag `de.cup.calender` wurden folgende Angaben
 gespeichert, aber nicht eingereicht oder veröffentlicht:
 
 - Datenschutzerklärung: `https://cupcal.af-software.app/datenschutz/`
@@ -25,10 +47,10 @@ gespeichert, aber nicht eingereicht oder veröffentlicht:
 - Datenerhebung: „Ja“, da Konto- und Favoritendaten übertragen werden.
 - Kontoerstellung: „Nutzername und Passwort“ für die E-Mail-/Passwortanmeldung.
 
-Die Erklärung zur Datensicherheit ist weiterhin ein unvollständiger Entwurf.
-Die gespeicherten Angaben wurden am 26. November im Browser bestätigt;
-eine spätere erneute Prüfung ist mangels wiederverwendbarer Sitzung offen.
-Nicht mit einem anderen Store-Eintrag oder einer neuen Paketkennung verwechseln.
+Auch dort war die Erklärung zur Datensicherheit ein unvollständiger Entwurf.
+Diese älteren Angaben sind kein Nachweis für den neuen Store-Eintrag.
+Beim oben dokumentierten Speichern im neuen Eintrag wurde der alte
+Eintrag nicht verändert.
 
 ## Im CupCal-Quellcode nachvollziehbare Datenflüsse
 
