@@ -1877,6 +1877,60 @@ test('zeigt den Ladezustand und sperrt die Schaltflächen während der Linkanfra
   });
 });
 
+test('sperrt den Moduswechsel bis die verzögerte Passwortlink-Antwort eintrifft', async () => {
+  let finishReset!: (result: { error: null }) => void;
+  auth.resetPasswordForEmail.mockImplementation(
+    () => new Promise((resolve) => { finishReset = resolve; }),
+  );
+  const view = await openSettings();
+  await fireEvent.press(view.getByTestId('forgot-password-button'));
+  await fireEvent.changeText(view.getByTestId('auth-email-input'), 'test@example.invalid');
+
+  const submitButton = view.getByTestId('auth-submit-button');
+  const modeToggle = view.getByTestId('auth-mode-toggle');
+  const submitClick = submitButton.props.onClick as (event: {
+    currentTarget: unknown;
+    target: unknown;
+    nativeEvent: object;
+    stopPropagation: () => void;
+  }) => void;
+  const toggleClick = modeToggle.props.onClick as (event: {
+    currentTarget: unknown;
+    target: unknown;
+    nativeEvent: object;
+    stopPropagation: () => void;
+  }) => void;
+  const clickEvent = (target: unknown) => ({
+    currentTarget: target,
+    target,
+    nativeEvent: {},
+    stopPropagation: jest.fn(),
+  });
+  await act(async () => {
+    submitClick(clickEvent(submitButton));
+    toggleClick(clickEvent(modeToggle));
+  });
+
+  expect(auth.resetPasswordForEmail).toHaveBeenCalledTimes(1);
+  expect(view.getByText('Passwort zurücksetzen')).toBeTruthy();
+  expect(view.getByTestId('auth-mode-toggle').props.accessibilityState).toMatchObject({
+    disabled: true,
+  });
+  expect(view.getByTestId('auth-submit-button').props.accessibilityLabel).toBe(
+    'Passwortlink wird angefordert',
+  );
+  expect(view.queryByTestId('auth-success-message')).toBeNull();
+
+  await act(async () => finishReset({ error: null }));
+
+  expect(view.getByText('Passwort zurücksetzen')).toBeTruthy();
+  expect(view.getByTestId('auth-mode-toggle').props.accessibilityLabel)
+    .toBe('Zurück zur Anmeldung');
+  expect(view.getByTestId('auth-success-message').props.children).toBe(
+    'Wenn zu dieser E-Mail ein CupCal-Konto besteht, erhältst du in Kürze einen Wiederherstellungslink. Der Versand kann etwas dauern. Prüfe auch deinen Spam-Ordner.',
+  );
+});
+
 test('hält die aktuelle Wartezeit bei fehlgeschlagenem Speichern nach erfolgreichem Versand ein', async () => {
   const mockedSupabase = jest.requireMock('@/services/supabase') as {
     requestEmailConfirmation: jest.Mock;
