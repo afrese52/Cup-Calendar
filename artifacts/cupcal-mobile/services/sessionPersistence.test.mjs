@@ -7,6 +7,7 @@ import {
   friendlyAuthError,
   SESSION_PERSISTENCE_ERROR_CODE,
   signOutAccount,
+  submitAccountAuth,
 } from './accountAuth.ts';
 
 const testUserId = '00000000-0000-4000-8000-000000000015';
@@ -355,27 +356,41 @@ test('meldet eine bestätigte E-Mail ohne dauerhaft speicherbare Sitzung', async
     },
   };
   let exchangeSucceeded = false;
+  let failNextSessionSave = true;
+  let submittedCredentials;
   const failingStorage = {
     ...storage,
     setItem: async (key, value) => {
       await storage.setItem(key, value);
-      if (key === storageKey) throw new Error('Device storage failed after writing');
+      if (key === storageKey && failNextSessionSave) {
+        failNextSessionSave = false;
+        throw new Error('Device storage failed after writing');
+      }
     },
+  };
+  const confirmationFetch = async (input, init) => {
+    const url = new URL(String(input));
+    if (url.pathname.endsWith('/token') && url.searchParams.get('grant_type') === 'pkce') {
+      exchangeSucceeded = true;
+      return new Response(JSON.stringify(serverResponse), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    if (url.pathname.endsWith('/token') && url.searchParams.get('grant_type') === 'password') {
+      submittedCredentials = JSON.parse(String(init?.body));
+      return new Response(JSON.stringify(serverResponse), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    return fakeUserFetch(input, init);
   };
   const client = createCupCalSupabaseClient(
     `https://${projectRef}.supabase.co`,
     'test-publishable-key',
     failingStorage,
-    async (input) => {
-      if (new URL(String(input)).pathname.endsWith('/token')) {
-        exchangeSucceeded = true;
-        return new Response(JSON.stringify(serverResponse), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        });
-      }
-      return fakeUserFetch(input);
-    },
+    confirmationFetch,
   );
 
   let restartedClient;
@@ -396,11 +411,45 @@ test('meldet eine bestätigte E-Mail ohne dauerhaft speicherbare Sitzung', async
       `https://${projectRef}.supabase.co`,
       'test-publishable-key',
       storage,
-      fakeUserFetch,
+      confirmationFetch,
     );
     const restored = await restartedClient.auth.getSession();
     assert.equal(restored.error, null);
     assert.equal(restored.data.session, null, 'nach einem Neustart darf keine Sitzung wiederherstellbar sein');
+
+    const signInResult = await submitAccountAuth(restartedClient.auth, {
+      mode: 'sign-in',
+      email: testEmail,
+      password: 'confirmed-account-password',
+      requestPasswordReset: async () => {},
+    });
+    assert.deepEqual(signInResult, {
+      ok: true,
+      message: 'Du bist angemeldet.',
+    });
+    assert.deepEqual(submittedCredentials, {
+      email: testEmail,
+      gotrue_meta_security: {},
+      password: 'confirmed-account-password',
+    });
+    const signedIn = await restartedClient.auth.getSession();
+    assert.equal(signedIn.error, null);
+    assert.equal(signedIn.data.session?.user.id, testUserId);
+
+    const afterSignInRestart = createCupCalSupabaseClient(
+      `https://${projectRef}.supabase.co`,
+      'test-publishable-key',
+      storage,
+      fakeUserFetch,
+    );
+    try {
+      const persistedSignIn = await afterSignInRestart.auth.getSession();
+      assert.equal(persistedSignIn.error, null);
+      assert.equal(persistedSignIn.data.session?.user.id, testUserId);
+      assert.equal(persistedSignIn.data.session?.user.email, testEmail);
+    } finally {
+      await afterSignInRestart.auth.dispose();
+    }
   } finally {
     await client.auth.dispose();
     await restartedClient?.auth.dispose();

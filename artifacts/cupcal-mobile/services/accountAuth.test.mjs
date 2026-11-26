@@ -66,6 +66,36 @@ test('tauscht den Bestätigungscode nur mit einer gültigen Sitzung ein', async 
   });
 });
 
+test('ermöglicht nach fehlgeschlagener Sitzungsablage eine normale Anmeldung', async () => {
+  const persistenceError = Object.assign(
+    new Error('Die Sitzung konnte nicht gespeichert werden.'),
+    { code: 'cupcal_session_persistence_failed' },
+  );
+  let signInCalls = 0;
+  const auth = createAuth({
+    exchangeCodeForSession: async () => { throw persistenceError; },
+    signInWithPassword: async () => {
+      signInCalls += 1;
+      return { error: null };
+    },
+  });
+
+  await assert.rejects(
+    confirmEmailCode(auth, 'already-consumed-confirmation-code'),
+    (error) => error === persistenceError,
+  );
+  assert.deepEqual(await submitAccountAuth(auth, {
+    mode: 'sign-in',
+    email: 'test@example.invalid',
+    password: 'test-password',
+    requestPasswordReset: async () => {},
+  }), {
+    ok: true,
+    message: 'Du bist angemeldet.',
+  });
+  assert.equal(signInCalls, 1);
+});
+
 test('übersetzt Fehler aus Bestätigungslinks in klare deutsche Hinweise', async (t) => {
   await t.test('abgelaufener oder wiederverwendeter Link', () => {
     assert.equal(
