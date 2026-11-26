@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { createStaticServer } from '../server/serve.js';
 import { confirmedStoreLinks, seoTopicPages, SITE_ORIGIN } from '../src/content/seo-pages.ts';
 import { deletionConfirmationPage, legalPages } from '../src/content/legal-pages.ts';
+import { assertStoreLinksConfirmed } from './store-link-validation.mjs';
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const publicRoot = path.join(projectRoot, 'dist/public');
@@ -20,7 +21,6 @@ const confirmedStoreDownloadUrls = new Set(
     .filter((url) => url !== null)
     .map((url) => new URL(url).href),
 );
-const storeDomains = ['play.google.com', 'apps.apple.com', 'itunes.apple.com'];
 const topicPagesByUrl = new Map(
   seoTopicPages.map((page) => [`${SITE_ORIGIN}${page.path}`, page]),
 );
@@ -288,7 +288,7 @@ async function runSmokeTest() {
     const observedTitles = new Set();
     const observedDescriptions = new Set();
     const observedCanonicals = new Set();
-    const unconfirmedStoreTargets = [];
+    const storeLinkTargets = [];
     let organizationLogoChecked = false;
     let homeReleaseStatusChecked = false;
     let calendarAppReleaseStatusChecked = false;
@@ -312,17 +312,7 @@ async function runSmokeTest() {
       }
 
       for (const href of extractAnchorHrefs(html)) {
-        let targetUrl;
-        try {
-          targetUrl = new URL(href, baseUrl);
-        } catch {
-          continue;
-        }
-        const isStoreTarget = storeDomains.some((domain) =>
-          targetUrl.hostname === domain || targetUrl.hostname.endsWith(`.${domain}`),
-        );
-        if (!isStoreTarget || confirmedStoreDownloadUrls.has(targetUrl.href)) continue;
-        unconfirmedStoreTargets.push(`${sitemapPageUrl.pathname} → ${targetUrl.href}`);
+        storeLinkTargets.push({ pagePath: sitemapPageUrl.pathname, href });
       }
 
       const title = extractTitle(html);
@@ -478,11 +468,10 @@ async function runSmokeTest() {
         `Die Startseite verlinkt eine bestätigte Store-Seite nicht: ${storeUrl}`,
       );
     }
-    assert.deepEqual(
-      unconfirmedStoreTargets,
-      [],
-      `Nicht bestätigte Store-Adressen dürfen nicht als Download-Ziel verlinkt sein:\n${unconfirmedStoreTargets.join('\n')}`,
-    );
+    assertStoreLinksConfirmed(storeLinkTargets, {
+      baseUrl,
+      confirmedStoreLinks: Object.values(confirmedStoreLinks),
+    });
 
     const notFoundResponse = await fetch(`${baseUrl}/__cupcal-seo-smoke-test-not-found__/`);
     assert.equal(notFoundResponse.status, 404, 'Eine unbekannte HTML-Route muss mit echtem HTTP 404 antworten.');
