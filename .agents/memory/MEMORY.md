@@ -37,3 +37,4 @@
 - [Speicherfehler nach Codeaustausch](supabase-session-save-failures.md) — Ein PKCE-Codeaustausch kann serverseitig erfolgreich sein, bevor ein fehlgeschlagenes lokales Schreiben die Sitzung verwirft.
 - [Android-Paketkennung für Play](android-package-id.md) — Wird die App-Kennung nach einem Play-Test geändert, entsteht ein separater Play-Eintrag statt eines Updates.
 - [Supabase-Aufbewahrung nach Upgrade](supabase-retention-activation.md) — Sieben Tage für Backups und Logs sind vereinbart, gelten aber erst nach dem Supabase-Upgrade.
+- [Expo-Release-Manifest prüfen](expo-release-manifest-audits.md) — Native Abhängigkeiten können Rechte ergänzen; für Store-Angaben das fertige AAB statt nur die Expo-Konfiguration prüfen.

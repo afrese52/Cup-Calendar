@@ -3,6 +3,18 @@
 Stand: 26. November 2026. Diese Notiz ist eine Arbeitsgrundlage, keine
 abgeschlossene Play-Console-Erklärung oder Rechtsberatung.
 
+## Ergebnis des bereitgestellten Release-AAB
+
+Die statische Prüfung der bereitgestellten Datei ergab eine leere
+Supabase-Konfiguration und zusätzliche Kamera-, Mikrofon- und Overlay-Rechte
+im zusammengeführten Android-Manifest. Paketkennung ist `de.cup.calender`,
+Versionscode `1`. Die Datei ist daher kein Nachweis eines korrigierten
+Releases. Einzelheiten und Grenzen der Prüfung stehen in
+[RELEASE-AAB-AUDIT-DE.md](./RELEASE-AAB-AUDIT-DE.md).
+
+Die folgenden Quellcodeangaben sind ausdrücklich nicht mit nachgewiesenem
+Verhalten dieses älteren AAB gleichzusetzen.
+
 ## Bearbeitungsstand in Google Play
 
 Im geprüften Store-Eintrag `de.cup.calender` wurden folgende Angaben
@@ -37,7 +49,10 @@ Nicht mit einem anderen Store-Eintrag oder einer neuen Paketkennung verwechseln.
   Netzwerkstatus-Berechtigungen sowie eine optionale Standortberechtigung an.
   Erteilte Standortkoordinaten werden auf dem Gerät nur zur Auswahl der
   nächstgelegenen Turnierregion verwendet und weder gespeichert noch gesendet.
-  Kamera und Mikrofon werden nicht angefordert.
+  Die frühere Quellcode-Vorprüfung erfasste keine Kamera-/Mikrofonnutzung.
+  Im tatsächlich bereitgestellten AAB sind jedoch Kamera- und
+  Mikrofonberechtigungen deklariert; eine tatsächliche Nutzung oder
+  Übertragung ist dadurch allein nicht belegt.
 - **Werbung und Analyse:** In den geprüften mobilen App-Dateien und direkten
   App-Abhängigkeiten wurde kein Werbe- oder Analytics-SDK-Aufruf gefunden.
   Für die Website sind Google Fonts eingebunden; Replit Analytics wurde

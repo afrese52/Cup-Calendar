@@ -112,3 +112,17 @@ mtime_ms = 1795563933859
 storage_uri = "gcs://replit-rams-assets-archer/rams/assets/repl:fba06988-5dc0-49ce-a88d-6c2b15091cfa/cb7963ee-bb31-4b06-af83-6bde9e66b5ad/3cb3b65c-8f07-434e-8bcb-85a90f9eb4e3"
 storage_version_token = "1795563948642249"
 content_type = "application/octet-stream"
+
+[[outputs]]
+id = "esFtMvGICq82l98IR56JA"
+uri = "file://artifacts/cupcal-mobile/store-assets/google-play/RELEASE-AAB-AUDIT-DE.md"
+type = "text"
+title = "Prüfbericht zum hochgeladenen CupCal-AAB"
+description = "Statische Prüfung: leere Supabase-Konfiguration, tatsächliche Berechtigungen, Paketkennung und offene Punkte vor der Store-Erklärung."
+logical_id = "746797f6-4a4b-49ef-8287-9c0e31cdf9f4"
+content_hash = "sha256:65ad480d6b8d38c9f4cda845687bc7709082e7cbaa4815cb6de7da8cd6ed43b3"
+size = 5911
+mtime_ms = 1795688809096
+storage_uri = "gcs://replit-rams-assets-archer/rams/assets/repl:fba06988-5dc0-49ce-a88d-6c2b15091cfa/746797f6-4a4b-49ef-8287-9c0e31cdf9f4/f6726a65-878a-4a9f-9720-51fa780b6bc6"
+storage_version_token = "1795688836697036"
+content_type = "text/markdown"
