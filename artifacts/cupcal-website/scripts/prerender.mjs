@@ -25,7 +25,7 @@ function replaceRequired(html, pattern, replacement, description) {
   return html.replace(pattern, replacement);
 }
 
-function withHomeMetadata(html, description) {
+function withHomeMetadata(html, description, applicationSchema) {
   let updatedHtml = html;
   for (const [pattern, replacement, label] of [
     [
@@ -58,11 +58,19 @@ function withHomeMetadata(html, description) {
     throw new Error('Schema.org-Daten enthalten keinen WebSite-Eintrag.');
   }
   websiteNode.description = description;
+  const existingApplicationIndex = structuredData['@graph'].findIndex(
+    (node) => node['@type'] === 'SoftwareApplication' && node['@id'] === applicationSchema['@id'],
+  );
+  if (existingApplicationIndex >= 0) {
+    structuredData['@graph'][existingApplicationIndex] = applicationSchema;
+  } else {
+    structuredData['@graph'].push(applicationSchema);
+  }
   const structuredDataTag = `<script type="application/ld+json">${JSON.stringify(structuredData).replaceAll('<', '\\u003c')}</script>`;
   return updatedHtml.replace(structuredDataPattern, structuredDataTag);
 }
 
-function withTopicMetadata(html, page, siteOrigin) {
+function withTopicMetadata(html, page, siteOrigin, applicationSchema) {
   const canonical = `${siteOrigin}${page.path}`;
   const metadata = [
     [/<title>[\s\S]*?<\/title>/i, `<title>${escapeHtml(page.title)}</title>`, 'title'],
@@ -129,6 +137,7 @@ function withTopicMetadata(html, page, siteOrigin) {
           { '@type': 'ListItem', position: 2, name: page.eyebrow, item: canonical },
         ],
       },
+      ...(page.slug === 'turnierkalender-app' ? [applicationSchema] : []),
     ],
   };
   const structuredDataTag = `<script type="application/ld+json">${JSON.stringify(pageStructuredData).replaceAll('<', '\\u003c')}</script>`;
@@ -148,7 +157,13 @@ try {
   const [
     { default: App },
     { ErrorBoundary },
-    { homePageDescription, seoTopicPages, SITE_ORIGIN },
+    {
+      confirmedStoreLinks,
+      createSoftwareApplicationSchema,
+      homePageDescription,
+      seoTopicPages,
+      SITE_ORIGIN,
+    },
     { deletionConfirmationPage, legalPages },
     { withLegalMetadata },
   ] = await Promise.all([
@@ -224,14 +239,26 @@ try {
     }
 
     let pageHtml = page
-      ? withTopicMetadata(shellHtml, page, SITE_ORIGIN)
+      ? withTopicMetadata(
+          shellHtml,
+          page,
+          SITE_ORIGIN,
+          createSoftwareApplicationSchema(confirmedStoreLinks, page.description, SITE_ORIGIN),
+        )
       : shellHtml;
     pageHtml = pageHtml.replace(rootMarker, `<div id="root">${renderedApp}</div>`);
     return { html: pageHtml, renderedLength: renderedApp.length };
   }
 
   const home = renderPage('/', 'Dein ', null);
-  await fs.writeFile(builtHtmlPath, withHomeMetadata(home.html, homePageDescription));
+  await fs.writeFile(
+    builtHtmlPath,
+    withHomeMetadata(
+      home.html,
+      homePageDescription,
+      createSoftwareApplicationSchema(confirmedStoreLinks, homePageDescription, SITE_ORIGIN),
+    ),
+  );
   console.log(`Startseite vorab gerendert: ${home.renderedLength} Zeichen.`);
 
   for (const page of seoTopicPages) {

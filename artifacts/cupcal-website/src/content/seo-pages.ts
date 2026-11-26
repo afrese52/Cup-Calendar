@@ -1,14 +1,86 @@
 export const SITE_ORIGIN = 'https://cupcal.af-software.app';
 
 // Erst nach Betreiberfreigabe mit offiziellen CupCal-Store-Seiten befüllen.
-export const confirmedStoreLinks: Record<'android' | 'ios', string | null> = {
+export interface ConfirmedStoreLinks {
+  android: string | null;
+  ios: string | null;
+}
+
+export const confirmedStoreLinks: ConfirmedStoreLinks = {
   android: null,
   ios: null,
 };
 
-export const homePageDescription = confirmedStoreLinks.android
-  ? 'Finde Turniere, Ligen und Qualifikationen mit CupCal. Android-App jetzt bei Google Play herunterladen. iOS-Termin offen; keine bestätigte iOS-Store-Seite.'
-  : 'Finde Turniere, Ligen und Qualifikationen mit CupCal. Android-Start am 30. November 2026 geplant; iOS-Termin offen. Noch keine bestätigten offiziellen CupCal-Store-Links.';
+function getStoreStatus(links: ConfirmedStoreLinks) {
+  return {
+    android: links.android
+      ? 'Android bei Google Play verfügbar'
+      : 'Android noch nicht verfügbar',
+    ios: links.ios
+      ? 'iOS im App Store verfügbar'
+      : 'iOS noch nicht verfügbar',
+    count: Number(Boolean(links.android)) + Number(Boolean(links.ios)),
+  };
+}
+
+function getDownloadEnding(availablePlatforms: number) {
+  if (availablePlatforms === 2) {
+    return 'Beide bestätigten Links führen direkt zum Download.';
+  }
+  if (availablePlatforms === 1) {
+    return 'Der bestätigte Download-Link führt zum offiziellen Store.';
+  }
+  return 'Offizielle Download-Links folgen nach Betreiberfreigabe.';
+}
+
+export function createStoreSearchMetadata(links: ConfirmedStoreLinks) {
+  const status = getStoreStatus(links);
+  const statusText = `${status.android}; ${status.ios}.`;
+  const homeEnding = status.count === 2
+    ? 'Beide Links führen direkt zum Download.'
+    : status.count === 1
+      ? 'Der bestätigte Link führt zum Store.'
+      : 'Offizielle Links folgen nach Freigabe.';
+
+  return {
+    homePageDescription:
+      `Turniere, Ligen und Qualifikationen im CupCal-Kalender. ${statusText} ${homeEnding}`,
+    calendarAppDescription:
+      `Cups, Ligen und Trainingsrunden in CupCal. ${statusText} ${getDownloadEnding(status.count)}`,
+  };
+}
+
+export function createSoftwareApplicationSchema(
+  links: ConfirmedStoreLinks,
+  description: string,
+  siteOrigin = SITE_ORIGIN,
+) {
+  const platformOffers = [
+    { platform: 'android', name: 'CupCal für Android' },
+    { platform: 'ios', name: 'CupCal für iOS' },
+  ] as const;
+
+  return {
+    '@type': 'SoftwareApplication',
+    '@id': `${siteOrigin}/#cupcal-app`,
+    name: 'CupCal',
+    description,
+    applicationCategory: 'UtilitiesApplication',
+    operatingSystem: ['Android', 'iOS'],
+    offers: platformOffers.map(({ platform, name }) => {
+      const url = links[platform];
+      return {
+        '@type': 'Offer',
+        name,
+        availability: url ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
+        ...(url ? { url } : {}),
+      };
+    }),
+  };
+}
+
+const storeSearchMetadata = createStoreSearchMetadata(confirmedStoreLinks);
+export const homePageDescription = storeSearchMetadata.homePageDescription;
 
 export interface SeoPageSection {
   heading: string;
@@ -34,9 +106,7 @@ export const seoTopicPages: SeoTopicPage[] = [
     slug: 'turnierkalender-app',
     path: '/turnierkalender-app/',
     title: 'Turnierkalender-App: Termine im Blick behalten | CupCal',
-    description: confirmedStoreLinks.android
-      ? 'Cups, Ligen und Trainingsrunden in CupCal. Android-App jetzt offiziell bei Google Play herunterladen. iOS-Termin offen; keine bestätigte iOS-Store-Seite.'
-      : 'Cups, Ligen und Trainingsrunden in CupCal. Noch nicht in den Stores; Android ab 30. November 2026 geplant, iOS-Termin offen. Keine bestätigten CupCal-Store-Links.',
+    description: storeSearchMetadata.calendarAppDescription,
     eyebrow: 'Kalender-App',
     h1: 'Turnierkalender-App für Cups, Ligen und Events',
     intro:
@@ -62,8 +132,11 @@ export const seoTopicPages: SeoTopicPage[] = [
         heading: 'Verfügbarkeit der App',
         paragraphs: [
           confirmedStoreLinks.android
-            ? 'CupCal ist ein unabhängiges Community-Projekt. Die Android-App ist jetzt über den offiziellen Google-Play-Eintrag verfügbar. Für iOS steht der Veröffentlichungstermin noch aus.'
-            : 'CupCal ist ein unabhängiges Community-Projekt und derzeit noch nicht in den Stores verfügbar. Die Android-Veröffentlichung ist für den 30. November 2026 geplant; für iOS steht der Termin noch aus. Offizielle Download-Links werden erst nach Betreiberfreigabe ergänzt.',
+            ? 'Die Android-App ist jetzt im offiziellen Google Play Store verfügbar.'
+            : 'Die Android-App ist noch nicht im Google Play Store verfügbar; der offizielle Download-Link wird nach Freigabe ergänzt.',
+          confirmedStoreLinks.ios
+            ? 'Die iOS-App ist jetzt im offiziellen App Store verfügbar.'
+            : 'Die iOS-App ist noch nicht im App Store verfügbar; ein Veröffentlichungstermin steht noch nicht fest.',
         ],
       },
     ],

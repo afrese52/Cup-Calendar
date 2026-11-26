@@ -119,75 +119,53 @@ function extractAnchorHrefs(html) {
 function assertPublishedReleaseStatus(
   html,
   pageLabel,
-  { checkSearchDescription = false, androidAvailable = false } = {},
+  {
+    checkSearchDescription = false,
+    androidAvailable = false,
+    iosAvailable = false,
+  } = {},
 ) {
   const text = extractRenderedText(html);
   if (androidAvailable) {
     assert.match(
       text,
-      /Android[\s\S]{0,100}(?:jetzt|offiziell)[\s\S]{0,60}(?:verfügbar|herunterladen)/i,
+      /(?:Android-App ist jetzt im offiziellen Google Play Store|CupCal ist jetzt im Google Play Store) verfügbar/i,
       `${pageLabel} kennzeichnet den bestätigten Android-Download nicht als verfügbar.`,
     );
     assert.doesNotMatch(
       text,
-      /30\. November 2026|Android[\s\S]{0,120}geplant/i,
+      /Android-App ist noch nicht verfügbar/i,
       `${pageLabel} zeigt nach bestätigter Veröffentlichung weiterhin einen zukünftigen Android-Termin.`,
     );
   } else {
-    assert.ok(
-      text.includes('30. November 2026'),
-      `${pageLabel} nennt nicht den geplanten Android-Termin 30. November 2026.`,
-    );
     assert.match(
       text,
-      /Android[\s\S]{0,120}geplant/i,
-      `${pageLabel} kennzeichnet den Android-Termin nicht als geplant.`,
-    );
-    assert.match(
-      text,
-      /noch nicht (?:in den Stores|im Google Play Store)/i,
+      /(?:Android-App ist noch nicht im Google Play Store verfügbar|CupCal ist noch nicht im Google Play Store verfügbar)/i,
       `${pageLabel} behauptet nicht klar, dass CupCal noch nicht heruntergeladen werden kann.`,
     );
   }
   assert.match(
     text,
-    /iOS[\s\S]{0,120}(?:kein Termin fest|Termin noch aus)/i,
-    `${pageLabel} nennt den iOS-Veröffentlichungstermin nicht als offen.`,
+    iosAvailable
+      ? /(?:iOS-App ist jetzt im offiziellen App Store verfügbar|CupCal ist jetzt im Apple App Store verfügbar)/i
+      : /(?:iOS-App ist noch nicht im App Store verfügbar|CupCal ist noch nicht im Apple App Store verfügbar|Im Apple App Store ist CupCal noch nicht verfügbar)/i,
+    `${pageLabel} kennzeichnet den iOS-Verfügbarkeitsstatus nicht korrekt.`,
   );
   if (checkSearchDescription) {
     const description = extractMetaDescription(html);
-    if (androidAvailable) {
-      assert.match(
-        description,
-        /Android-App jetzt (?:offiziell )?bei Google Play herunterladen/i,
-        `${pageLabel}: Die Suchbeschreibung nennt den bestätigten Google-Play-Download nicht.`,
-      );
-      assert.doesNotMatch(
-        description,
-        /keine bestätigten .*Store-Links/i,
-        `${pageLabel}: Die Suchbeschreibung behauptet trotz bestätigtem Android-Link, dass Store-Links fehlen.`,
-      );
-    } else {
-      assert.match(
-        description,
-        /noch nicht in den Stores/i,
-        `${pageLabel}: Die Suchbeschreibung verschweigt, dass CupCal noch nicht in den Stores verfügbar ist.`,
-      );
-      assert.match(
-        description,
-        /Android(?:-Start am| ab) 30\. November 2026 geplant/i,
-        `${pageLabel}: Die Suchbeschreibung nennt nicht den geplanten Android-Termin.`,
-      );
-      assert.match(
-        description,
-        /keine bestätigten CupCal-Store-Links/i,
-        `${pageLabel}: Die Suchbeschreibung behauptet nicht, dass offizielle Store-Downloads fehlen.`,
-      );
-    }
     assert.match(
       description,
-      /iOS-Termin offen/i,
-      `${pageLabel}: Die Suchbeschreibung kennzeichnet den iOS-Termin nicht als offen.`,
+      androidAvailable
+        ? /Android bei Google Play verfügbar/i
+        : /Android noch nicht verfügbar/i,
+      `${pageLabel}: Die Suchbeschreibung kennzeichnet Android nicht korrekt.`,
+    );
+    assert.match(
+      description,
+      iosAvailable
+        ? /iOS im App Store verfügbar/i
+        : /iOS noch nicht verfügbar/i,
+      `${pageLabel}: Die Suchbeschreibung kennzeichnet iOS nicht korrekt.`,
     );
   }
 }
@@ -347,8 +325,9 @@ async function runSmokeTest() {
           html,
           isHomePage ? 'Die Startseite' : 'Die Kalender-App-Themenseite',
           {
-            checkSearchDescription: isCalendarAppPage,
+            checkSearchDescription: true,
             androidAvailable: confirmedStoreLinks.android !== null,
+            iosAvailable: confirmedStoreLinks.ios !== null,
           },
         );
         if (isHomePage) homeReleaseStatusChecked = true;
@@ -398,6 +377,33 @@ async function runSmokeTest() {
 
       const topicPage = topicPagesByUrl.get(sitemapUrl);
       const legalPage = legalPagesByUrl.get(sitemapUrl);
+      if (isHomePage || isCalendarAppPage) {
+        const [application] = schemaNodesOfType(schemaNodes, 'SoftwareApplication');
+        assert.ok(application, `${sitemapPageUrl.pathname} enthält keine SoftwareApplication-Angabe.`);
+        assert.equal(
+          application.description,
+          isHomePage ? homePageDescription : topicPage?.description,
+          `${sitemapPageUrl.pathname} hat eine vom Store-Status abweichende App-Beschreibung.`,
+        );
+        for (const [platform, name] of [
+          ['android', 'CupCal für Android'],
+          ['ios', 'CupCal für iOS'],
+        ]) {
+          const offer = application.offers?.find((candidate) => candidate.name === name);
+          const confirmedUrl = confirmedStoreLinks[platform];
+          assert.ok(offer, `${sitemapPageUrl.pathname} enthält kein strukturiertes ${platform}-Angebot.`);
+          assert.equal(
+            offer.availability,
+            confirmedUrl ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
+            `${sitemapPageUrl.pathname} kennzeichnet ${platform} nicht gemäß der Store-Freigabe.`,
+          );
+          assert.equal(
+            offer.url ?? null,
+            confirmedUrl ? new URL(confirmedUrl).href : null,
+            `${sitemapPageUrl.pathname} verlinkt ${platform} ohne bestätigte Store-URL oder lässt den bestätigten Link aus.`,
+          );
+        }
+      }
       if (topicPage) {
         assert.equal(title, topicPage.title, `Seitentitel weicht von der SEO-Definition für ${sitemapPageUrl.pathname} ab.`);
         assert.equal(description, topicPage.description, `Meta-Beschreibung weicht für ${sitemapPageUrl.pathname} ab.`);
