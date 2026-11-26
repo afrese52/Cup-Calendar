@@ -112,3 +112,18 @@ gesamten Inhalt bis zum Fußbereich durchgehen: Es darf keine horizontale
 Bildlaufleiste geben; Überschriften, Themenlinks und Schaltflächen müssen
 vollständig lesbar und erreichbar bleiben. Bei der Tastaturprüfung mit `Tab`
 müssen die Links sichtbar fokussiert werden können.
+
+## Schriftprüfung in Firefox und WebKit
+
+Der Cross-Browser-Test öffnet die Startseite und alle Themenseiten in Firefox
+und der WebKit-Engine (Safari-Engine) bei schmalen Hoch- und Querformaten. Er
+prüft, ob „DM Sans“ und „Barlow Condensed“ geladen werden, und meldet
+abgeschnittene Überschriften, Navigationstexte, Schaltflächen oder
+Seitenüberläufe mit Seite, Ansicht und betroffenem Text.
+
+Nach dem Produktionsbuild ausführen:
+
+```sh
+pnpm --filter @workspace/cupcal-website exec playwright install webkit firefox
+pnpm --filter @workspace/cupcal-website run test:cross-browser-layout
+```

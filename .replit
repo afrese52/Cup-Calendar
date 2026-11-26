@@ -23,3 +23,7 @@ timeoutMs = 20000
 
 [userenv.shared]
 CUPCAL_IMPORT_ADMIN_EMAILS = "afrese@gmail.com,afrese52@gmail.com"
+
+[nix]
+channel = "stable-25_05"
+packages = ["gtk4", "glib", "pango", "gdk-pixbuf", "cairo", "gst_all_1.gstreamer", "gst_all_1.gst-plugins-base", "icu", "libxml2", "sqlite", "libxslt", "gcc", "libevent", "libopus", "libwebp", "libavif", "libepoxy", "libjpeg", "xorg.libX11", "wayland", "libmanette", "enchant", "libgbm", "libdrm", "libsecret", "hyphen", "atk", "libxkbcommon", "xorg.libXcursor", "xorg.libXdamage", "xorg.libXext", "xorg.libXfixes", "xorg.libXi", "xorg.libXrandr", "xorg.libxcb", "mesa", "x264", "gtk3", "alsa-lib", "icu74", "icu73", "libatomic_ops", "libjxl", "libsoup_3", "lcms2", "gst_all_1.gst-plugins-bad", "harfbuzz", "libjpeg8", "gcc-unwrapped", "libgcc"]
