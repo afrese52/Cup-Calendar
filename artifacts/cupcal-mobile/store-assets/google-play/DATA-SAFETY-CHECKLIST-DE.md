@@ -31,8 +31,12 @@ Werte gespeichert und nach erneutem Laden bestätigt:
 
 Die Datensicherheit ist ein **unvollständiger gespeicherter Entwurf**.
 Es wurde nichts eingereicht oder veröffentlicht. Die Pflichtfrage zur
-Verschlüsselung aller übertragenen Nutzerdaten ist bewusst unbeantwortet:
-Eine umfassende Prüfung des korrigierten Release-AAB steht noch aus.
+Verschlüsselung aller übertragenen Nutzerdaten ist im Formular weiterhin
+unbeantwortet. Der inzwischen durchgeführte statische Abgleich des neuen
+AAB und TLS-Handshakes bestätigen HTTPS/WSS für die nachvollzogenen
+App-Datenwege; ein vollständiger Laufzeit-/SDK-Nachweis liegt nicht vor.
+Dateizuordnung, Ergebnis und Grenzen stehen in
+[RELEASE-V2-TRANSPORT-AUDIT-DE.md](./RELEASE-V2-TRANSPORT-AUDIT-DE.md).
 Dadurch ist „Weiter“ deaktiviert; Datentypen, Datennutzung und Vorschau
 (Schritte 3–5) wurden noch nicht ausgefüllt. Die optionale Frage nach
 Datenlöschung ohne Kontolöschung blieb ebenfalls unbeantwortet.
@@ -118,8 +122,10 @@ sind zu prüfen.
 | Drittanbieter | In den direkten mobilen Abhängigkeiten ist kein Werbe-/Analytics-SDK erkennbar. | Eingebundene native und transitive SDKs des AAB sowie mögliche Diagnoseverarbeitung prüfen. |
 
 Die Frage „Werden alle Nutzerdaten bei der Übertragung verschlüsselt?“
-bleibt bis zum Release-Abgleich unbeantwortet. HTTPS im API-Quellcode
-allein belegt nicht sämtliche Datenübertragungen des Store-Builds.
+bleibt im gespeicherten Formular unbeantwortet. Die neue AAB-Prüfung
+stützt „Ja“ für die nachvollzogenen App-Datenwege, ist aber kein
+uneingeschränkter Nachweis sämtlicher SDK-Übertragungen oder aller aktiven
+Store-Artefakte. HTTPS im API-Quellcode allein wäre kein solcher Nachweis.
 
 ## Vor Freigabe noch zu klären
 
