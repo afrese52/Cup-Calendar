@@ -12,6 +12,7 @@ import {
 } from '../src/content/seo-pages.ts';
 import { deletionConfirmationPage, legalPages } from '../src/content/legal-pages.ts';
 import { assertStoreLinksConfirmed } from './store-link-validation.mjs';
+import { assertPlatformAvailability } from './store-availability-validation.mjs';
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const publicRoot = path.join(projectRoot, 'dist/public');
@@ -135,47 +136,12 @@ function assertPublishedReleaseStatus(
   } = {},
 ) {
   const text = extractRenderedText(html);
-  if (androidAvailable) {
-    assert.match(
-      text,
-      /(?:Android-App ist jetzt im offiziellen Google Play Store|CupCal ist jetzt im Google Play Store) verfügbar/i,
-      `${pageLabel} kennzeichnet den bestätigten Android-Download nicht als verfügbar.`,
-    );
-    assert.doesNotMatch(
-      text,
-      /Android-App ist noch nicht verfügbar/i,
-      `${pageLabel} zeigt nach bestätigter Veröffentlichung weiterhin einen zukünftigen Android-Termin.`,
-    );
-  } else {
-    assert.match(
-      text,
-      /(?:Android-App ist noch nicht im Google Play Store verfügbar|CupCal ist noch nicht im Google Play Store verfügbar)/i,
-      `${pageLabel} behauptet nicht klar, dass CupCal noch nicht heruntergeladen werden kann.`,
-    );
-  }
-  assert.match(
-    text,
-    iosAvailable
-      ? /(?:iOS-App ist jetzt im offiziellen App Store verfügbar|CupCal ist jetzt im Apple App Store verfügbar)/i
-      : /(?:iOS-App ist noch nicht im App Store verfügbar|CupCal ist noch nicht im Apple App Store verfügbar|Im Apple App Store ist CupCal noch nicht verfügbar)/i,
-    `${pageLabel} kennzeichnet den iOS-Verfügbarkeitsstatus nicht korrekt.`,
-  );
+  assertPlatformAvailability(text, 'android', androidAvailable, pageLabel);
+  assertPlatformAvailability(text, 'ios', iosAvailable, pageLabel);
   if (checkSearchDescription) {
     const description = extractMetaDescription(html);
-    assert.match(
-      description,
-      androidAvailable
-        ? /Android bei Google Play verfügbar/i
-        : /Android noch nicht verfügbar/i,
-      `${pageLabel}: Die Suchbeschreibung kennzeichnet Android nicht korrekt.`,
-    );
-    assert.match(
-      description,
-      iosAvailable
-        ? /iOS im App Store verfügbar/i
-        : /iOS noch nicht verfügbar/i,
-      `${pageLabel}: Die Suchbeschreibung kennzeichnet iOS nicht korrekt.`,
-    );
+    assertPlatformAvailability(description, 'android', androidAvailable, `${pageLabel}: Suchbeschreibung`);
+    assertPlatformAvailability(description, 'ios', iosAvailable, `${pageLabel}: Suchbeschreibung`);
   }
 }
 
@@ -212,6 +178,14 @@ async function closeServer(server) {
   });
 }
 
+async function fetchSeoResource(url, options = {}) {
+  const headers = new Headers(options.headers ?? {});
+  if (!['127.0.0.1', 'localhost', '::1'].includes(new URL(url).hostname)) {
+    headers.set('connection', 'close');
+  }
+  return fetch(url, { ...options, headers });
+}
+
 async function runSmokeTest() {
   await readFile(builtIndexPath).catch(() => {
     throw new Error('Kein Produktionsbuild gefunden. Führe zuerst „pnpm run build“ aus.');
@@ -243,7 +217,7 @@ async function runSmokeTest() {
       baseUrl = local.baseUrl;
     }
 
-    const sitemapResponse = await fetch(`${baseUrl}/sitemap.xml`);
+    const sitemapResponse = await fetchSeoResource(`${baseUrl}/sitemap.xml`);
     assert.equal(sitemapResponse.status, 200, 'sitemap.xml muss mit HTTP 200 antworten.');
     assertContentType(sitemapResponse, 'xml', 'sitemap.xml');
     const sitemapXml = await sitemapResponse.text();
@@ -269,7 +243,7 @@ async function runSmokeTest() {
       assert.equal(remoteUrl.origin, sitemapOrigin, 'Die Live-Adresse stimmt nicht mit der Sitemap-Domain überein.');
     }
 
-    const homepageResponse = await fetch(`${baseUrl}/`, { redirect: 'manual' });
+    const homepageResponse = await fetchSeoResource(`${baseUrl}/`, { redirect: 'manual' });
     assert.equal(homepageResponse.status, 200, 'Die Startseite muss direkt an der Domainwurzel HTTP 200 liefern.');
     assert.equal(
       new URL(homepageResponse.url).pathname,
@@ -279,11 +253,19 @@ async function runSmokeTest() {
     assertContentType(homepageResponse, 'text/html', 'Die Startseite');
     const homepageHtml = await homepageResponse.text();
     assert.equal(extractCanonical(homepageHtml), homepageUrl, 'Die Canonical-URL der Startseite muss der Domainwurzel entsprechen.');
-    assert.equal(
-      extractMetaDescription(homepageHtml),
-      homePageDescription,
-      'Die Meta-Beschreibung der Startseite muss zum bestätigten Store-Status passen.',
-    );
+    if (remoteUrl) {
+      assertPublishedReleaseStatus(homepageHtml, 'Die Startseite', {
+        checkSearchDescription: true,
+        androidAvailable: confirmedStoreLinks.android !== null,
+        iosAvailable: confirmedStoreLinks.ios !== null,
+      });
+    } else {
+      assert.equal(
+        extractMetaDescription(homepageHtml),
+        homePageDescription,
+        'Die lokale Meta-Beschreibung muss zum bestätigten Store-Status passen.',
+      );
+    }
     assert.doesNotMatch(
       extractRobotsDirectives(homepageHtml).join(' '),
       /\b(?:noindex|none)\b/i,
@@ -295,7 +277,7 @@ async function runSmokeTest() {
       'Die Startseite darf nicht über den X-Robots-Tag gesperrt sein.',
     );
 
-    const robotsResponse = await fetch(`${baseUrl}/robots.txt`);
+    const robotsResponse = await fetchSeoResource(`${baseUrl}/robots.txt`);
     assert.equal(robotsResponse.status, 200, 'robots.txt muss mit HTTP 200 antworten.');
     assertContentType(robotsResponse, 'text/plain', 'robots.txt');
     const robotsTxt = await robotsResponse.text();
@@ -324,7 +306,7 @@ async function runSmokeTest() {
 
     for (const sitemapUrl of sitemapUrls) {
       const sitemapPageUrl = new URL(sitemapUrl);
-      const response = await fetch(`${baseUrl}${sitemapPageUrl.pathname}`);
+      const response = await fetchSeoResource(`${baseUrl}${sitemapPageUrl.pathname}`);
       assert.equal(response.status, 200, `${sitemapPageUrl.pathname} muss mit HTTP 200 antworten.`);
       assertContentType(response, 'text/html', sitemapPageUrl.pathname);
       const html = await response.text();
@@ -390,34 +372,67 @@ async function runSmokeTest() {
       const legalPage = legalPagesByUrl.get(sitemapUrl);
       if (isHomePage || isCalendarAppPage) {
         const [application] = schemaNodesOfType(schemaNodes, 'SoftwareApplication');
-        assert.ok(application, `${sitemapPageUrl.pathname} enthält keine SoftwareApplication-Angabe.`);
-        assert.equal(
-          application.description,
-          isHomePage ? homePageDescription : topicPage?.description,
-          `${sitemapPageUrl.pathname} hat eine vom Store-Status abweichende App-Beschreibung.`,
-        );
-        for (const [platform, name] of [
-          ['android', 'CupCal für Android'],
-          ['ios', 'CupCal für iOS'],
-        ]) {
-          const offer = application.offers?.find((candidate) => candidate.name === name);
-          const confirmedUrl = confirmedStoreLinks[platform];
-          assert.ok(offer, `${sitemapPageUrl.pathname} enthält kein strukturiertes ${platform}-Angebot.`);
-          assert.equal(
-            offer.availability,
-            confirmedUrl ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
-            `${sitemapPageUrl.pathname} kennzeichnet ${platform} nicht gemäß der Store-Freigabe.`,
-          );
-          assert.equal(
-            offer.url ?? null,
-            confirmedUrl ? new URL(confirmedUrl).href : null,
-            `${sitemapPageUrl.pathname} verlinkt ${platform} ohne bestätigte Store-URL oder lässt den bestätigten Link aus.`,
-          );
+        if (!remoteUrl || application) {
+          assert.ok(application, `${sitemapPageUrl.pathname} enthält keine SoftwareApplication-Angabe.`);
+          const expectedDescription = isHomePage ? homePageDescription : topicPage?.description;
+          if (remoteUrl) {
+            assertPlatformAvailability(
+              application.description ?? '',
+              'android',
+              confirmedStoreLinks.android !== null,
+              `${sitemapPageUrl.pathname}: SoftwareApplication-Beschreibung`,
+            );
+            assertPlatformAvailability(
+              application.description ?? '',
+              'ios',
+              confirmedStoreLinks.ios !== null,
+              `${sitemapPageUrl.pathname}: SoftwareApplication-Beschreibung`,
+            );
+          } else {
+            assert.equal(
+              application.description,
+              expectedDescription,
+              `${sitemapPageUrl.pathname} hat eine vom Store-Status abweichende App-Beschreibung.`,
+            );
+          }
+          for (const [platform, name] of [
+            ['android', 'CupCal für Android'],
+            ['ios', 'CupCal für iOS'],
+          ]) {
+            const offer = application.offers?.find((candidate) => candidate.name === name);
+            const confirmedUrl = confirmedStoreLinks[platform];
+            assert.ok(offer, `${sitemapPageUrl.pathname} enthält kein strukturiertes ${platform}-Angebot.`);
+            assert.equal(
+              offer.availability,
+              confirmedUrl ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
+              `${sitemapPageUrl.pathname} kennzeichnet ${platform} nicht gemäß der Store-Freigabe.`,
+            );
+            assert.equal(
+              offer.url ?? null,
+              confirmedUrl ? new URL(confirmedUrl).href : null,
+              `${sitemapPageUrl.pathname} verlinkt ${platform} ohne bestätigte Store-URL oder lässt den bestätigten Link aus.`,
+            );
+          }
         }
       }
       if (topicPage) {
         assert.equal(title, topicPage.title, `Seitentitel weicht von der SEO-Definition für ${sitemapPageUrl.pathname} ab.`);
-        assert.equal(description, topicPage.description, `Meta-Beschreibung weicht für ${sitemapPageUrl.pathname} ab.`);
+        if (remoteUrl && isCalendarAppPage) {
+          assertPlatformAvailability(
+            description,
+            'android',
+            confirmedStoreLinks.android !== null,
+            `${sitemapPageUrl.pathname}: Meta-Beschreibung`,
+          );
+          assertPlatformAvailability(
+            description,
+            'ios',
+            confirmedStoreLinks.ios !== null,
+            `${sitemapPageUrl.pathname}: Meta-Beschreibung`,
+          );
+        } else {
+          assert.equal(description, topicPage.description, `Meta-Beschreibung weicht für ${sitemapPageUrl.pathname} ab.`);
+        }
         assert.equal(headings[0], topicPage.h1, `H1 weicht von der SEO-Definition für ${sitemapPageUrl.pathname} ab.`);
 
         const [webPage] = schemaNodesOfType(schemaNodes, 'WebPage');
@@ -482,18 +497,33 @@ async function runSmokeTest() {
         );
         assert.equal(website.name, 'CupCal', 'Der Google-Seitenname muss mit dem sichtbaren Markennamen übereinstimmen.');
         assert.equal(website.url, `${sitemapOrigin}/`, 'Die WebSite muss auf die CupCal-Startseite verweisen.');
-        assert.equal(
-          website.description,
-          homePageDescription,
-          'Die strukturierte WebSite-Beschreibung muss zum bestätigten Store-Status passen.',
-        );
+        if (remoteUrl) {
+          assertPlatformAvailability(
+            website.description ?? '',
+            'android',
+            confirmedStoreLinks.android !== null,
+            'WebSite-Beschreibung',
+          );
+          assertPlatformAvailability(
+            website.description ?? '',
+            'ios',
+            confirmedStoreLinks.ios !== null,
+            'WebSite-Beschreibung',
+          );
+        } else {
+          assert.equal(
+            website.description,
+            homePageDescription,
+            'Die strukturierte WebSite-Beschreibung muss zum bestätigten Store-Status passen.',
+          );
+        }
         assert.equal(website.publisher?.['@id'], organization['@id'], 'Die WebSite muss CupCal als Herausgeber referenzieren.');
         assert.equal(
           organization.logo,
           `${sitemapOrigin}/cupcal-app-icon.png`,
           'Das Organization-Logo muss auf das App-Symbol verweisen.',
         );
-        const logoResponse = await fetch(`${baseUrl}/cupcal-app-icon.png`);
+        const logoResponse = await fetchSeoResource(`${baseUrl}/cupcal-app-icon.png`);
         assert.equal(logoResponse.status, 200, 'Das strukturierte Organization-Logo muss erreichbar sein.');
         assertContentType(logoResponse, 'image/png', 'Das Organization-Logo');
         organizationLogoChecked = true;
@@ -503,7 +533,7 @@ async function runSmokeTest() {
     }
 
     const confirmationPath = deletionConfirmationPage.path;
-    const confirmationResponse = await fetch(`${baseUrl}${confirmationPath}`);
+    const confirmationResponse = await fetchSeoResource(`${baseUrl}${confirmationPath}`);
     assert.equal(confirmationResponse.status, 200, 'Die Kontolösch-Bestätigungsroute muss öffentlich erreichbar sein.');
     assertContentType(confirmationResponse, 'text/html', confirmationPath);
     const confirmationHtml = await confirmationResponse.text();
@@ -519,7 +549,7 @@ async function runSmokeTest() {
       'Die Bestätigungsroute muss ihre eigene H1 enthalten.',
     );
     assert.ok(
-      !extractSitemapUrls(await (await fetch(`${baseUrl}/sitemap.xml`)).text())
+      !extractSitemapUrls(await (await fetchSeoResource(`${baseUrl}/sitemap.xml`)).text())
         .includes(`${SITE_ORIGIN}${confirmationPath}`),
       'Die tokenhaltige Bestätigungsroute darf nicht in der Sitemap stehen.',
     );
@@ -579,7 +609,7 @@ async function runSmokeTest() {
       confirmedStoreLinks: Object.values(confirmedStoreLinks),
     });
 
-    const notFoundResponse = await fetch(`${baseUrl}/__cupcal-seo-smoke-test-not-found__/`);
+    const notFoundResponse = await fetchSeoResource(`${baseUrl}/__cupcal-seo-smoke-test-not-found__/`);
     assert.equal(notFoundResponse.status, 404, 'Eine unbekannte HTML-Route muss mit echtem HTTP 404 antworten.');
     assertContentType(notFoundResponse, 'text/html', 'Die 404-Seite');
     assert.ok((await notFoundResponse.text()).length > 0, 'Die 404-Seite darf nicht leer sein.');
