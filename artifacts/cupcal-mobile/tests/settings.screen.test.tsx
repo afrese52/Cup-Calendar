@@ -2497,6 +2497,81 @@ test.each(['ios', 'android'] as const)(
   },
 );
 
+test('verhindert doppelte Kontolöschanfragen im Browser und erlaubt nach einem Fehler den erneuten Versuch', async () => {
+  const originalPlatformOS = Platform.OS;
+  Object.defineProperty(Platform, 'OS', { configurable: true, value: 'web' });
+  let finishFirstDeletionRequest!: (result: {
+    confirmationToken: string;
+    expiresAt: string;
+  }) => void;
+  const mockedApi = jest.requireMock('@workspace/api-client-react') as {
+    __requestAccountDeletion: jest.Mock;
+  };
+  mockedApi.__requestAccountDeletion
+    .mockImplementationOnce(
+      () => new Promise((resolve) => {
+        finishFirstDeletionRequest = resolve;
+      }),
+    )
+    .mockImplementationOnce(async () => ({
+      confirmationToken: 'retry.confirmation.token',
+      expiresAt: '2026-11-12T12:30:00.000Z',
+    }));
+  auth.signInWithOtp
+    .mockResolvedValueOnce({ error: new Error('Mailversand nicht verfügbar') })
+    .mockResolvedValueOnce({ error: null });
+
+  try {
+    auth.getSession.mockResolvedValue({ data: { session: testSession }, error: null });
+    const view = await render(<SettingsScreen />);
+    expect(await view.findByText('test@example.invalid')).toBeTruthy();
+    await fireEvent.press(view.getByTestId('delete-account-button'));
+
+    const confirmButton = view.getByTestId('delete-account-confirm-button');
+    await act(async () => {
+      confirmButton.props.onClick();
+      confirmButton.props.onClick();
+    });
+
+    expect(mockedApi.__requestAccountDeletion).toHaveBeenCalledTimes(1);
+    expect(view.getByTestId('delete-account-confirm-button').props.accessibilityState).toMatchObject({
+      disabled: true,
+      busy: true,
+    });
+
+    await act(async () => {
+      finishFirstDeletionRequest({
+        confirmationToken: 'failed.confirmation.token',
+        expiresAt: '2026-11-12T12:30:00.000Z',
+      });
+    });
+
+    expect((await view.findByTestId('auth-error-message')).props.children)
+      .toContain('Mailversand nicht verfügbar');
+    expect(view.getByTestId('delete-account-confirm-button').props.accessibilityState).toMatchObject({
+      disabled: false,
+      busy: false,
+    });
+
+    await fireEvent.press(view.getByTestId('delete-account-confirm-button'));
+
+    expect(await view.findByText(/Bestätigungslink an test@example\.invalid gesendet/)).toBeTruthy();
+    expect(view.queryByTestId('delete-account-confirmation-title')).toBeNull();
+    expect(mockedApi.__requestAccountDeletion).toHaveBeenCalledTimes(2);
+    expect(auth.signInWithOtp).toHaveBeenCalledTimes(2);
+    expect(auth.signInWithOtp).toHaveBeenLastCalledWith({
+      email: 'test@example.invalid',
+      options: {
+        emailRedirectTo:
+          'cupcal-test://auth/confirm?flow=cupcal-account-deletion&deletion_token=retry.confirmation.token',
+        shouldCreateUser: false,
+      },
+    });
+  } finally {
+    Object.defineProperty(Platform, 'OS', { configurable: true, value: originalPlatformOS });
+  }
+});
+
 test('stellt die Bestätigungsadresse nach einem App-Neustart wieder her und entfernt sie nach Anmeldung', async () => {
   const mockedSupabase = jest.requireMock('@/services/supabase') as {
     requestEmailConfirmation: jest.Mock;
