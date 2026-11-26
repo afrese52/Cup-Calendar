@@ -1,7 +1,8 @@
 import React from 'react';
 import { afterEach, beforeEach, expect, jest, test } from '@jest/globals';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
-import { AccessibilityInfo, Alert, Dimensions, Platform, StyleSheet } from 'react-native';
+import { AccessibilityInfo, Alert, AppState, Dimensions, Platform, StyleSheet } from 'react-native';
+import type { AppStateStatus } from 'react-native';
 import { matchesEventFilter, sampleEvents, toLocalDateKey, type TournamentEvent } from '../data/events';
 import { EventCard } from '../components/EventCard';
 import CalendarScreen from '../app/(tabs)/index';
@@ -491,6 +492,81 @@ test('setzt die Gerätestandort-Region automatisch und lässt globale Turniere s
     region: 'NAE',
     source: 'manual',
   });
+});
+
+test('aktualisiert eine automatische Region nach der Rückkehr in die App', async () => {
+  mockRegionPreference.loadCalendarRegionPreference.mockResolvedValue({
+    region: 'EU',
+    source: 'automatic',
+  } as never);
+  const readyRegion = (region: 'EU' | 'NAE') => ({
+    status: 'ready',
+    region,
+    permission: {
+      granted: true,
+      status: 'granted',
+      canAskAgain: true,
+      expires: 'never',
+    },
+  });
+  mockDeviceRegion.resolveDeviceRegion
+    .mockResolvedValueOnce(readyRegion('EU') as never)
+    .mockResolvedValueOnce(readyRegion('NAE') as never);
+  let notifyAppStateChange: ((state: AppStateStatus) => void) | undefined;
+  const addAppStateListener = jest.spyOn(AppState, 'addEventListener').mockImplementation(
+    (eventName, listener) => {
+      if (eventName === 'change') notifyAppStateChange = listener;
+      return { remove: jest.fn() };
+    },
+  );
+
+  try {
+    const view = await render(<CalendarScreen />);
+    await waitFor(() => expect(mockDeviceRegion.resolveDeviceRegion).toHaveBeenCalledTimes(1));
+    await act(async () => {
+      notifyAppStateChange?.('background');
+      notifyAppStateChange?.('active');
+    });
+
+    await waitFor(() => expect(mockDeviceRegion.resolveDeviceRegion).toHaveBeenCalledTimes(2));
+    await fireEvent.press(view.getByTestId('calendar-filter'));
+    expect(view.getByText('Automatisch ermittelt · NAE')).toBeTruthy();
+    expect(view.getByTestId('calendar-filter-region-NAE').props.accessibilityState.selected)
+      .toBe(true);
+  } finally {
+    addAppStateListener.mockRestore();
+  }
+});
+
+test('überschreibt eine manuelle Region nach der Rückkehr in die App nicht', async () => {
+  mockRegionPreference.loadCalendarRegionPreference.mockResolvedValue({
+    region: 'EU',
+    source: 'manual',
+  } as never);
+  let notifyAppStateChange: ((state: AppStateStatus) => void) | undefined;
+  const addAppStateListener = jest.spyOn(AppState, 'addEventListener').mockImplementation(
+    (eventName, listener) => {
+      if (eventName === 'change') notifyAppStateChange = listener;
+      return { remove: jest.fn() };
+    },
+  );
+
+  try {
+    const view = await render(<CalendarScreen />);
+    await waitFor(() => expect(notifyAppStateChange).toBeDefined());
+    await act(async () => {
+      notifyAppStateChange?.('background');
+      notifyAppStateChange?.('active');
+    });
+
+    expect(mockDeviceRegion.resolveDeviceRegion).not.toHaveBeenCalled();
+    await fireEvent.press(view.getByTestId('calendar-filter'));
+    expect(view.getByText('Manuell ausgewählt · EU')).toBeTruthy();
+    expect(view.getByTestId('calendar-filter-region-EU').props.accessibilityState.selected)
+      .toBe(true);
+  } finally {
+    addAppStateListener.mockRestore();
+  }
 });
 
 test('lässt die Regionsauswahl bei fehlender Standortfreigabe manuell nutzbar', async () => {

@@ -2,7 +2,7 @@ import { Feather } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import type { LocationPermissionResponse } from 'expo-location';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { AppState, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { EventCard } from '@/components/EventCard';
 import { MonthCalendar } from '@/components/MonthCalendar';
@@ -112,6 +112,8 @@ export default function CalendarScreen() {
   const requestVersion = useRef(0);
   const manualSelectionMade = useRef(false);
   const mounted = useRef(false);
+  const regionSourceRef = useRef(regionSource);
+  regionSourceRef.current = regionSource;
 
   const detectRegion = useCallback(async (request: 'initial' | 'explicit') => {
     const version = ++requestVersion.current;
@@ -200,6 +202,21 @@ export default function CalendarScreen() {
     return () => {
       cancelled = true;
     };
+  }, [detectRegion]);
+
+  useEffect(() => {
+    let previousAppState = AppState.currentState;
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      const returnedToForeground =
+        previousAppState !== 'active' && nextAppState === 'active';
+      previousAppState = nextAppState;
+
+      if (returnedToForeground && regionSourceRef.current === 'automatic') {
+        void detectRegion('initial');
+      }
+    });
+
+    return () => subscription?.remove?.();
   }, [detectRegion]);
 
   const selectRegionManually = (region: CalendarRegionFilter) => {
