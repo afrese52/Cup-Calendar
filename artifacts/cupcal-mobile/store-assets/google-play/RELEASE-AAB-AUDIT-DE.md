@@ -130,3 +130,26 @@ Gerätesicherungen fest.
 
 Ein neuer Build, ein kostenpflichtiges Upgrade oder eine Store-Einreichung
 wurde durch diese Prüfung nicht ausgelöst.
+
+## Vorbereitete Korrekturen im Projekt
+
+Nach Freigabe durch den Nutzer wurden folgende Änderungen vorbereitet:
+
+- Explizite Android-Manifest-Merge-Ausschlüsse für `CAMERA`, `RECORD_AUDIO`,
+  `SYSTEM_ALERT_WINDOW`, `READ_EXTERNAL_STORAGE` und `WRITE_EXTERNAL_STORAGE`.
+  GPS und Netzwerk bleiben erhalten.
+- Ein EAS-Pre-Install-Hook stoppt Builds bei fehlenden oder formal
+  ungültigen öffentlichen Supabase-Werten. Er erlaubt öffentliche
+  Publishable-Keys und strukturell passende Legacy-Anon-JWTs, aber keine
+  Service-Role-/Secret-Keys. Werte werden nicht ausgegeben.
+- Elf gezielte automatisierte Tests prüfen diese Regeln, die unveränderte
+  Paketkennung und die bisherigen EAS-Profilentscheidungen.
+- Die Expo-Introspektion bestätigt die fünf `tools:node="remove"`-Einträge
+  sowie den Erhalt von GPS und Netzwerk. Diese Konfigurationsprüfung ist
+  kein Ersatz für das zusammengeführte Manifest eines späteren AAB.
+
+Die Paketkennung `de.cup.calendar` wurde bei dieser Vorbereitung nicht
+geändert. Die bereits hochgeladene Datei bleibt unverändert und fehlerhaft.
+Es wurde kein neuer nativer Build gestartet. Der Hook prüft das Format,
+nicht die tatsächliche Gültigkeit, Projektzugehörigkeit oder Erreichbarkeit
+von Supabase-Zugangsdaten.

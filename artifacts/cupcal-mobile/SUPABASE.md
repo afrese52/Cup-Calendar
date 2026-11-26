@@ -18,6 +18,25 @@ Produktionsprofil verwenden diese Umgebung, damit Vorschau und Store-Build
 dieselben Supabase-Werte erhalten. Änderungen an den Expo-Variablen wirken
 sich erst auf neu erstellte App-Builds aus.
 
+### Prüfung vor EAS-Builds
+
+Der Hook `eas-build-pre-install` prüft beide öffentlichen Variablen, bevor
+EAS Abhängigkeiten installiert und den nativen Build vorbereitet. Fehlen
+Werte, ist die Projektadresse keine HTTPS-Basisadresse oder ist der Schlüssel
+kein öffentlicher Publishable-/Legacy-Anon-Key, bricht der Build mit einer
+deutschen Meldung ab. Variablenwerte werden nicht ausgegeben.
+
+Die Prüfung verwendet bewusst nur die beiden `EXPO_PUBLIC_SUPABASE_*`
+Buildvariablen und keinen stillen Rückgriff auf serverseitige Variablen.
+Sie prüft nur das Format, nicht die Signatur eines Legacy-JWT, die
+Projektzugehörigkeit oder die tatsächliche Erreichbarkeit von Supabase.
+Sie verändert weder Expo-Variablen noch Provider-Einstellungen.
+Der Entwicklungsstart und sein bestehender Fallback bleiben unverändert.
+
+Die Prüfung lässt sich mit `pnpm run validate:build-config` im App-Verzeichnis
+aufrufen. `pnpm run test:build-config` verwendet ausschließlich erfundene
+Testwerte und startet keinen Build.
+
 Beide Werte werden in den nativen und Web-Client eingebettet und sind öffentlich sichtbar. Verwende hier ausschließlich den Publishable Key, niemals einen Service-Role-Key. Ohne vollständige Konfiguration bleibt die App nutzbar; CupCal gibt eine verständliche Warnung in der Entwicklerkonsole aus. Der Status und die Meldung sind außerdem über `isSupabaseConfigured` und `supabaseConfigurationMessage` aus `services/supabase` verfügbar.
 
 Der Web-Client speichert Auth-Sitzungen über AsyncStorage. Auf iOS speichert
