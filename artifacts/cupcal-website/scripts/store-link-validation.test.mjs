@@ -4,6 +4,7 @@ import test from 'node:test';
 import {
   createSoftwareApplicationSchema,
   createStoreSearchMetadata,
+  getOfficialStoreUrl,
 } from '../src/content/seo-pages.ts';
 import { assertStoreLinksConfirmed } from './store-link-validation.mjs';
 
@@ -43,6 +44,34 @@ test('akzeptiert Store-Ziele nur, wenn sie ausdrücklich bestätigt wurden', () 
       },
     ),
   );
+});
+
+test('akzeptiert nur CupCal-Listings über die offiziellen HTTPS-Store-Seiten', () => {
+  assert.equal(
+    getOfficialStoreUrl('https://play.google.com/store/apps/details?id=de.cup.calendar', 'android'),
+    'https://play.google.com/store/apps/details?id=de.cup.calendar',
+  );
+  assert.equal(
+    getOfficialStoreUrl('https://apps.apple.com/app/cupcal/id1234567890', 'ios'),
+    'https://apps.apple.com/app/cupcal/id1234567890',
+  );
+  assert.equal(
+    getOfficialStoreUrl('https://apps.apple.com/de/app/cupcal-kalender-fuer-fn/id1234567890', 'ios'),
+    'https://apps.apple.com/de/app/cupcal-kalender-fuer-fn/id1234567890',
+  );
+
+  for (const [url, platform] of [
+    ['http://play.google.com/store/apps/details?id=de.cup.calendar', 'android'],
+    ['https://play.google.com/store/apps/details?id=com.example.other', 'android'],
+    ['https://apps.apple.com/app/other-app/id1234567890', 'ios'],
+    ['https://example.com/app/cupcal/id1234567890', 'ios'],
+  ]) {
+    assert.throws(
+      () => getOfficialStoreUrl(url, platform),
+      /keine gültige offizielle CupCal-Store-Seite/,
+      `${platform} darf kein unbestätigtes oder fremdes Listing als CupCal akzeptieren.`,
+    );
+  }
 });
 
 test('spiegelt alle Android- und iOS-Freigabekombinationen in Suchtexten und Angeboten', () => {

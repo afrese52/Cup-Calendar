@@ -116,6 +116,15 @@ function extractAnchorHrefs(html) {
     .map(decodeHtml);
 }
 
+function extractAnchors(html) {
+  return [...html.matchAll(/<a\b[^>]*>/gi)].map((match) => ({
+    testId: readAttribute(match[0], 'data-testid'),
+    href: readAttribute(match[0], 'href') === null
+      ? null
+      : decodeHtml(readAttribute(match[0], 'href')),
+  }));
+}
+
 function assertPublishedReleaseStatus(
   html,
   pageLabel,
@@ -307,7 +316,8 @@ async function runSmokeTest() {
     const observedDescriptions = new Set();
     const observedCanonicals = new Set();
     const storeLinkTargets = [];
-    let calendarAppAnchors = new Set();
+    let calendarAppAnchors = [];
+    let homepageAnchors = [];
     let organizationLogoChecked = false;
     let homeReleaseStatusChecked = false;
     let calendarAppReleaseStatusChecked = false;
@@ -331,9 +341,10 @@ async function runSmokeTest() {
           },
         );
         if (isHomePage) homeReleaseStatusChecked = true;
+        if (isHomePage) homepageAnchors = extractAnchors(html);
         if (isCalendarAppPage) {
           calendarAppReleaseStatusChecked = true;
-          calendarAppAnchors = new Set(extractAnchorHrefs(html));
+          calendarAppAnchors = extractAnchors(html);
         }
       }
 
@@ -519,34 +530,48 @@ async function runSmokeTest() {
       calendarAppReleaseStatusChecked,
       'Die Veröffentlichungsangaben der Kalender-App-Themenseite wurden nicht geprüft.',
     );
-    const homepageAnchors = new Set(extractAnchorHrefs(homepageHtml));
+    for (const [platform, testIds] of [
+      ['android', ['link-google-play', 'link-topic-google-play']],
+      ['ios', ['link-app-store', 'link-topic-app-store']],
+    ]) {
+      const confirmedUrl = confirmedStoreLinks[platform]
+        ? new URL(confirmedStoreLinks[platform]).href
+        : null;
+      const pages = [
+        ['Startseite', homepageAnchors, testIds[0]],
+        ['Kalender-App-Themenseite', calendarAppAnchors, testIds[1]],
+      ];
+      for (const [pageLabel, anchors, testId] of pages) {
+        const button = anchors.find((anchor) => anchor.testId === testId);
+        if (confirmedUrl) {
+          assert.ok(
+            button,
+            `${pageLabel} zeigt keinen Button für den bestätigten ${platform}-Store.`,
+          );
+          assert.equal(
+            new URL(button.href, baseUrl).href,
+            confirmedUrl,
+            `${pageLabel} führt der ${platform}-Button nicht exakt zum bestätigten Listing.`,
+          );
+          assert.equal(
+            new URL(button.href, baseUrl).protocol,
+            'https:',
+            `${pageLabel} verlinkt den ${platform}-Store nicht per HTTPS.`,
+          );
+        } else {
+          assert.equal(
+            button,
+            undefined,
+            `${pageLabel} zeigt einen ${platform}-Store-Button ohne bestätigte Listing-URL.`,
+          );
+        }
+      }
+    }
     for (const storeUrl of confirmedStoreDownloadUrls) {
       assert.ok(
-        homepageAnchors.has(storeUrl),
-        `Die Startseite verlinkt eine bestätigte Store-Seite nicht: ${storeUrl}`,
-      );
-    }
-    if (confirmedStoreLinks.android) {
-      const confirmedAndroidUrl = new URL(confirmedStoreLinks.android).href;
-      assert.ok(
-        homepageAnchors.has(confirmedAndroidUrl),
-        'Die Startseite bietet keinen direkten Download zur bestätigten Google-Play-Seite.',
-      );
-      assert.ok(
-        calendarAppAnchors.has(confirmedAndroidUrl),
-        'Die Kalender-App-Themenseite bietet keinen direkten Download zur bestätigten Google-Play-Seite.',
-      );
-    }
-    if (!confirmedStoreLinks.ios) {
-      assert.ok(
-        ![...homepageAnchors, ...calendarAppAnchors].some((href) => {
-          try {
-            return new URL(href, baseUrl).hostname === 'apps.apple.com';
-          } catch {
-            return false;
-          }
-        }),
-        'Ohne bestätigten iOS-Link darf keine App-Store-Adresse verlinkt sein.',
+        homepageAnchors.some((anchor) => anchor.href === storeUrl)
+          || calendarAppAnchors.some((anchor) => anchor.href === storeUrl),
+        `Keine der geprüften Seiten verlinkt die bestätigte Store-Seite: ${storeUrl}`,
       );
     }
     assertStoreLinksConfirmed(storeLinkTargets, {

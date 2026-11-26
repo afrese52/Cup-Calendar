@@ -9,9 +9,10 @@ const topicIcons = [CalendarDays, Filter, Clock3];
 interface SeoTopicPageViewProps {
   page: SeoTopicPage;
   androidStoreUrl: string | null;
+  iosStoreUrl: string | null;
 }
 
-export function SeoTopicPageView({ page, androidStoreUrl }: SeoTopicPageViewProps) {
+export function SeoTopicPageView({ page, androidStoreUrl, iosStoreUrl }: SeoTopicPageViewProps) {
   const relatedPages = seoTopicPages.filter((topic) => topic.slug !== page.slug);
   const pageIndex = seoTopicPages.findIndex((topic) => topic.slug === page.slug);
   const Icon = topicIcons[pageIndex] ?? CalendarDays;
@@ -82,20 +83,39 @@ export function SeoTopicPageView({ page, androidStoreUrl }: SeoTopicPageViewProp
           <div className="eyebrow"><Icon aria-hidden="true" /> CupCal · {page.eyebrow}</div>
           <h1>{page.h1}</h1>
           <p className="topic-intro">{page.intro}</p>
-          {page.slug === 'turnierkalender-app' && androidStoreUrl && (
-            <a
-              className="button-primary topic-store-cta"
-              href={androidStoreUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              data-testid="link-topic-google-play"
-              onClick={() => trackEvent('availability_cta_click', {
-                placement: 'calendar_app_topic',
-                platform: 'android',
-              })}
-            >
-              <Download aria-hidden="true" /> Android bei Google Play herunterladen <ArrowRight aria-hidden="true" />
-            </a>
+          {page.slug === 'turnierkalender-app' && (androidStoreUrl || iosStoreUrl) && (
+            <div className="topic-store-ctas">
+              {androidStoreUrl && (
+                <a
+                  className="button-primary topic-store-cta"
+                  href={androidStoreUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  data-testid="link-topic-google-play"
+                  onClick={() => trackEvent('availability_cta_click', {
+                    placement: 'calendar_app_topic',
+                    platform: 'android',
+                  })}
+                >
+                  <Download aria-hidden="true" /> Android bei Google Play herunterladen <ArrowRight aria-hidden="true" />
+                </a>
+              )}
+              {iosStoreUrl && (
+                <a
+                  className="button-primary topic-store-cta"
+                  href={iosStoreUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  data-testid="link-topic-app-store"
+                  onClick={() => trackEvent('availability_cta_click', {
+                    placement: 'calendar_app_topic',
+                    platform: 'ios',
+                  })}
+                >
+                  <Download aria-hidden="true" /> CupCal im App Store laden <ArrowRight aria-hidden="true" />
+                </a>
+              )}
+            </div>
           )}
         </header>
 

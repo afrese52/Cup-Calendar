@@ -11,6 +11,26 @@ export const confirmedStoreLinks: ConfirmedStoreLinks = {
   ios: null,
 };
 
+export function getOfficialStoreUrl(url: string | null, platform: 'android' | 'ios') {
+  if (!url) return null;
+
+  const parsedUrl = new URL(url);
+  const isOfficialListing = platform === 'android'
+    ? parsedUrl.protocol === 'https:'
+      && parsedUrl.hostname === 'play.google.com'
+      && parsedUrl.pathname === '/store/apps/details'
+      && parsedUrl.searchParams.get('id') === 'de.cup.calendar'
+    : parsedUrl.protocol === 'https:'
+      && parsedUrl.hostname === 'apps.apple.com'
+      && /(?:\/[a-z]{2}(?:-[a-z]{2})?)?\/app\/cupcal(?:-[^/]+)?\/id\d+\/?$/i.test(parsedUrl.pathname);
+
+  if (!isOfficialListing) {
+    throw new Error(`Die bestätigte ${platform}-Store-URL ist keine gültige offizielle CupCal-Store-Seite.`);
+  }
+
+  return parsedUrl.href;
+}
+
 function getStoreStatus(links: ConfirmedStoreLinks) {
   return {
     android: links.android

@@ -1,33 +1,13 @@
 import { useEffect, useRef } from 'react';
 import { ArrowDown, ArrowRight, Bookmark, CalendarDays, Check, Clock3, Download, Filter, WifiOff } from 'lucide-react';
 import { trackEvent } from './lib/analytics';
-import { confirmedStoreLinks, normalizeWebsitePath, seoTopicPages } from './content/seo-pages';
+import { confirmedStoreLinks, getOfficialStoreUrl, normalizeWebsitePath, seoTopicPages } from './content/seo-pages';
 import { deletionConfirmationPage, legalPages } from './content/legal-pages';
 import { SeoTopicPageView } from './pages/seo-topic-page';
 import { LegalPageView } from './pages/legal-pages';
 
 const websiteLogo = `${import.meta.env.BASE_URL}cupcal-website-logo-transparent.webp`;
 const appLogo = `${import.meta.env.BASE_URL}cupcal-app-logo.webp`;
-
-function getOfficialStoreUrl(url: string | null, platform: 'android' | 'ios') {
-  if (!url) return null;
-
-  const parsedUrl = new URL(url);
-  const isOfficialListing = platform === 'android'
-    ? parsedUrl.protocol === 'https:'
-      && parsedUrl.hostname === 'play.google.com'
-      && parsedUrl.pathname === '/store/apps/details'
-      && Boolean(parsedUrl.searchParams.get('id'))
-    : parsedUrl.protocol === 'https:'
-      && parsedUrl.hostname === 'apps.apple.com'
-      && /\/app\/[^/]+\/id\d+\/?$/.test(parsedUrl.pathname);
-
-  if (!isOfficialListing) {
-    throw new Error(`Die bestätigte ${platform}-Store-URL ist keine gültige offizielle Store-Seite.`);
-  }
-
-  return parsedUrl.href;
-}
 
 const androidStoreUrl = getOfficialStoreUrl(confirmedStoreLinks.android, 'android');
 const iosStoreUrl = getOfficialStoreUrl(confirmedStoreLinks.ios, 'ios');
@@ -90,7 +70,15 @@ function App({ pathname }: AppProps = {}) {
     return () => observer.disconnect();
   }, [currentPath]);
 
-  if (topicPage) return <SeoTopicPageView page={topicPage} androidStoreUrl={androidStoreUrl} />;
+  if (topicPage) {
+    return (
+      <SeoTopicPageView
+        page={topicPage}
+        androidStoreUrl={androidStoreUrl}
+        iosStoreUrl={iosStoreUrl}
+      />
+    );
+  }
   if (legalPage) return <LegalPageView page={legalPage} />;
 
   return (
@@ -241,7 +229,11 @@ function App({ pathname }: AppProps = {}) {
             <p>
               {androidStoreUrl
                 ? 'CupCal ist jetzt offiziell bei Google Play verfügbar. Für iOS steht noch kein Veröffentlichungstermin fest.'
-                : 'CupCal ist noch nicht in den Stores verfügbar. Die Android-Veröffentlichung ist für den 30. November 2026 geplant; für iOS steht noch kein Termin fest. Offizielle Download-Links werden erst nach Betreiberfreigabe ergänzt.'}
+                : 'CupCal ist noch nicht im Google Play Store verfügbar. Die Android-Veröffentlichung ist für den 30. November 2026 geplant.'}
+              {' '}
+              {iosStoreUrl
+                ? 'CupCal ist jetzt im Apple App Store verfügbar.'
+                : 'Im Apple App Store ist CupCal noch nicht verfügbar; ein Veröffentlichungstermin steht noch nicht fest.'}
             </p>
           </article>
         </div>
