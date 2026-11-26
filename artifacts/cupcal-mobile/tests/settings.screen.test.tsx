@@ -1269,6 +1269,78 @@ test('öffnet bei aktualisiertem Routenparameter die Linkanfrage und entfernt de
   });
 });
 
+test.each([
+  ['entfernt', undefined],
+  ['auf Anmeldung geändert', 'sign-in'],
+] as const)(
+  'kehrt zurück zur Anmeldung, wenn der Routenparameter %s wird',
+  async (_change, nextAuthMode) => {
+    mockRouteParams.authMode = 'forgot-password';
+    auth.resetPasswordForEmail.mockResolvedValue({
+      error: new Error('Email rate limit exceeded'),
+    });
+    const view = await openSettings();
+    await fireEvent.changeText(view.getByTestId('auth-email-input'), 'test@example.invalid');
+    await fireEvent.press(view.getByTestId('auth-submit-button'));
+    expect(await view.findByTestId('auth-error-message')).toBeTruthy();
+
+    mockRouteParams.authMode = nextAuthMode;
+    await view.rerender(<SettingsScreen />);
+
+    await waitFor(() => {
+      expect(view.getByText('Bei CupCal anmelden')).toBeTruthy();
+      expect(view.queryByTestId('auth-error-message')).toBeNull();
+      expect(view.queryByTestId('auth-success-message')).toBeNull();
+      expect(view.getByTestId('auth-password-input')).toBeTruthy();
+    });
+
+    mockRouteParams.authMode = 'forgot-password';
+    await view.rerender(<SettingsScreen />);
+
+    await waitFor(() => {
+      expect(view.getByText('Passwort zurücksetzen')).toBeTruthy();
+      expect(view.queryByTestId('auth-error-message')).toBeNull();
+      expect(view.queryByTestId('auth-success-message')).toBeNull();
+    });
+  },
+);
+
+test('entfernt eine erfolgreiche Wiederherstellungsmeldung beim Zurückwechseln zur Anmeldung', async () => {
+  mockRouteParams.authMode = 'forgot-password';
+  const view = await openSettings();
+  await fireEvent.changeText(view.getByTestId('auth-email-input'), 'test@example.invalid');
+  await fireEvent.press(view.getByTestId('auth-submit-button'));
+  expect(await view.findByTestId('auth-success-message')).toBeTruthy();
+
+  mockRouteParams.authMode = undefined;
+  await view.rerender(<SettingsScreen />);
+
+  await waitFor(() => {
+    expect(view.getByText('Bei CupCal anmelden')).toBeTruthy();
+    expect(view.queryByTestId('auth-success-message')).toBeNull();
+    expect(view.queryByTestId('auth-error-message')).toBeNull();
+  });
+});
+
+test('zeigt nach Verlassen der Linkanfrage keine verspätete Wiederherstellungsfehlermeldung', async () => {
+  let finishReset!: (result: { error: Error }) => void;
+  auth.resetPasswordForEmail.mockImplementation(
+    () => new Promise((resolve) => { finishReset = resolve; }),
+  );
+  mockRouteParams.authMode = 'forgot-password';
+  const view = await openSettings();
+  await fireEvent.changeText(view.getByTestId('auth-email-input'), 'test@example.invalid');
+  await fireEvent.press(view.getByTestId('auth-submit-button'));
+
+  mockRouteParams.authMode = undefined;
+  await view.rerender(<SettingsScreen />);
+  await waitFor(() => expect(view.getByText('Bei CupCal anmelden')).toBeTruthy());
+  await act(async () => finishReset({ error: new Error('Email rate limit exceeded') }));
+
+  expect(view.queryByTestId('auth-error-message')).toBeNull();
+  expect(view.queryByTestId('auth-success-message')).toBeNull();
+});
+
 test('zeigt im direkt geöffneten Wiederherstellungsmodus den Fehler einer neuen Linkanfrage verständlich an', async () => {
   mockRouteParams.authMode = 'forgot-password';
   auth.resetPasswordForEmail.mockResolvedValue({

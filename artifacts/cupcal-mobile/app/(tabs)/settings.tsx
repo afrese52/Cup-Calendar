@@ -115,6 +115,7 @@ export default function SettingsScreen() {
     requestedAuthMode === 'forgot-password' ? 'forgot-password' : 'sign-in',
   );
   const previousAuthModeRef = useRef(authMode);
+  const previousRequestedAuthModeRef = useRef(requestedAuthMode);
   const [email, setEmail] = useState('');
   const [registrationConfirmationEmail, setRegistrationConfirmationEmail] = useState<string | null>(null);
   const [password, setPassword] = useState('');
@@ -252,12 +253,28 @@ export default function SettingsScreen() {
   }, [showDeleteConfirmation]);
 
   useEffect(() => {
-    if (requestedAuthMode !== 'forgot-password') return;
-    setAuthMode('forgot-password');
+    const wasRequestingPasswordReset =
+      previousRequestedAuthModeRef.current === 'forgot-password';
+    previousRequestedAuthModeRef.current = requestedAuthMode;
+
+    if (requestedAuthMode === 'forgot-password') {
+      setAuthMode('forgot-password');
+      setAuthError(null);
+      recoveryErrorEmailRef.current = null;
+      setAuthMessage(null);
+      setPassword('');
+      setRegistrationConfirmationEmail(null);
+      return;
+    }
+
+    if (!wasRequestingPasswordReset) return;
+
+    setAuthMode('sign-in');
     setAuthError(null);
-    setAuthMessage(null);
+    recoveryErrorEmailRef.current = null;
+    if (recoverySuccessEmailRef.current !== null) setAuthMessage(null);
     setPassword('');
-    setRegistrationConfirmationEmail(null);
+    recoveryEmailRevisionRef.current += 1;
   }, [requestedAuthMode]);
 
   useEffect(() => {
