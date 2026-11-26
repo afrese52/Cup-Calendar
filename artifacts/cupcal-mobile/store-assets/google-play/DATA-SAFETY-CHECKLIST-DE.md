@@ -19,6 +19,49 @@ Verhalten dieses älteren AAB gleichzusetzen.
 
 ### Neuer Store-Eintrag `de.cup.calendar`
 
+#### Korrigierter und erneut geprüfter Entwurf
+
+Nach Betreiberfreigabe wurden die Fehler korrigiert, über „Als Entwurf
+speichern“ gespeichert und nach vollständigem Neuladen die konkreten
+Detailantworten sowie die Vorschau erneut geprüft:
+
+| Datentyp | Erhoben | Geteilt | Nur sitzungsspezifisch | Erhebung | Zwecke |
+| --- | --- | --- | --- | --- | --- |
+| E-Mail-Adresse | Ja | Nein | Nein | Optional | Funktionen der App, Kontoverwaltung |
+| Nutzer-IDs | Ja | Nein | Nein | Optional | Funktionen der App, Kontoverwaltung |
+| App-Interaktionen (Favoriten) | Ja | Nein | Nein | Optional | Funktionen der App |
+
+Ungefährer und genauer Standort sind nicht als erhobene Daten ausgewählt:
+Die geprüfte Regionsbestimmung verarbeitet Koordinaten lokal, der Kalender
+lädt Termine ohne Regionsparameter und filtert sie auf dem Gerät.
+Im API-Code wurde keine zusätzliche Geo-IP-Ableitung gefunden. Dies ist
+eine Aussage zu den geprüften App-Datenflüssen, keine pauschale Garantie
+für alle denkbaren Plattform-/SDK-Verarbeitungen.
+
+Die Vorschau zeigt nun E-Mail-Adresse, Nutzer-IDs und App-Interaktionen
+als erfasste Daten, keine Standorterhebung und keine Datenweitergabe.
+„Nicht geteilt“ berücksichtigt die Dienstanbieter-Ausnahme nach Googles
+Definition für die Verarbeitung durch Supabase im Auftrag.
+Übertragungsverschlüsselung bleibt „Ja“, Kontoerstellung
+„Nutzername und Passwort“, Teil-Datenlöschung ohne Kontolöschung „Nein“.
+Beide Links stimmen weiterhin:
+
+- `https://cupcal.af-software.app/datenschutz/`
+- `https://cupcal.af-software.app/konto-loeschen/`
+
+Die bekannten Datenflüsse sind mit dem geprüften AAB
+`de.cup.calendar`, Version `1.0.0`, Versionscode `2`, abgeglichen.
+Die vom Betreiber bestätigten Supabase-Fristen bleiben sieben Tage
+für Backups/Logs; Replit-Betriebslogs sind davon getrennt mit 30 Tagen
+zu behandeln. Die Console enthält keine eigenen Felder für diese Fristen.
+Die Aussagegrenzen des Transportaudits bleiben bestehen.
+
+**Es wurde ausschließlich der Entwurf gespeichert.** Der abschließende
+„Speichern“-Button in der Vorschau wurde nicht betätigt; es wurde nichts
+eingereicht, veröffentlicht oder an einem Release geändert.
+Der alte Store-Eintrag blieb unberührt. Die folgenden Abschnitte halten
+die vorausgegangenen Zwischenstände fest.
+
 #### Nachprüfung der manuell gepflegten Angaben
 
 Die anschließende rein lesende Console-Prüfung am 26. November ergab:
