@@ -28,18 +28,24 @@ Werte gespeichert und nach erneutem Laden bestätigt:
   Konto- und Favoritendaten übertragen werden.
 - Kontoerstellung: ausschließlich „Nutzername und Passwort“ für
   die E-Mail-/Passwortanmeldung.
+- Verschlüsselung aller erhobenen Nutzerdaten bei der Übertragung: „Ja“.
+  Bei der nachfolgenden, vom Betreiber freigegebenen Browserprüfung war
+  dieser Wert bereits ausgewählt. Er wurde nach frischem Neuladen bei
+  deaktiviertem „Entwurf speichern“ bestätigt; es war kein erneutes
+  Speichern nötig. Die Prüfgrenzen des Transportaudits gelten weiterhin.
 
 Die Datensicherheit ist ein **unvollständiger gespeicherter Entwurf**.
 Es wurde nichts eingereicht oder veröffentlicht. Die Pflichtfrage zur
-Verschlüsselung aller übertragenen Nutzerdaten ist im Formular weiterhin
-unbeantwortet. Der inzwischen durchgeführte statische Abgleich des neuen
+Verschlüsselung ist inzwischen im gespeicherten Entwurf mit „Ja“ beantwortet.
+Der durchgeführte statische Abgleich des neuen
 AAB und TLS-Handshakes bestätigen HTTPS/WSS für die nachvollzogenen
 App-Datenwege; ein vollständiger Laufzeit-/SDK-Nachweis liegt nicht vor.
 Dateizuordnung, Ergebnis und Grenzen stehen in
 [RELEASE-V2-TRANSPORT-AUDIT-DE.md](./RELEASE-V2-TRANSPORT-AUDIT-DE.md).
-Dadurch ist „Weiter“ deaktiviert; Datentypen, Datennutzung und Vorschau
-(Schritte 3–5) wurden noch nicht ausgefüllt. Die optionale Frage nach
-Datenlöschung ohne Kontolöschung blieb ebenfalls unbeantwortet.
+Datentypen, Datennutzung und Vorschau (Schritte 3–5) wurden durch diese
+Bearbeitung noch nicht ausgefüllt. Die optionale Frage nach Datenlöschung
+ohne Kontolöschung war bei der erneuten Prüfung bereits mit „Nein“
+beantwortet und wurde nicht geändert.
 
 ### Früherer Store-Eintrag `de.cup.calender`
 
@@ -122,7 +128,8 @@ sind zu prüfen.
 | Drittanbieter | In den direkten mobilen Abhängigkeiten ist kein Werbe-/Analytics-SDK erkennbar. | Eingebundene native und transitive SDKs des AAB sowie mögliche Diagnoseverarbeitung prüfen. |
 
 Die Frage „Werden alle Nutzerdaten bei der Übertragung verschlüsselt?“
-bleibt im gespeicherten Formular unbeantwortet. Die neue AAB-Prüfung
+ist nach Betreiberfreigabe im gespeicherten Entwurf mit „Ja“ bestätigt.
+Die neue AAB-Prüfung
 stützt „Ja“ für die nachvollzogenen App-Datenwege, ist aber kein
 uneingeschränkter Nachweis sämtlicher SDK-Übertragungen oder aller aktiven
 Store-Artefakte. HTTPS im API-Quellcode allein wäre kein solcher Nachweis.
