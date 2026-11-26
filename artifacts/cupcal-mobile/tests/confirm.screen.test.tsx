@@ -150,6 +150,46 @@ test('tauscht den E-Mail-Bestätigungscode samt Flow-ID ein und zeigt CupCal-Erf
   expect(view.getByTestId('email-confirmation-return-button')).toBeTruthy();
 });
 
+test('verarbeitet denselben Bestätigungslink nach einem anderen Link nicht erneut', async () => {
+  const firstLink =
+    'cupcal-android://auth/confirm?code=repeat-confirmation-code&flow_id=repeat-confirmation-flow';
+  mockInitialUrl.current = firstLink;
+  const view = await render(<ConfirmEmailScreen />);
+
+  await waitFor(() => {
+    expect(supabase.auth.exchangeCodeForSession).toHaveBeenCalledTimes(1);
+    expect(view.getByText('Bestätigt')).toBeTruthy();
+    expect(view.getByText(
+      'Deine E-Mail-Adresse ist bestätigt. Du kannst CupCal jetzt verwenden.',
+    )).toBeTruthy();
+  });
+
+  await act(async () => {
+    mockUrlListener.current?.({
+      url: 'cupcal-android://auth/confirm?error=access_denied&error_code=otp_expired',
+    });
+    await Promise.resolve();
+  });
+  await waitFor(() => {
+    expect(view.getByText('Bestätigung fehlgeschlagen')).toBeTruthy();
+  });
+
+  await act(async () => {
+    mockUrlListener.current?.({ url: firstLink });
+    mockUrlListener.current?.({ url: firstLink });
+    await Promise.resolve();
+  });
+
+  await waitFor(() => {
+    expect(supabase.auth.exchangeCodeForSession).toHaveBeenCalledTimes(1);
+    expect(view.getByText('Bestätigung fehlgeschlagen')).toBeTruthy();
+    expect(view.queryByText('Bestätigt')).toBeNull();
+    expect(view.queryByText(
+      'Deine E-Mail-Adresse ist bestätigt. Du kannst CupCal jetzt verwenden.',
+    )).toBeNull();
+  });
+});
+
 test('meldet nach erfolgreichem Codeaustausch einen fehlgeschlagenen Sitzungsspeicher ohne Login-Erfolg', async () => {
   mockInitialUrl.current =
     'https://cupcal.example/auth/confirm?code=email-confirmation-code&flow_id=confirmation-flow-id';

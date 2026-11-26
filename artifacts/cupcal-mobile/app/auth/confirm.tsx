@@ -65,7 +65,7 @@ export default function ConfirmEmailScreen() {
     error_description?: string | string[];
   }>();
   const confirmationMutation = useConfirmAccountDeletion();
-  const processedCallback = useRef<string | null>(null);
+  const processedCallbacks = useRef(new Set<string>());
   const callbackQueue = useRef<Promise<void>>(Promise.resolve());
   const [status, setStatus] = useState<ConfirmationStatus>('checking');
   const [message, setMessage] = useState('Deine E-Mail-Adresse wird bestätigt …');
@@ -86,8 +86,8 @@ export default function ConfirmEmailScreen() {
         callback.errorDescription,
       ].join('|');
       if (!isMounted) return;
-      if (processedCallback.current === callbackKey) return;
-      processedCallback.current = callbackKey;
+      if (processedCallbacks.current.has(callbackKey)) return;
+      processedCallbacks.current.add(callbackKey);
 
       setStatus('checking');
       setMessage('Deine E-Mail-Adresse wird bestätigt …');
