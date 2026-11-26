@@ -180,3 +180,32 @@ test('Inhaltsereignisse aller CupCal-Themenseiten enthalten Seite und Bereich', 
     );
   }
 });
+
+test('Startseite verlinkt alle Themenseiten und erfasst Ziel sowie Platzierung', async () => {
+  const { seoTopicPages } = await vite.ssrLoadModule('/src/content/seo-pages.ts');
+  await renderApp('/');
+
+  for (const page of seoTopicPages) {
+    const directoryLink = dom.window.document.querySelector(`[data-testid="link-topic-${page.slug}"]`);
+    assert.ok(directoryLink, `Themenseite ${page.slug} muss im Themenbereich der Startseite verlinkt sein`);
+    assert.equal(directoryLink.getAttribute('href'), page.path);
+
+    trackedEvents.length = 0;
+    directoryLink.addEventListener('click', (event) => event.preventDefault(), { once: true });
+    await act(async () => directoryLink.click());
+    assert.deepEqual(trackedEvents, [
+      ['site_navigation_click', { destination: page.slug, placement: 'home_topic_directory' }],
+    ]);
+
+    const footerLink = dom.window.document.querySelector(`[data-testid="link-footer-${page.slug}"]`);
+    assert.ok(footerLink, `Themenseite ${page.slug} muss auch im Footer verlinkt sein`);
+    assert.equal(footerLink.getAttribute('href'), page.path);
+
+    trackedEvents.length = 0;
+    footerLink.addEventListener('click', (event) => event.preventDefault(), { once: true });
+    await act(async () => footerLink.click());
+    assert.deepEqual(trackedEvents, [
+      ['site_navigation_click', { destination: page.slug, placement: 'footer' }],
+    ]);
+  }
+});
