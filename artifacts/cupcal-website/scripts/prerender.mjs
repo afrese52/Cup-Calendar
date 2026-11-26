@@ -25,6 +25,43 @@ function replaceRequired(html, pattern, replacement, description) {
   return html.replace(pattern, replacement);
 }
 
+function withHomeMetadata(html, description) {
+  let updatedHtml = html;
+  for (const [pattern, replacement, label] of [
+    [
+      /<meta name="description"[^>]*\/?>/i,
+      `<meta name="description" content="${escapeHtml(description)}" />`,
+      'Meta-Beschreibung',
+    ],
+    [
+      /<meta property="og:description"[^>]*\/?>/i,
+      `<meta property="og:description" content="${escapeHtml(description)}" />`,
+      'Open-Graph-Beschreibung',
+    ],
+    [
+      /<meta name="twitter:description"[^>]*\/?>/i,
+      `<meta name="twitter:description" content="${escapeHtml(description)}" />`,
+      'Twitter-Beschreibung',
+    ],
+  ]) {
+    updatedHtml = replaceRequired(updatedHtml, pattern, replacement, label);
+  }
+
+  const structuredDataPattern = /<script type="application\/ld\+json">([\s\S]*?)<\/script>/i;
+  const structuredDataMatch = updatedHtml.match(structuredDataPattern);
+  if (!structuredDataMatch) {
+    throw new Error('HTML-Vorlage enthält keine Schema.org-Daten.');
+  }
+  const structuredData = JSON.parse(structuredDataMatch[1]);
+  const websiteNode = structuredData['@graph']?.find((node) => node['@type'] === 'WebSite');
+  if (!websiteNode) {
+    throw new Error('Schema.org-Daten enthalten keinen WebSite-Eintrag.');
+  }
+  websiteNode.description = description;
+  const structuredDataTag = `<script type="application/ld+json">${JSON.stringify(structuredData).replaceAll('<', '\\u003c')}</script>`;
+  return updatedHtml.replace(structuredDataPattern, structuredDataTag);
+}
+
 function withTopicMetadata(html, page, siteOrigin) {
   const canonical = `${siteOrigin}${page.path}`;
   const metadata = [
@@ -111,7 +148,7 @@ try {
   const [
     { default: App },
     { ErrorBoundary },
-    { seoTopicPages, SITE_ORIGIN },
+    { homePageDescription, seoTopicPages, SITE_ORIGIN },
     { deletionConfirmationPage, legalPages },
     { withLegalMetadata },
   ] = await Promise.all([
@@ -194,7 +231,7 @@ try {
   }
 
   const home = renderPage('/', 'Dein ', null);
-  await fs.writeFile(builtHtmlPath, home.html);
+  await fs.writeFile(builtHtmlPath, withHomeMetadata(home.html, homePageDescription));
   console.log(`Startseite vorab gerendert: ${home.renderedLength} Zeichen.`);
 
   for (const page of seoTopicPages) {

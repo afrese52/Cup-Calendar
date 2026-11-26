@@ -1,4 +1,4 @@
-import { ArrowRight, CalendarDays, Clock3, Filter } from 'lucide-react';
+import { ArrowRight, CalendarDays, Clock3, Download, Filter } from 'lucide-react';
 import { trackEvent } from '../lib/analytics';
 import { seoTopicPages, type SeoTopicPage } from '../content/seo-pages';
 
@@ -8,9 +8,10 @@ const topicIcons = [CalendarDays, Filter, Clock3];
 
 interface SeoTopicPageViewProps {
   page: SeoTopicPage;
+  androidStoreUrl: string | null;
 }
 
-export function SeoTopicPageView({ page }: SeoTopicPageViewProps) {
+export function SeoTopicPageView({ page, androidStoreUrl }: SeoTopicPageViewProps) {
   const relatedPages = seoTopicPages.filter((topic) => topic.slug !== page.slug);
   const pageIndex = seoTopicPages.findIndex((topic) => topic.slug === page.slug);
   const Icon = topicIcons[pageIndex] ?? CalendarDays;
@@ -81,6 +82,21 @@ export function SeoTopicPageView({ page }: SeoTopicPageViewProps) {
           <div className="eyebrow"><Icon aria-hidden="true" /> CupCal · {page.eyebrow}</div>
           <h1>{page.h1}</h1>
           <p className="topic-intro">{page.intro}</p>
+          {page.slug === 'turnierkalender-app' && androidStoreUrl && (
+            <a
+              className="button-primary topic-store-cta"
+              href={androidStoreUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              data-testid="link-topic-google-play"
+              onClick={() => trackEvent('availability_cta_click', {
+                placement: 'calendar_app_topic',
+                platform: 'android',
+              })}
+            >
+              <Download aria-hidden="true" /> Android bei Google Play herunterladen <ArrowRight aria-hidden="true" />
+            </a>
+          )}
         </header>
 
         <div className="topic-sections">

@@ -90,7 +90,7 @@ function App({ pathname }: AppProps = {}) {
     return () => observer.disconnect();
   }, [currentPath]);
 
-  if (topicPage) return <SeoTopicPageView page={topicPage} />;
+  if (topicPage) return <SeoTopicPageView page={topicPage} androidStoreUrl={androidStoreUrl} />;
   if (legalPage) return <LegalPageView page={legalPage} />;
 
   return (
@@ -114,11 +114,13 @@ function App({ pathname }: AppProps = {}) {
         </nav>
         <a
           className="nav-cta"
-          href="#verfuegbarkeit"
+          href={androidStoreUrl ?? '#verfuegbarkeit'}
+          target={androidStoreUrl ? '_blank' : undefined}
+          rel={androidStoreUrl ? 'noopener noreferrer' : undefined}
           data-testid="button-download-status"
           onClick={() => trackEvent('availability_cta_click', { placement: 'header' })}
         >
-          <span>App-Status</span><ArrowRight aria-hidden="true" />
+          <span>{androidStoreUrl ? 'Android herunterladen' : 'App-Status'}</span><ArrowRight aria-hidden="true" />
         </a>
       </header>
 
@@ -143,11 +145,13 @@ function App({ pathname }: AppProps = {}) {
               </a>
               <a
                 className="button-muted"
-                href="#verfuegbarkeit"
+                href={androidStoreUrl ?? '#verfuegbarkeit'}
+                target={androidStoreUrl ? '_blank' : undefined}
+                rel={androidStoreUrl ? 'noopener noreferrer' : undefined}
                 data-testid="button-availability"
                 onClick={() => trackEvent('availability_cta_click', { placement: 'hero' })}
               >
-                <Download aria-hidden="true" /> Download-Status
+                <Download aria-hidden="true" /> {androidStoreUrl ? 'Android herunterladen' : 'Download-Status'}
               </a>
             </div>
             <div className="hero-note"><b>Für die Community gemacht.</b> Unabhängiges Fanprojekt.</div>
@@ -235,8 +239,8 @@ function App({ pathname }: AppProps = {}) {
           <article className="faq-card">
             <h3>Wann kann ich CupCal herunterladen?</h3>
             <p>
-              {androidStoreUrl || iosStoreUrl
-                ? 'CupCal ist für die Plattformen mit bestätigter Store-Seite jetzt verfügbar.'
+              {androidStoreUrl
+                ? 'CupCal ist jetzt offiziell bei Google Play verfügbar. Für iOS steht noch kein Veröffentlichungstermin fest.'
                 : 'CupCal ist noch nicht in den Stores verfügbar. Die Android-Veröffentlichung ist für den 30. November 2026 geplant; für iOS steht noch kein Termin fest. Offizielle Download-Links werden erst nach Betreiberfreigabe ergänzt.'}
             </p>
           </article>

@@ -4,7 +4,12 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { createStaticServer } from '../server/serve.js';
-import { confirmedStoreLinks, seoTopicPages, SITE_ORIGIN } from '../src/content/seo-pages.ts';
+import {
+  confirmedStoreLinks,
+  homePageDescription,
+  seoTopicPages,
+  SITE_ORIGIN,
+} from '../src/content/seo-pages.ts';
 import { deletionConfirmationPage, legalPages } from '../src/content/legal-pages.ts';
 import { assertStoreLinksConfirmed } from './store-link-validation.mjs';
 
@@ -111,22 +116,39 @@ function extractAnchorHrefs(html) {
     .map(decodeHtml);
 }
 
-function assertPublishedReleaseStatus(html, pageLabel, { checkSearchDescription = false } = {}) {
+function assertPublishedReleaseStatus(
+  html,
+  pageLabel,
+  { checkSearchDescription = false, androidAvailable = false } = {},
+) {
   const text = extractRenderedText(html);
-  assert.ok(
-    text.includes('30. November 2026'),
-    `${pageLabel} nennt nicht den geplanten Android-Termin 30. November 2026.`,
-  );
-  assert.match(
-    text,
-    /Android[\s\S]{0,120}geplant/i,
-    `${pageLabel} kennzeichnet den Android-Termin nicht als geplant.`,
-  );
-  assert.match(
-    text,
-    /noch nicht (?:in den Stores|im Google Play Store)/i,
-    `${pageLabel} behauptet nicht klar, dass CupCal noch nicht heruntergeladen werden kann.`,
-  );
+  if (androidAvailable) {
+    assert.match(
+      text,
+      /Android[\s\S]{0,100}(?:jetzt|offiziell)[\s\S]{0,60}(?:verfügbar|herunterladen)/i,
+      `${pageLabel} kennzeichnet den bestätigten Android-Download nicht als verfügbar.`,
+    );
+    assert.doesNotMatch(
+      text,
+      /30\. November 2026|Android[\s\S]{0,120}geplant/i,
+      `${pageLabel} zeigt nach bestätigter Veröffentlichung weiterhin einen zukünftigen Android-Termin.`,
+    );
+  } else {
+    assert.ok(
+      text.includes('30. November 2026'),
+      `${pageLabel} nennt nicht den geplanten Android-Termin 30. November 2026.`,
+    );
+    assert.match(
+      text,
+      /Android[\s\S]{0,120}geplant/i,
+      `${pageLabel} kennzeichnet den Android-Termin nicht als geplant.`,
+    );
+    assert.match(
+      text,
+      /noch nicht (?:in den Stores|im Google Play Store)/i,
+      `${pageLabel} behauptet nicht klar, dass CupCal noch nicht heruntergeladen werden kann.`,
+    );
+  }
   assert.match(
     text,
     /iOS[\s\S]{0,120}(?:kein Termin fest|Termin noch aus)/i,
@@ -134,25 +156,38 @@ function assertPublishedReleaseStatus(html, pageLabel, { checkSearchDescription 
   );
   if (checkSearchDescription) {
     const description = extractMetaDescription(html);
-    assert.match(
-      description,
-      /noch nicht in den Stores/i,
-      `${pageLabel}: Die Suchbeschreibung verschweigt, dass CupCal noch nicht in den Stores verfügbar ist.`,
-    );
-    assert.match(
-      description,
-      /Android(?:-Start am| ab) 30\. November 2026 geplant/i,
-      `${pageLabel}: Die Suchbeschreibung nennt nicht den geplanten Android-Termin.`,
-    );
+    if (androidAvailable) {
+      assert.match(
+        description,
+        /Android-App jetzt (?:offiziell )?bei Google Play herunterladen/i,
+        `${pageLabel}: Die Suchbeschreibung nennt den bestätigten Google-Play-Download nicht.`,
+      );
+      assert.doesNotMatch(
+        description,
+        /keine bestätigten .*Store-Links/i,
+        `${pageLabel}: Die Suchbeschreibung behauptet trotz bestätigtem Android-Link, dass Store-Links fehlen.`,
+      );
+    } else {
+      assert.match(
+        description,
+        /noch nicht in den Stores/i,
+        `${pageLabel}: Die Suchbeschreibung verschweigt, dass CupCal noch nicht in den Stores verfügbar ist.`,
+      );
+      assert.match(
+        description,
+        /Android(?:-Start am| ab) 30\. November 2026 geplant/i,
+        `${pageLabel}: Die Suchbeschreibung nennt nicht den geplanten Android-Termin.`,
+      );
+      assert.match(
+        description,
+        /keine bestätigten CupCal-Store-Links/i,
+        `${pageLabel}: Die Suchbeschreibung behauptet nicht, dass offizielle Store-Downloads fehlen.`,
+      );
+    }
     assert.match(
       description,
       /iOS-Termin offen/i,
       `${pageLabel}: Die Suchbeschreibung kennzeichnet den iOS-Termin nicht als offen.`,
-    );
-    assert.match(
-      description,
-      /keine bestätigten CupCal-Store-Links/i,
-      `${pageLabel}: Die Suchbeschreibung behauptet nicht, dass offizielle Store-Downloads fehlen.`,
     );
   }
 }
@@ -257,6 +292,11 @@ async function runSmokeTest() {
     assertContentType(homepageResponse, 'text/html', 'Die Startseite');
     const homepageHtml = await homepageResponse.text();
     assert.equal(extractCanonical(homepageHtml), homepageUrl, 'Die Canonical-URL der Startseite muss der Domainwurzel entsprechen.');
+    assert.equal(
+      extractMetaDescription(homepageHtml),
+      homePageDescription,
+      'Die Meta-Beschreibung der Startseite muss zum bestätigten Store-Status passen.',
+    );
     assert.doesNotMatch(
       extractRobotsDirectives(homepageHtml).join(' '),
       /\b(?:noindex|none)\b/i,
@@ -289,6 +329,7 @@ async function runSmokeTest() {
     const observedDescriptions = new Set();
     const observedCanonicals = new Set();
     const storeLinkTargets = [];
+    let calendarAppAnchors = new Set();
     let organizationLogoChecked = false;
     let homeReleaseStatusChecked = false;
     let calendarAppReleaseStatusChecked = false;
@@ -305,10 +346,16 @@ async function runSmokeTest() {
         assertPublishedReleaseStatus(
           html,
           isHomePage ? 'Die Startseite' : 'Die Kalender-App-Themenseite',
-          { checkSearchDescription: isCalendarAppPage },
+          {
+            checkSearchDescription: isCalendarAppPage,
+            androidAvailable: confirmedStoreLinks.android !== null,
+          },
         );
         if (isHomePage) homeReleaseStatusChecked = true;
-        if (isCalendarAppPage) calendarAppReleaseStatusChecked = true;
+        if (isCalendarAppPage) {
+          calendarAppReleaseStatusChecked = true;
+          calendarAppAnchors = new Set(extractAnchorHrefs(html));
+        }
       }
 
       for (const href of extractAnchorHrefs(html)) {
@@ -418,6 +465,11 @@ async function runSmokeTest() {
         );
         assert.equal(website.name, 'CupCal', 'Der Google-Seitenname muss mit dem sichtbaren Markennamen übereinstimmen.');
         assert.equal(website.url, `${sitemapOrigin}/`, 'Die WebSite muss auf die CupCal-Startseite verweisen.');
+        assert.equal(
+          website.description,
+          homePageDescription,
+          'Die strukturierte WebSite-Beschreibung muss zum bestätigten Store-Status passen.',
+        );
         assert.equal(website.publisher?.['@id'], organization['@id'], 'Die WebSite muss CupCal als Herausgeber referenzieren.');
         assert.equal(
           organization.logo,
@@ -466,6 +518,29 @@ async function runSmokeTest() {
       assert.ok(
         homepageAnchors.has(storeUrl),
         `Die Startseite verlinkt eine bestätigte Store-Seite nicht: ${storeUrl}`,
+      );
+    }
+    if (confirmedStoreLinks.android) {
+      const confirmedAndroidUrl = new URL(confirmedStoreLinks.android).href;
+      assert.ok(
+        homepageAnchors.has(confirmedAndroidUrl),
+        'Die Startseite bietet keinen direkten Download zur bestätigten Google-Play-Seite.',
+      );
+      assert.ok(
+        calendarAppAnchors.has(confirmedAndroidUrl),
+        'Die Kalender-App-Themenseite bietet keinen direkten Download zur bestätigten Google-Play-Seite.',
+      );
+    }
+    if (!confirmedStoreLinks.ios) {
+      assert.ok(
+        ![...homepageAnchors, ...calendarAppAnchors].some((href) => {
+          try {
+            return new URL(href, baseUrl).hostname === 'apps.apple.com';
+          } catch {
+            return false;
+          }
+        }),
+        'Ohne bestätigten iOS-Link darf keine App-Store-Adresse verlinkt sein.',
       );
     }
     assertStoreLinksConfirmed(storeLinkTargets, {

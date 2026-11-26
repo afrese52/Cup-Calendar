@@ -6,6 +6,10 @@ export const confirmedStoreLinks: Record<'android' | 'ios', string | null> = {
   ios: null,
 };
 
+export const homePageDescription = confirmedStoreLinks.android
+  ? 'Finde Turniere, Ligen und Qualifikationen mit CupCal. Android-App jetzt bei Google Play herunterladen. iOS-Termin offen; keine bestätigte iOS-Store-Seite.'
+  : 'Finde Turniere, Ligen und Qualifikationen mit CupCal. Android-Start am 30. November 2026 geplant; iOS-Termin offen. Noch keine bestätigten offiziellen CupCal-Store-Links.';
+
 export interface SeoPageSection {
   heading: string;
   paragraphs?: string[];
@@ -30,8 +34,9 @@ export const seoTopicPages: SeoTopicPage[] = [
     slug: 'turnierkalender-app',
     path: '/turnierkalender-app/',
     title: 'Turnierkalender-App: Termine im Blick behalten | CupCal',
-    description:
-      'Cups, Ligen und Trainingsrunden in CupCal. Noch nicht in den Stores; Android ab 30. November 2026 geplant, iOS-Termin offen. Keine bestätigten CupCal-Store-Links.',
+    description: confirmedStoreLinks.android
+      ? 'Cups, Ligen und Trainingsrunden in CupCal. Android-App jetzt offiziell bei Google Play herunterladen. iOS-Termin offen; keine bestätigte iOS-Store-Seite.'
+      : 'Cups, Ligen und Trainingsrunden in CupCal. Noch nicht in den Stores; Android ab 30. November 2026 geplant, iOS-Termin offen. Keine bestätigten CupCal-Store-Links.',
     eyebrow: 'Kalender-App',
     h1: 'Turnierkalender-App für Cups, Ligen und Events',
     intro:
@@ -56,7 +61,9 @@ export const seoTopicPages: SeoTopicPage[] = [
       {
         heading: 'Verfügbarkeit der App',
         paragraphs: [
-          'CupCal ist ein unabhängiges Community-Projekt und derzeit noch nicht in den Stores verfügbar. Die Android-Veröffentlichung ist für den 30. November 2026 geplant; für iOS steht der Termin noch aus. Offizielle Download-Links werden erst nach Betreiberfreigabe ergänzt.',
+          confirmedStoreLinks.android
+            ? 'CupCal ist ein unabhängiges Community-Projekt. Die Android-App ist jetzt über den offiziellen Google-Play-Eintrag verfügbar. Für iOS steht der Veröffentlichungstermin noch aus.'
+            : 'CupCal ist ein unabhängiges Community-Projekt und derzeit noch nicht in den Stores verfügbar. Die Android-Veröffentlichung ist für den 30. November 2026 geplant; für iOS steht der Termin noch aus. Offizielle Download-Links werden erst nach Betreiberfreigabe ergänzt.',
         ],
       },
     ],
