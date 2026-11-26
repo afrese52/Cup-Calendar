@@ -9,6 +9,7 @@
 - [Asynchrone Expo-Bildschirmtests](async-expo-screen-tests.md) — React-Native-Testing-Library-14-Renderings und Interaktionen immer awaiten, bevor der Zustand geprüft wird.
 - [Native Fokus in Expo-Bildschirmtests](native-accessibility-focus-tests.md) — Für Fokuswechsel den nativen Handle und AccessibilityInfo-Fokusaufruf im Test gezielt mocken.
 - [Expo-Router-Testdateien](expo-router-test-placement.md) — Bildschirmtests außerhalb von `app/` ablegen, damit Expo sie nicht als Routen bündelt.
+- [Expo-Router-Integrationstests](expo-router-integration-tests.md) — `renderRouter` braucht eigene ungemockte Router-Tests und In-Memory-Routenschlüssel ohne Dateiendung.
 - [Supabase-Projekt-URL](supabase-base-url.md) — Supabase-Clients brauchen die Projektbasis; API-Endpfade können Auth-Fehler wie 401 oder 404 auslösen.
 - [Supabase-PKCE auf nativen Geräten](supabase-native-pkce.md) — `sb_flow_id` wird nur mit aktivierter Flow-ID-Option angehängt; Redirect-Allowlist und Callback müssen den Namen erhalten.
 - [Gesperrte Supabase-Mailvorlage](supabase-locked-email-template.md) — Die Magic-Link-Vorlage kann im CupCal-Supabase-Projekt schreibgeschützt sein; einen unterstützten Rücksprung nicht voraussetzen.
