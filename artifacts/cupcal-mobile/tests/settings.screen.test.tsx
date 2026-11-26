@@ -536,15 +536,10 @@ test('zeigt Ladezustand und sperrt die Anmeldeschaltfläche während der Anfrage
   expect(await view.findByText('Du bist angemeldet.')).toBeTruthy();
 });
 
-test('verhindert doppelte Anmeldungen bei schnellen Mehrfachklicks und zeigt danach die Sitzung', async () => {
-  let finishSignIn!: (result: { error: null }) => void;
+test('verhindert doppelte Anmeldungen bei schnellen Mehrfachklicks und gibt die Schaltfläche danach frei', async () => {
+  const pendingSignIns: Array<(result: { error: Error | null }) => void> = [];
   auth.signInWithPassword.mockImplementation(
-    () => new Promise((resolve) => {
-      finishSignIn = (result) => {
-        mockSupabase.__emitAuthStateChange('SIGNED_IN', testSession);
-        resolve(result);
-      };
-    }),
+    () => new Promise((resolve) => { pendingSignIns.push(resolve); }),
   );
   const view = await openSettings();
   await enterCredentials(view);
@@ -569,6 +564,7 @@ test('verhindert doppelte Anmeldungen bei schnellen Mehrfachklicks und zeigt dan
   });
 
   expect(auth.signInWithPassword).toHaveBeenCalledTimes(1);
+  expect(pendingSignIns).toHaveLength(1);
   await waitFor(() => {
     expect(view.getByTestId('auth-submit-button').props.accessibilityState).toEqual({
       disabled: true,
@@ -577,12 +573,35 @@ test('verhindert doppelte Anmeldungen bei schnellen Mehrfachklicks und zeigt dan
     expect(view.getByTestId('auth-submit-button').props.accessibilityLabel).toBe('Anmeldung läuft');
   });
 
-  await act(async () => finishSignIn({ error: null }));
+  await act(async () => pendingSignIns[0]!({ error: new Error('Invalid login credentials') }));
+  expect(await view.findByTestId('auth-error-message')).toBeTruthy();
+  await waitFor(() => {
+    expect(view.getByTestId('auth-submit-button').props.accessibilityState).toEqual({
+      disabled: false,
+      busy: false,
+    });
+    expect(view.getByTestId('auth-submit-button').props.accessibilityLabel).toBe('Anmelden');
+  });
+
+  await fireEvent.press(view.getByTestId('auth-submit-button'));
+  expect(auth.signInWithPassword).toHaveBeenCalledTimes(2);
+  expect(pendingSignIns).toHaveLength(2);
+  await waitFor(() => {
+    expect(view.getByTestId('auth-submit-button').props.accessibilityState).toEqual({
+      disabled: true,
+      busy: true,
+    });
+  });
+
+  await act(async () => {
+    mockSupabase.__emitAuthStateChange('SIGNED_IN', testSession);
+    pendingSignIns[1]!({ error: null });
+  });
   expect(await view.findByTestId('account-session-status')).toBeTruthy();
   expect(view.getByText('test@example.invalid')).toBeTruthy();
   expect(view.queryByText('Einen Moment …')).toBeNull();
   expect(view.queryByTestId('auth-submit-button')).toBeNull();
-  expect(auth.signInWithPassword).toHaveBeenCalledTimes(1);
+  expect(auth.signInWithPassword).toHaveBeenCalledTimes(2);
 });
 
 test('registriert ein Konto und zeigt die Bestätigungsmeldung', async () => {
