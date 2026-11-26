@@ -1167,6 +1167,100 @@ test('synchronisiert die neueste lokale Änderung nach Abschluss eines laufenden
   expect(remoteFavorite).toBe(false);
 });
 
+test('synchronisiert eine neue lokale Änderung nach verzögerter Sync-Vorbereitung', async () => {
+  const firstPreparation = deferred<Record<string, { isFavorite: boolean; updatedAt: string }>>();
+  let firstPreparationResolved = false;
+  void firstPreparation.promise.then(() => {
+    firstPreparationResolved = true;
+  });
+  const pending = new Map<string, { isFavorite: boolean; updatedAt: string }>();
+  const localIds = new Set<string>();
+  const remote = new Map<string, boolean>();
+
+  bookmarkStore.loadBookmarksForUser.mockImplementation(async (userId: string | null) =>
+    userId === 'konto-a' ? [...localIds] : [],
+  );
+  bookmarkStore.setBookmarksFavorite.mockImplementation(async (
+    _userId: string,
+    eventIds: string[],
+    isFavorite: boolean,
+  ) => {
+    for (const eventId of eventIds) {
+      if (isFavorite) localIds.add(eventId);
+      else localIds.delete(eventId);
+      pending.set(eventId, { isFavorite, updatedAt: '2026-01-02T00:00:00.000Z' });
+    }
+    return [...localIds];
+  });
+  let preparationCount = 0;
+  bookmarkStore.prepareBookmarksForSync.mockImplementation(async () => {
+    preparationCount += 1;
+    if (preparationCount === 1) return firstPreparation.promise;
+    return Object.fromEntries([...pending.entries()].map(([eventId, change]) => [
+      eventId,
+      { ...change },
+    ]));
+  });
+  bookmarkStore.reconcileBookmarks.mockImplementation(async (
+    _userId: string,
+    remoteBookmarks: RemoteBookmark[],
+  ) => {
+    const remoteById = new Map(remoteBookmarks.map((bookmark) => [bookmark.event_id, bookmark]));
+    for (const [eventId, change] of pending) {
+      if (remoteById.get(eventId)?.is_favorite === change.isFavorite) pending.delete(eventId);
+    }
+    const ids = new Set(
+      remoteBookmarks.filter((bookmark) => bookmark.is_favorite).map((bookmark) => bookmark.event_id),
+    );
+    for (const [eventId, change] of pending) {
+      if (change.isFavorite) ids.add(eventId);
+      else ids.delete(eventId);
+    }
+    return { eventIds: [...ids], pendingCount: pending.size };
+  });
+  mockedSupabase.fetchRemoteBookmarks.mockImplementation(async () =>
+    [...remote.entries()].map(([event_id, is_favorite], revision) => ({
+      event_id,
+      is_favorite,
+      updated_at: '2026-01-02T00:00:00.000Z',
+      revision,
+    })),
+  );
+  mockedSupabase.saveRemoteBookmark.mockImplementation(async (
+    eventId: string,
+    change: { isFavorite: boolean },
+  ) => {
+    remote.set(eventId, change.isFavorite);
+  });
+
+  const view = await renderProvider();
+  await emitUser('konto-a');
+  await waitFor(() => expect(preparationCount).toBe(1));
+
+  await act(async () => {
+    await fireEvent.press(view.getByTestId('toggle-bookmark'));
+  });
+
+  expect(view.getByTestId('bookmark-ids').props.children).toBe('turnier-neu');
+  expect(firstPreparationResolved).toBe(false);
+  expect(mockedSupabase.saveRemoteBookmark).not.toHaveBeenCalled();
+
+  await act(async () => {
+    firstPreparation.resolve({});
+    await firstPreparation.promise;
+  });
+
+  await waitFor(() => expect(view.getByTestId('bookmark-sync-status').props.children).toBe('synced'));
+  expect(preparationCount).toBe(2);
+  expect(mockedSupabase.saveRemoteBookmark).toHaveBeenCalledWith('turnier-neu', {
+    isFavorite: true,
+    updatedAt: '2026-01-02T00:00:00.000Z',
+  });
+  expect([...localIds]).toEqual(['turnier-neu']);
+  expect([...remote.entries()]).toEqual([['turnier-neu', true]]);
+  expect(pending.size).toBe(0);
+});
+
 test('synchronisiert während eines Schreibens die neuesten Änderungen für mehrere Turniere', async () => {
   const firstWrite = deferred<void>();
   const pending = new Map<string, { isFavorite: boolean; updatedAt: string }>([

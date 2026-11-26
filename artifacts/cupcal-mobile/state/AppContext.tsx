@@ -149,6 +149,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       currentUserId.current === targetUserId &&
       currentSessionVersion.current === sessionVersion;
     if (announceRemoteChanges) queuedAnnouncementSessions.current.add(sessionKey);
+    if (syncingSessions.current.has(sessionKey)) {
+      queuedSyncSessions.current.add(sessionKey);
+      return;
+    }
+
     let unclaimedIds: string[];
     try {
       unclaimedIds = await getAnonymousBookmarksForImport(targetUserId);
