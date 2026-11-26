@@ -122,6 +122,7 @@ export default function SettingsScreen() {
   const [password, setPassword] = useState('');
   const [submittingAction, setSubmittingAction] = useState<AuthAction | null>(null);
   const isSubmittingAuthRef = useRef(false);
+  const isSigningOutRef = useRef(false);
   const isRequestingRecoveryRef = useRef(false);
   const recoveryEmailRevisionRef = useRef(0);
   const isResendingConfirmationRef = useRef(false);
@@ -512,8 +513,9 @@ export default function SettingsScreen() {
   };
 
   const signOut = async () => {
-    if (!supabase) return;
+    if (!supabase || isSigningOutRef.current) return;
 
+    isSigningOutRef.current = true;
     setSubmittingAction('sign-out');
     setAuthError(null);
     setAuthMessage(null);
@@ -529,6 +531,7 @@ export default function SettingsScreen() {
         reportAuthError(result.error);
       }
     } finally {
+      isSigningOutRef.current = false;
       setSubmittingAction(null);
     }
   };

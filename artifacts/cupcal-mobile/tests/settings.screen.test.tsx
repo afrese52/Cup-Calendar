@@ -2397,13 +2397,54 @@ test.each(['ios', 'android'] as const)(
 
 test('zeigt einen Abmeldefehler sichtbar an', async () => {
   auth.getSession.mockResolvedValue({ data: { session: testSession }, error: null });
-  auth.signOut.mockResolvedValue({ error: new Error('Abmeldung fehlgeschlagen') });
+  auth.signOut
+    .mockResolvedValueOnce({ error: new Error('Abmeldung fehlgeschlagen') })
+    .mockImplementationOnce(async () => {
+      mockSupabase.__emitAuthStateChange('SIGNED_OUT', null);
+      return { error: null };
+    });
   const view = await render(<SettingsScreen />);
   expect(await view.findByText('test@example.invalid')).toBeTruthy();
 
   await fireEvent.press(view.getByTestId('sign-out-button'));
 
   expect(await view.findByText('Abmeldung fehlgeschlagen')).toBeTruthy();
+  await fireEvent.press(view.getByTestId('sign-out-button'));
+
+  await waitFor(() => {
+    expect(view.getByTestId('account-session-status').props.children).toBe('Bei CupCal anmelden');
+  });
+  expect(auth.signOut).toHaveBeenCalledTimes(2);
+});
+
+test('startet bei synchronen Abmeldeklicks nur eine Anfrage', async () => {
+  auth.getSession.mockResolvedValue({ data: { session: testSession }, error: null });
+  let finishSignOut!: (result: { error: Error | null }) => void;
+  auth.signOut.mockImplementation(
+    () => new Promise((resolve) => {
+      finishSignOut = resolve;
+    }),
+  );
+  const view = await render(<SettingsScreen />);
+  expect(await view.findByText('test@example.invalid')).toBeTruthy();
+
+  const signOutButton = view.getByTestId('sign-out-button');
+  const target = {};
+  await act(async () => {
+    const click = signOutButton.props.onClick as (event: {
+      currentTarget: object;
+      target: object;
+    }) => void;
+    click({ currentTarget: target, target });
+    click({ currentTarget: target, target });
+    click({ currentTarget: target, target });
+  });
+
+  expect(auth.signOut).toHaveBeenCalledTimes(1);
+
+  await act(async () => {
+    finishSignOut({ error: null });
+  });
 });
 
 test('fragt vor dem Versand des Kontolöschungslinks ausdrücklich nach', async () => {
