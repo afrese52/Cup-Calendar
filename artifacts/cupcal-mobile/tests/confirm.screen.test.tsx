@@ -448,6 +448,36 @@ test('ignoriert Routenbestätigung, wenn die Start-URL nach dem Schließen fehls
   expect(mockPersistedSession).toBeNull();
 });
 
+test('bestätigt Routenparameter, wenn die Start-URL bei offenem Bildschirm fehlschlägt', async () => {
+  const initialUrl = deferred<string | null>();
+  mockInitialUrlPromise.current = initialUrl.promise;
+  mockRouteParams.current = {
+    code: 'route-confirmation-code',
+    flow_id: 'route-confirmation-flow',
+  };
+  const view = await render(<ConfirmEmailScreen />);
+
+  expect(view.getByText('Bestätigung prüfen')).toBeTruthy();
+  expect(supabase.auth.exchangeCodeForSession).not.toHaveBeenCalled();
+
+  await act(async () => {
+    initialUrl.reject(new Error('Start-URL konnte nicht gelesen werden.'));
+    await initialUrl.promise.catch(() => undefined);
+  });
+
+  await waitFor(() => {
+    expect(supabase.auth.exchangeCodeForSession).toHaveBeenCalledTimes(1);
+    expect(supabase.auth.exchangeCodeForSession).toHaveBeenCalledWith(
+      'route-confirmation-code',
+      { flowId: 'route-confirmation-flow' },
+    );
+    expect(view.getByText('Bestätigt')).toBeTruthy();
+    expect(view.getByText(
+      'Deine E-Mail-Adresse ist bestätigt. Du kannst CupCal jetzt verwenden.',
+    )).toBeTruthy();
+  });
+});
+
 test('ändert nach dem Schließen bei verspätetem Fehler keinen Seitenzustand', async () => {
   const exchange = deferred<any>();
   const stateUpdates = trackStateUpdatesAfterUnmount();
