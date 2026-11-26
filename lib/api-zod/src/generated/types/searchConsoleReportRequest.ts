@@ -14,4 +14,6 @@ export interface SearchConsoleReportRequest {
   urls: string[];
   startDate: Date;
   endDate: Date;
+  comparisonStartDate: Date;
+  comparisonEndDate: Date;
 }

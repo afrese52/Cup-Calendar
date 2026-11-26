@@ -784,7 +784,7 @@ export const getGetSearchConsoleReportUrl = () => {
 
 /**
  * Ausschließlich lesender Abruf für HTTPS-URLs der fest konfigurierten CupCal-Property.
- * @summary Lädt Indexstatus, Seitenleistung, Länder, Geräte und Suchbegriffe für CupCal-Seiten
+ * @summary Lädt CupCal-Seitenberichte und vergleicht Suchbegriffe aus zwei Zeiträumen
  */
 export const getSearchConsoleReport = async (searchConsoleReportRequest: SearchConsoleReportRequest, options?: Parameters<typeof customFetch>[1]): Promise<SearchConsoleReportResponse> => {
 
@@ -850,7 +850,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type GetSearchConsoleReportMutationVariables = {data: BodyType<SearchConsoleReportRequest>}
 
     /**
- * @summary Lädt Indexstatus, Seitenleistung, Länder, Geräte und Suchbegriffe für CupCal-Seiten
+ * @summary Lädt CupCal-Seitenberichte und vergleicht Suchbegriffe aus zwei Zeiträumen
  */
 export const useGetSearchConsoleReport = <TError = ErrorType<void>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof getSearchConsoleReport>>, TError,GetSearchConsoleReportMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}

@@ -38,6 +38,8 @@ export * from './searchConsoleCountry';
 export * from './searchConsoleDevice';
 export * from './searchConsoleDeviceDevice';
 export * from './searchConsoleQuery';
+export * from './searchConsoleQueryComparison';
+export * from './searchConsoleQueryComparisonStatus';
 export * from './searchConsoleReportItem';
 export * from './searchConsoleReportItemIndexing';
 export * from './searchConsoleReportItemPerformance';

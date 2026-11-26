@@ -13,6 +13,8 @@ const validRequest = {
   urls: ["https://cupcal.af-software.app/", "https://cupcal.af-software.app/turnierkalender-app/"],
   startDate: "2026-10-25",
   endDate: "2026-11-21",
+  comparisonStartDate: "2026-09-27",
+  comparisonEndDate: "2026-10-24",
 };
 
 function serviceAccountEnv() {
@@ -83,8 +85,6 @@ test("uses the readonly OAuth scope and maps index and search performance data",
       }
       assert.match(url, /searchAnalytics\/query$/);
       const body = JSON.parse(String(init.body));
-      assert.equal(body.startDate, validRequest.startDate);
-      assert.equal(body.endDate, validRequest.endDate);
       assert.deepEqual(body.dimensionFilterGroups, [{
         filters: [{
           dimension: "page",
@@ -94,13 +94,21 @@ test("uses the readonly OAuth scope and maps index and search performance data",
       }]);
       if (body.dimensions[0] === "query") {
         assert.equal(body.rowLimit, 100);
-        return Response.json({
-          rows: [
+        const comparisonPeriod = body.startDate === validRequest.comparisonStartDate;
+        assert.equal(body.startDate, comparisonPeriod ? validRequest.comparisonStartDate : validRequest.startDate);
+        assert.equal(body.endDate, comparisonPeriod ? validRequest.comparisonEndDate : validRequest.endDate);
+        return Response.json({ rows: comparisonPeriod
+          ? [
+            { keys: ["cupcal kalender"], clicks: 3, impressions: 50, ctr: 0.06, position: 5.5 },
+            { keys: ["alter cupcal begriff"], clicks: 1, impressions: 20, ctr: 0.05, position: 8.1 },
+          ]
+          : [
             { keys: ["cupcal kalender"], clicks: 8, impressions: 100, ctr: 0.08, position: 4.5 },
             { keys: ["fortnite cup termine"], clicks: 2, impressions: 30, ctr: 0.0667, position: 7.1 },
-          ],
-        });
+          ] });
       }
+      assert.equal(body.startDate, validRequest.startDate);
+      assert.equal(body.endDate, validRequest.endDate);
       if (body.dimensions[0] === "country") {
         assert.equal(body.rowLimit, 250);
         return Response.json({
@@ -142,14 +150,44 @@ test("uses the readonly OAuth scope and maps index and search performance data",
       { query: "cupcal kalender", clicks: 8, impressions: 100, ctr: 0.08, position: 4.5 },
       { query: "fortnite cup termine", clicks: 2, impressions: 30, ctr: 0.0667, position: 7.1 },
     ],
+    queryComparisons: [
+      {
+        query: "cupcal kalender",
+        currentClicks: 8,
+        currentImpressions: 100,
+        comparisonClicks: 3,
+        comparisonImpressions: 50,
+        status: "both",
+      },
+      {
+        query: "fortnite cup termine",
+        currentClicks: 2,
+        currentImpressions: 30,
+        comparisonClicks: null,
+        comparisonImpressions: null,
+        status: "new",
+      },
+      {
+        query: "alter cupcal begriff",
+        currentClicks: null,
+        currentImpressions: null,
+        comparisonClicks: 1,
+        comparisonImpressions: 20,
+        status: "not_visible",
+      },
+    ],
   });
-  assert.equal(calls.length, 6);
+  assert.equal(calls.length, 7);
   assert.ok(calls.slice(1).every(({ init }) => init.headers.authorization === "Bearer mock-access-token"));
   assert.ok(calls.slice(1).every(({ init }) => init.method === "POST"));
   for (const { init } of calls.slice(2)) {
     const body = JSON.parse(String(init.body));
-    assert.equal(body.startDate, validRequest.startDate);
-    assert.equal(body.endDate, validRequest.endDate);
+    if (body.dimensions[0] === "query" && body.startDate === validRequest.comparisonStartDate) {
+      assert.equal(body.endDate, validRequest.comparisonEndDate);
+    } else {
+      assert.equal(body.startDate, validRequest.startDate);
+      assert.equal(body.endDate, validRequest.endDate);
+    }
     assert.equal(body.dimensionFilterGroups[0].filters[0].expression, validRequest.urls[0]);
   }
 });
@@ -168,6 +206,7 @@ test("returns zeros when Search Console has no performance row", async () => {
   const [result] = await client.getReport({ ...validRequest, urls: [validRequest.urls[0]] });
   assert.deepEqual(result?.performance, { clicks: 0, impressions: 0, ctr: 0, position: null });
   assert.deepEqual(result?.queries, []);
+  assert.deepEqual(result?.queryComparisons, []);
   assert.deepEqual(result?.countries, []);
   assert.deepEqual(result?.devices, []);
 });
@@ -191,6 +230,7 @@ test("filters visible search terms separately for each selected CupCal page", as
         dimensions: body.dimensions,
         startDate: body.startDate,
         endDate: body.endDate,
+        comparisonPeriod: body.startDate === validRequest.comparisonStartDate,
       });
       if (body.dimensions[0] === "country") {
         return Response.json({
@@ -203,27 +243,62 @@ test("filters visible search terms separately for each selected CupCal page", as
         });
       }
       return body.dimensions[0] === "query"
-        ? Response.json({ rows: [{ keys: [`Suchbegriff für ${pageUrl}`], clicks: 1, impressions: 4 }] })
+        ? Response.json({ rows: [{ keys: [`Suchbegriff ${requestedPages.at(-1)?.comparisonPeriod ? "Vergleich" : "aktuell"} für ${pageUrl}`], clicks: 1, impressions: 4 }] })
         : Response.json({ rows: [{ clicks: 1, impressions: 4 }] });
     },
   });
 
   const result = await client.getReport(validRequest);
   assert.deepEqual(result.map((item) => item.queries[0]?.query), [
-    `Suchbegriff für ${validRequest.urls[0]}`,
-    `Suchbegriff für ${validRequest.urls[1]}`,
+    `Suchbegriff aktuell für ${validRequest.urls[0]}`,
+    `Suchbegriff aktuell für ${validRequest.urls[1]}`,
+  ]);
+  assert.deepEqual(result.map((item) => item.queryComparisons.map(({ query, status }) => [query, status])), [
+    [
+      [`Suchbegriff aktuell für ${validRequest.urls[0]}`, "new"],
+      [`Suchbegriff Vergleich für ${validRequest.urls[0]}`, "not_visible"],
+    ],
+    [
+      [`Suchbegriff aktuell für ${validRequest.urls[1]}`, "new"],
+      [`Suchbegriff Vergleich für ${validRequest.urls[1]}`, "not_visible"],
+    ],
   ]);
   assert.deepEqual(result.map((item) => item.countries[0]?.country), ["DEU", "FRA"]);
   assert.deepEqual(result.map((item) => item.devices[0]?.device), ["MOBILE", "MOBILE"]);
   for (const dimension of ["query", "country", "device"]) {
     assert.equal(
       requestedPages.filter(({ dimensions }) => dimensions[0] === dimension).length,
-      2,
+      dimension === "query" ? 4 : 2,
     );
   }
   assert.ok(requestedPages.every(({ pageUrl }) => validRequest.urls.includes(pageUrl)));
-  assert.ok(requestedPages.every(({ startDate, endDate }) =>
-    startDate === validRequest.startDate && endDate === validRequest.endDate));
+  assert.ok(requestedPages.every(({ startDate, endDate, comparisonPeriod }) =>
+    comparisonPeriod
+      ? startDate === validRequest.comparisonStartDate && endDate === validRequest.comparisonEndDate
+      : startDate === validRequest.startDate && endDate === validRequest.endDate));
+});
+
+test("validates the comparison period independently", () => {
+  assert.throws(
+    () => validateSearchConsoleReportRequest({ ...validRequest, comparisonStartDate: "2026-02-30" }, now),
+    /Zeitraum ist ungültig/,
+  );
+  assert.throws(
+    () => validateSearchConsoleReportRequest({ ...validRequest, comparisonEndDate: "2026-11-22" }, now),
+    /Zukunft/,
+  );
+  assert.throws(
+    () => validateSearchConsoleReportRequest({
+      ...validRequest,
+      comparisonStartDate: "2026-10-25",
+      comparisonEndDate: "2026-10-24",
+    }, now),
+    /Startdatum muss vor oder am Enddatum liegen/,
+  );
+  assert.throws(
+    () => validateSearchConsoleReportRequest({ ...validRequest, comparisonStartDate: "2025-06-01" }, now),
+    /16 Monate/,
+  );
 });
 
 test("does not reveal Google error response contents", async () => {

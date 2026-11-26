@@ -111,6 +111,24 @@ test('lädt Indexstatus und Suchleistung mit der CupCal-Admin-Sitzung', async ()
           { query: 'cupcal kalender', clicks: 8, impressions: 100, ctr: 0.08, position: 4.5 },
           { query: 'fortnite cup termine', clicks: 2, impressions: 30, ctr: 0.0667, position: 7.1 },
         ],
+        queryComparisons: [
+          {
+            query: 'cupcal kalender',
+            currentClicks: 8,
+            currentImpressions: 100,
+            comparisonClicks: 3,
+            comparisonImpressions: 50,
+            status: 'both',
+          },
+          {
+            query: 'neuer cupcal begriff',
+            currentClicks: 2,
+            currentImpressions: 30,
+            comparisonClicks: null,
+            comparisonImpressions: null,
+            status: 'new',
+          },
+        ],
       }],
     }));
 
@@ -123,6 +141,9 @@ test('lädt Indexstatus und Suchleistung mit der CupCal-Admin-Sitzung', async ()
   expect(await view.findByText('DEU')).toBeTruthy();
   expect(await view.findByText('Mobilgerät')).toBeTruthy();
   expect(await view.findByText('cupcal kalender')).toBeTruthy();
+  expect(await view.findByText('Aktuell: 8 Klicks · 100 Impressionen')).toBeTruthy();
+  expect(await view.findByText('Vergleich: 3 Klicks · 50 Impressionen')).toBeTruthy();
+  expect(await view.findByText('Neu')).toBeTruthy();
   expect(view.getByText(/anonymisierte Suchanfragen möglicherweise aus/)).toBeTruthy();
   await waitFor(() => {
     const reportCall = mockFetch.mock.calls[1];
@@ -135,6 +156,8 @@ test('lädt Indexstatus und Suchleistung mit der CupCal-Admin-Sitzung', async ()
       urls: ['https://cupcal.af-software.app/'],
       startDate: expect.any(String),
       endDate: expect.any(String),
+      comparisonStartDate: expect.any(String),
+      comparisonEndDate: expect.any(String),
     });
   });
 });
@@ -164,6 +187,7 @@ test('erklärt, wenn für eine Seite keine sichtbaren Suchbegriffe vorliegen', a
         countries: [],
         devices: [],
         queries: [],
+        queryComparisons: [],
       }],
     }));
 
@@ -172,7 +196,7 @@ test('erklärt, wenn für eine Seite keine sichtbaren Suchbegriffe vorliegen', a
   await fireEvent.press(await view.findByText('Suchdaten abrufen'));
 
   expect(await view.findByText(
-    'Für diese Seite wurden im Zeitraum keine sichtbaren Suchbegriffe gemeldet.',
+    'Für diese Seite wurden in beiden Zeiträumen keine sichtbaren Suchbegriffe gemeldet.',
   )).toBeTruthy();
   expect(view.getByText(/Google blendet seltene oder anonymisierte Suchanfragen/)).toBeTruthy();
   expect(view.getByText(

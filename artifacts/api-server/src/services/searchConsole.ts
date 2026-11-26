@@ -10,6 +10,8 @@ export type SearchConsoleReportRequest = {
   urls: string[];
   startDate: string;
   endDate: string;
+  comparisonStartDate: string;
+  comparisonEndDate: string;
 };
 
 export type SearchConsoleReportItem = {
@@ -31,6 +33,7 @@ export type SearchConsoleReportItem = {
     position: number | null;
   };
   queries: SearchConsoleQuery[];
+  queryComparisons: SearchConsoleQueryComparison[];
   countries: SearchConsoleCountry[];
   devices: SearchConsoleDevice[];
 };
@@ -41,6 +44,15 @@ export type SearchConsoleQuery = {
   impressions: number;
   ctr: number;
   position: number | null;
+};
+
+export type SearchConsoleQueryComparison = {
+  query: string;
+  currentClicks: number | null;
+  currentImpressions: number | null;
+  comparisonClicks: number | null;
+  comparisonImpressions: number | null;
+  status: "both" | "new" | "not_visible";
 };
 
 export type SearchConsoleCountry = {
@@ -142,16 +154,33 @@ export function validateSearchConsoleReportRequest(
   if (input.urls.length < 1 || input.urls.length > 10) {
     throw new TypeError("Bitte gib zwischen einer und zehn CupCal-Seiten an.");
   }
-  if (!isCalendarDate(input.startDate) || !isCalendarDate(input.endDate)) {
+  if (
+    !isCalendarDate(input.startDate)
+    || !isCalendarDate(input.endDate)
+    || !isCalendarDate(input.comparisonStartDate)
+    || !isCalendarDate(input.comparisonEndDate)
+  ) {
     throw new TypeError("Der ausgewählte Zeitraum ist ungültig.");
   }
-  if (input.startDate > input.endDate || input.endDate > now.toISOString().slice(0, 10)) {
+  const today = now.toISOString().slice(0, 10);
+  if (
+    input.startDate > input.endDate
+    || input.comparisonStartDate > input.comparisonEndDate
+  ) {
+    throw new TypeError("Das Startdatum muss vor oder am Enddatum liegen.");
+  }
+  if (input.endDate > today || input.comparisonEndDate > today) {
     throw new TypeError("Der Zeitraum darf nicht in der Zukunft liegen.");
   }
-  const startMillis = Date.parse(`${input.startDate}T00:00:00.000Z`);
-  const endMillis = Date.parse(`${input.endDate}T00:00:00.000Z`);
-  if (endMillis - startMillis > MAX_REPORT_DAYS * 24 * 60 * 60 * 1000) {
-    throw new TypeError("Der Zeitraum darf höchstens 16 Monate umfassen.");
+  for (const [startDate, endDate] of [
+    [input.startDate, input.endDate],
+    [input.comparisonStartDate, input.comparisonEndDate],
+  ]) {
+    const startMillis = Date.parse(`${startDate}T00:00:00.000Z`);
+    const endMillis = Date.parse(`${endDate}T00:00:00.000Z`);
+    if (endMillis - startMillis > MAX_REPORT_DAYS * 24 * 60 * 60 * 1000) {
+      throw new TypeError("Jeder Zeitraum darf höchstens 16 Monate umfassen.");
+    }
   }
 
   const urls = input.urls.map((value) => {
@@ -289,7 +318,7 @@ export function createSearchConsoleClient(options: {
         `${API_BASE_URL}/webmasters/v3/sites/${encodeURIComponent(CUPCAL_SEARCH_CONSOLE_PROPERTY)}/searchAnalytics/query`;
 
       return await Promise.all(validated.urls.map(async (url): Promise<SearchConsoleReportItem> => {
-        const [inspection, analytics, queryAnalytics, countryAnalytics, deviceAnalytics] = await Promise.all([
+        const [inspection, analytics, queryAnalytics, comparisonQueryAnalytics, countryAnalytics, deviceAnalytics] = await Promise.all([
           googlePost(`${API_BASE_URL}/v1/urlInspection/index:inspect`, token, {
             inspectionUrl: url,
             siteUrl: CUPCAL_SEARCH_CONSOLE_PROPERTY,
@@ -307,6 +336,15 @@ export function createSearchConsoleClient(options: {
           googlePost(analyticsEndpoint, token, {
             startDate: validated.startDate,
             endDate: validated.endDate,
+            dimensions: ["query"],
+            dimensionFilterGroups: [{
+              filters: [{ dimension: "page", operator: "equals", expression: url }],
+            }],
+            rowLimit: 100,
+          }),
+          googlePost(analyticsEndpoint, token, {
+            startDate: validated.comparisonStartDate,
+            endDate: validated.comparisonEndDate,
             dimensions: ["query"],
             dimensionFilterGroups: [{
               filters: [{ dimension: "page", operator: "equals", expression: url }],
@@ -345,9 +383,34 @@ export function createSearchConsoleClient(options: {
           ? rows[0] as Record<string, unknown>
           : {};
         const queryRows = Array.isArray(queryAnalytics["rows"]) ? queryAnalytics["rows"] : [];
+        const comparisonQueryRows = Array.isArray(comparisonQueryAnalytics["rows"])
+          ? comparisonQueryAnalytics["rows"]
+          : [];
         const countryRows = Array.isArray(countryAnalytics["rows"]) ? countryAnalytics["rows"] : [];
         const deviceRows = Array.isArray(deviceAnalytics["rows"]) ? deviceAnalytics["rows"] : [];
         const position = row["position"];
+
+        const queries = parseSearchConsoleQueries(queryRows);
+        const comparisonQueries = parseSearchConsoleQueries(comparisonQueryRows);
+        const currentByQuery = new Map(queries.map((query) => [query.query, query]));
+        const comparisonByQuery = new Map(comparisonQueries.map((query) => [query.query, query]));
+        const queryNames = new Set([...currentByQuery.keys(), ...comparisonByQuery.keys()]);
+        const queryComparisons = [...queryNames].map((query): SearchConsoleQueryComparison => {
+          const current = currentByQuery.get(query);
+          const comparison = comparisonByQuery.get(query);
+          return {
+            query,
+            currentClicks: current?.clicks ?? null,
+            currentImpressions: current?.impressions ?? null,
+            comparisonClicks: comparison?.clicks ?? null,
+            comparisonImpressions: comparison?.impressions ?? null,
+            status: current && comparison ? "both" : current ? "new" : "not_visible",
+          };
+        }).sort((a, b) =>
+          (b.currentImpressions ?? 0) + (b.comparisonImpressions ?? 0)
+          - (a.currentImpressions ?? 0) - (a.comparisonImpressions ?? 0)
+          || a.query.localeCompare(b.query),
+        );
 
         return {
           url,
@@ -405,29 +468,34 @@ export function createSearchConsoleClient(options: {
                 : null,
             }];
           }),
-          queries: queryRows.flatMap((queryRow): SearchConsoleQuery[] => {
-            if (!queryRow || typeof queryRow !== "object") return [];
-            const queryData = queryRow as Record<string, unknown>;
-            const keys = queryData["keys"];
-            const query = Array.isArray(keys) && typeof keys[0] === "string"
-              ? keys[0].trim()
-              : "";
-            if (!query) return [];
-            const queryPosition = queryData["position"];
-            return [{
-              query,
-              clicks: asNumber(queryData["clicks"]),
-              impressions: asNumber(queryData["impressions"]),
-              ctr: asNumber(queryData["ctr"]),
-              position: typeof queryPosition === "number" && Number.isFinite(queryPosition)
-                ? queryPosition
-                : null,
-            }];
-          }),
+          queries,
+          queryComparisons,
         };
       }));
     },
   };
+}
+
+function parseSearchConsoleQueries(rows: unknown[]): SearchConsoleQuery[] {
+  return rows.flatMap((queryRow): SearchConsoleQuery[] => {
+    if (!queryRow || typeof queryRow !== "object") return [];
+    const queryData = queryRow as Record<string, unknown>;
+    const keys = queryData["keys"];
+    const query = Array.isArray(keys) && typeof keys[0] === "string"
+      ? keys[0].trim()
+      : "";
+    if (!query) return [];
+    const queryPosition = queryData["position"];
+    return [{
+      query,
+      clicks: asNumber(queryData["clicks"]),
+      impressions: asNumber(queryData["impressions"]),
+      ctr: asNumber(queryData["ctr"]),
+      position: typeof queryPosition === "number" && Number.isFinite(queryPosition)
+        ? queryPosition
+        : null,
+    }];
+  });
 }
 
 const searchConsoleClient = createSearchConsoleClient();

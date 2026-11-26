@@ -176,7 +176,7 @@ export const GetSearchConsoleStatusResponse = zod.object({
 
 /**
  * Ausschließlich lesender Abruf für HTTPS-URLs der fest konfigurierten CupCal-Property.
- * @summary Lädt Indexstatus, Seitenleistung, Länder, Geräte und Suchbegriffe für CupCal-Seiten
+ * @summary Lädt CupCal-Seitenberichte und vergleicht Suchbegriffe aus zwei Zeiträumen
  */
 export const getSearchConsoleReportBodyUrlsMax = 10;
 
@@ -185,7 +185,9 @@ export const getSearchConsoleReportBodyUrlsMax = 10;
 export const GetSearchConsoleReportBody = zod.object({
   "urls": zod.array(zod.string().url()).min(1).max(getSearchConsoleReportBodyUrlsMax),
   "startDate": zod.coerce.date(),
-  "endDate": zod.coerce.date()
+  "endDate": zod.coerce.date(),
+  "comparisonStartDate": zod.coerce.date(),
+  "comparisonEndDate": zod.coerce.date()
 })
 
 export const GetSearchConsoleReportResponse = zod.object({
@@ -215,6 +217,14 @@ export const GetSearchConsoleReportResponse = zod.object({
   "ctr": zod.number(),
   "position": zod.number().nullable()
 })).describe('Sichtbare Suchbegriffe; Google kann seltene oder anonymisierte Begriffe ausblenden.'),
+  "queryComparisons": zod.array(zod.object({
+  "query": zod.string(),
+  "currentClicks": zod.number().nullable(),
+  "currentImpressions": zod.number().nullable(),
+  "comparisonClicks": zod.number().nullable(),
+  "comparisonImpressions": zod.number().nullable(),
+  "status": zod.enum(['both', 'new', 'not_visible'])
+})).describe('Sichtbare Suchbegriffe beider Zeiträume; fehlende Zeilen können durch Googles Anonymisierung entstehen.'),
   "countries": zod.array(zod.object({
   "country": zod.string().describe('ISO-3166-1 alpha-3 country code'),
   "clicks": zod.number(),

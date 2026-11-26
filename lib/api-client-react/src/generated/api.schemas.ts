@@ -394,6 +394,8 @@ export interface SearchConsoleReportRequest {
   urls: string[];
   startDate: string;
   endDate: string;
+  comparisonStartDate: string;
+  comparisonEndDate: string;
 }
 
 export interface SearchConsoleQuery {
@@ -403,6 +405,28 @@ export interface SearchConsoleQuery {
   ctr: number;
   /** @nullable */
   position: number | null;
+}
+
+export type SearchConsoleQueryComparisonStatus = typeof SearchConsoleQueryComparisonStatus[keyof typeof SearchConsoleQueryComparisonStatus];
+
+
+export const SearchConsoleQueryComparisonStatus = {
+  both: 'both',
+  new: 'new',
+  not_visible: 'not_visible',
+} as const;
+
+export interface SearchConsoleQueryComparison {
+  query: string;
+  /** @nullable */
+  currentClicks: number | null;
+  /** @nullable */
+  currentImpressions: number | null;
+  /** @nullable */
+  comparisonClicks: number | null;
+  /** @nullable */
+  comparisonImpressions: number | null;
+  status: SearchConsoleQueryComparisonStatus;
 }
 
 export interface SearchConsoleCountry {
@@ -466,6 +490,8 @@ export interface SearchConsoleReportItem {
   performance: SearchConsoleReportItemPerformance;
   /** Sichtbare Suchbegriffe; Google kann seltene oder anonymisierte Begriffe ausblenden. */
   queries: SearchConsoleQuery[];
+  /** Sichtbare Suchbegriffe beider Zeiträume; fehlende Zeilen können durch Googles Anonymisierung entstehen. */
+  queryComparisons: SearchConsoleQueryComparison[];
   /** Suchleistung nach ISO-Ländercode; leer, wenn Google keine Länderzeilen meldet. */
   countries: SearchConsoleCountry[];
   /** Suchleistung nach Gerät; leer, wenn Google keine Gerätezeilen meldet. */

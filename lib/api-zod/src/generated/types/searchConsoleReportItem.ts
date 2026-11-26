@@ -8,6 +8,7 @@
 import type { SearchConsoleCountry } from './searchConsoleCountry';
 import type { SearchConsoleDevice } from './searchConsoleDevice';
 import type { SearchConsoleQuery } from './searchConsoleQuery';
+import type { SearchConsoleQueryComparison } from './searchConsoleQueryComparison';
 import type { SearchConsoleReportItemIndexing } from './searchConsoleReportItemIndexing';
 import type { SearchConsoleReportItemPerformance } from './searchConsoleReportItemPerformance';
 
@@ -17,6 +18,8 @@ export interface SearchConsoleReportItem {
   performance: SearchConsoleReportItemPerformance;
   /** Sichtbare Suchbegriffe; Google kann seltene oder anonymisierte Begriffe ausblenden. */
   queries: SearchConsoleQuery[];
+  /** Sichtbare Suchbegriffe beider Zeiträume; fehlende Zeilen können durch Googles Anonymisierung entstehen. */
+  queryComparisons: SearchConsoleQueryComparison[];
   /** Suchleistung nach ISO-Ländercode; leer, wenn Google keine Länderzeilen meldet. */
   countries: SearchConsoleCountry[];
   /** Suchleistung nach Gerät; leer, wenn Google keine Gerätezeilen meldet. */

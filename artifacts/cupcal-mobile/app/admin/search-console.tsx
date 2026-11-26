@@ -53,6 +53,8 @@ export default function SearchConsoleScreen() {
   const [urls, setUrls] = useState(DEFAULT_URL);
   const [startDate, setStartDate] = useState(() => defaultDate(28));
   const [endDate, setEndDate] = useState(() => defaultDate(1));
+  const [comparisonStartDate, setComparisonStartDate] = useState(() => defaultDate(56));
+  const [comparisonEndDate, setComparisonEndDate] = useState(() => defaultDate(29));
 
   const loadReport = async () => {
     if (loading) return;
@@ -63,6 +65,8 @@ export default function SearchConsoleScreen() {
             urls: urls.split('\n').map((url) => url.trim()).filter(Boolean),
             startDate,
             endDate,
+            comparisonStartDate,
+            comparisonEndDate,
         },
       });
     } catch {
@@ -124,7 +128,7 @@ export default function SearchConsoleScreen() {
             onChangeText={setUrls}
             style={[styles.input, styles.urlsInput, { color: colors.foreground, backgroundColor: colors.input, borderColor: colors.border }]}
           />
-          <Text style={[styles.label, { color: colors.foreground }]}>Zeitraum für Suchleistung</Text>
+          <Text style={[styles.label, { color: colors.foreground }]}>Aktueller Zeitraum</Text>
           <View style={styles.dateRow}>
             <TextInput
               accessibilityLabel="Startdatum"
@@ -139,6 +143,26 @@ export default function SearchConsoleScreen() {
               accessibilityLabel="Enddatum"
               value={endDate}
               onChangeText={setEndDate}
+              placeholder="JJJJ-MM-TT"
+              autoCapitalize="none"
+              style={[styles.input, styles.dateInput, { color: colors.foreground, backgroundColor: colors.input, borderColor: colors.border }]}
+            />
+          </View>
+          <Text style={[styles.label, { color: colors.foreground }]}>Vergleichszeitraum</Text>
+          <View style={styles.dateRow}>
+            <TextInput
+              accessibilityLabel="Vergleich Startdatum"
+              value={comparisonStartDate}
+              onChangeText={setComparisonStartDate}
+              placeholder="JJJJ-MM-TT"
+              autoCapitalize="none"
+              style={[styles.input, styles.dateInput, { color: colors.foreground, backgroundColor: colors.input, borderColor: colors.border }]}
+            />
+            <Text style={[styles.dateSeparator, { color: colors.mutedForeground }]}>bis</Text>
+            <TextInput
+              accessibilityLabel="Vergleich Enddatum"
+              value={comparisonEndDate}
+              onChangeText={setComparisonEndDate}
               placeholder="JJJJ-MM-TT"
               autoCapitalize="none"
               style={[styles.input, styles.dateInput, { color: colors.foreground, backgroundColor: colors.input, borderColor: colors.border }]}
@@ -234,30 +258,43 @@ export default function SearchConsoleScreen() {
               </View>
             )}
             <Text style={[styles.sectionLabel, { color: colors.mutedForeground, marginTop: 18 }]}>
-              SUCHBEGRIFFE IM ZEITRAUM
+              SUCHBEGRIFFE IM ZEITRAUMVERGLEICH
             </Text>
             <Text style={[styles.help, { color: colors.mutedForeground }]}>
-              Google blendet seltene oder anonymisierte Suchanfragen möglicherweise aus. Die Liste kann daher unvollständig sein.
+              Klicks und Impressionen je Begriff in beiden ausgewählten Zeiträumen. „Neu“ bedeutet, dass der Begriff nur im aktuellen Zeitraum sichtbar ist; „Nicht mehr sichtbar“ bedeutet, dass Google ihn nur im Vergleichszeitraum meldet. Google blendet seltene oder anonymisierte Suchanfragen möglicherweise aus. Die Liste kann daher unvollständig sein.
             </Text>
-            {result.queries.length === 0 ? (
+            {result.queryComparisons.length === 0 ? (
               <Text style={[styles.emptyQueries, { color: colors.mutedForeground }]}>
-                Für diese Seite wurden im Zeitraum keine sichtbaren Suchbegriffe gemeldet.
+                Für diese Seite wurden in beiden Zeiträumen keine sichtbaren Suchbegriffe gemeldet.
               </Text>
             ) : (
               <>
                 <View style={styles.queryList}>
-                  {result.queries.slice(0, 20).map((query) => (
-                    <View key={query.query} style={[styles.queryRow, { borderColor: colors.border }]}>
-                      <Text style={[styles.queryText, { color: colors.foreground }]}>{query.query}</Text>
-                      <Text style={[styles.queryMetrics, { color: colors.mutedForeground }]}>
-                        {query.clicks} Klicks · {query.impressions} Impressionen · Pos. {query.position?.toFixed(1) ?? '–'}
-                      </Text>
-                    </View>
-                  ))}
+                  {result.queryComparisons.slice(0, 20).map((comparison) => {
+                    const status = comparison.status === 'new'
+                      ? 'Neu'
+                      : comparison.status === 'not_visible'
+                        ? 'Nicht mehr sichtbar'
+                        : 'In beiden Zeiträumen';
+                    return (
+                      <View key={comparison.query} style={[styles.queryRow, { borderColor: colors.border }]}>
+                        <Text style={[styles.queryText, { color: colors.foreground }]}>{comparison.query}</Text>
+                        <Text style={[styles.queryMetrics, { color: colors.mutedForeground }]}>
+                          Aktuell: {comparison.currentClicks ?? '–'} Klicks · {comparison.currentImpressions ?? '–'} Impressionen
+                        </Text>
+                        <Text style={[styles.queryMetrics, { color: colors.mutedForeground }]}>
+                          Vergleich: {comparison.comparisonClicks ?? '–'} Klicks · {comparison.comparisonImpressions ?? '–'} Impressionen
+                        </Text>
+                        <Text style={[styles.queryMetrics, { color: comparison.status === 'both' ? colors.mutedForeground : colors.primary }]}>
+                          {status}
+                        </Text>
+                      </View>
+                    );
+                  })}
                 </View>
-                {result.queries.length > 20 ? (
+                {result.queryComparisons.length > 20 ? (
                   <Text style={[styles.help, { color: colors.mutedForeground }]}>
-                    Angezeigt werden die ersten 20 von {result.queries.length} sichtbaren Suchbegriffen.
+                    Angezeigt werden die 20 Begriffe mit den meisten Impressionen über beide Zeiträume von insgesamt {result.queryComparisons.length}.
                   </Text>
                 ) : null}
               </>

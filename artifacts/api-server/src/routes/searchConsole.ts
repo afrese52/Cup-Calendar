@@ -12,6 +12,8 @@ const requestSchema = z.object({
   urls: z.array(z.string().trim().min(1).max(2048)).min(1).max(10),
   startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  comparisonStartDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  comparisonEndDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
 }).strict();
 
 export function createSearchConsoleRouter(options: {

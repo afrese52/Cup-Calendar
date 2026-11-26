@@ -238,7 +238,7 @@ paths:
     post:
       operationId: getSearchConsoleReport
       tags: [search-console]
-      summary: Lädt Indexstatus, Seitenleistung, Länder, Geräte und Suchbegriffe für CupCal-Seiten
+      summary: Lädt CupCal-Seitenberichte und vergleicht Suchbegriffe aus zwei Zeiträumen
       description: Ausschließlich lesender Abruf für HTTPS-URLs der fest konfigurierten CupCal-Property.
       security:
         - BearerAuth: []
@@ -560,7 +560,9 @@ components:
           items: { type: string, format: uri }
         startDate: { type: string, format: date }
         endDate: { type: string, format: date }
-      required: [urls, startDate, endDate]
+        comparisonStartDate: { type: string, format: date }
+        comparisonEndDate: { type: string, format: date }
+      required: [urls, startDate, endDate, comparisonStartDate, comparisonEndDate]
     SearchConsoleQuery:
       type: object
       properties:
@@ -570,6 +572,16 @@ components:
         ctr: { type: number }
         position: { type: ["number", "null"] }
       required: [query, clicks, impressions, ctr, position]
+    SearchConsoleQueryComparison:
+      type: object
+      properties:
+        query: { type: string }
+        currentClicks: { type: ["number", "null"] }
+        currentImpressions: { type: ["number", "null"] }
+        comparisonClicks: { type: ["number", "null"] }
+        comparisonImpressions: { type: ["number", "null"] }
+        status: { type: string, enum: [both, new, not_visible] }
+      required: [query, currentClicks, currentImpressions, comparisonClicks, comparisonImpressions, status]
     SearchConsoleCountry:
       type: object
       properties:
@@ -617,6 +629,11 @@ components:
           description: Sichtbare Suchbegriffe; Google kann seltene oder anonymisierte Begriffe ausblenden.
           items:
             $ref: "#/components/schemas/SearchConsoleQuery"
+        queryComparisons:
+          type: array
+          description: Sichtbare Suchbegriffe beider Zeiträume; fehlende Zeilen können durch Googles Anonymisierung entstehen.
+          items:
+            $ref: "#/components/schemas/SearchConsoleQueryComparison"
         countries:
           type: array
           description: Suchleistung nach ISO-Ländercode; leer, wenn Google keine Länderzeilen meldet.
@@ -627,7 +644,7 @@ components:
           description: Suchleistung nach Gerät; leer, wenn Google keine Gerätezeilen meldet.
           items:
             $ref: "#/components/schemas/SearchConsoleDevice"
-      required: [url, indexing, performance, queries, countries, devices]
+      required: [url, indexing, performance, queries, queryComparisons, countries, devices]
     SearchConsoleReportResponse:
       type: object
       properties:
