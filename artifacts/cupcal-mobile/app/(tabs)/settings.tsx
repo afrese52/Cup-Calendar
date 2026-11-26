@@ -117,6 +117,7 @@ export default function SettingsScreen() {
   const previousAuthModeRef = useRef(authMode);
   const previousRequestedAuthModeRef = useRef(requestedAuthMode);
   const [email, setEmail] = useState('');
+  const [registrationRequestEmail, setRegistrationRequestEmail] = useState<string | null>(null);
   const [registrationConfirmationEmail, setRegistrationConfirmationEmail] = useState<string | null>(null);
   const [password, setPassword] = useState('');
   const [submittingAction, setSubmittingAction] = useState<AuthAction | null>(null);
@@ -384,6 +385,7 @@ export default function SettingsScreen() {
 
     isSubmittingAuthRef.current = true;
     isRequestingRecoveryRef.current = submittedMode === 'forgot-password';
+    setRegistrationRequestEmail(submittedMode === 'sign-up' ? normalizedEmail : null);
     setSubmittingAction('submit');
     setAuthError(null);
     recoveryErrorEmailRef.current = null;
@@ -456,6 +458,7 @@ export default function SettingsScreen() {
     } finally {
       isSubmittingAuthRef.current = false;
       isRequestingRecoveryRef.current = false;
+      setRegistrationRequestEmail(null);
       setSubmittingAction(null);
     }
   };
@@ -881,6 +884,16 @@ export default function SettingsScreen() {
                   style={[styles.accountSubtitle, { color: colors.mutedForeground }]}
                 >
                   {PASSWORD_LENGTH_POLICY_MESSAGE}
+                </Text>
+              ) : null}
+              {registrationRequestEmail ? (
+                <Text
+                  accessibilityRole="text"
+                  accessibilityLiveRegion="polite"
+                  testID="registration-request-recipient"
+                  style={[styles.accountSubtitle, { color: colors.mutedForeground }]}
+                >
+                  Die Registrierung wird für {registrationRequestEmail} angefordert.
                 </Text>
               ) : null}
               {authError ? (

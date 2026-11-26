@@ -708,6 +708,39 @@ test('sperrt den Moduswechsel bis die verzögerte Registrierungsantwort eintriff
   expect(view.getByTestId('auth-submit-button').props.accessibilityLabel).toBe('Konto erstellen');
 });
 
+test('behält die Registrierungsadresse sichtbar, wenn das E-Mail-Feld während der Anfrage geändert wird', async () => {
+  let finishSignUp!: (result: { data: { session: null }; error: null }) => void;
+  auth.signUp.mockImplementation(
+    () => new Promise((resolve) => { finishSignUp = resolve; }),
+  );
+  const mockedSupabase = jest.requireMock('@/services/supabase') as {
+    requestEmailConfirmation: jest.Mock;
+  };
+  const view = await openSettings();
+  await fireEvent.press(view.getByTestId('auth-mode-toggle'));
+  await enterCredentials(view);
+
+  await fireEvent.press(view.getByTestId('auth-submit-button'));
+  await waitFor(() => expect(finishSignUp).toBeDefined());
+  expect(view.getByText('Die Registrierung wird für test@example.invalid angefordert.')).toBeTruthy();
+
+  await fireEvent.changeText(view.getByTestId('auth-email-input'), 'changed@example.invalid');
+  expect(view.getByTestId('auth-email-input').props.value).toBe('changed@example.invalid');
+  expect(view.getByText('Die Registrierung wird für test@example.invalid angefordert.')).toBeTruthy();
+
+  await act(async () => finishSignUp({ data: { session: null }, error: null }));
+  expect(await view.findByTestId('auth-success-message')).toBeTruthy();
+  expect(view.queryByTestId('registration-request-recipient')).toBeNull();
+  expect(view.getByText('Der Bestätigungslink wird an test@example.invalid gesendet.')).toBeTruthy();
+  expect(view.queryByText('Der Bestätigungslink wird an changed@example.invalid gesendet.')).toBeNull();
+
+  await fireEvent.press(view.getByTestId('registration-resend-confirmation-button'));
+  expect(mockedSupabase.requestEmailConfirmation).toHaveBeenCalledWith(
+    'test@example.invalid',
+    'cupcal-test://auth/confirm',
+  );
+});
+
 test('verschiebt den Screenreader-Fokus während einer laufenden Registrierung nicht', async () => {
   let finishSignUp!: (result: { data: { session: null }; error: null }) => void;
   auth.signUp.mockImplementation(
