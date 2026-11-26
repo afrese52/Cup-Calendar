@@ -1,3 +1,4 @@
+- [Google-Play-Zugriff](google-play-access.md) — Blockierter Connector-OAuth kann unabhängig vom funktionierenden direkten Play-Console-Browserzugriff sein.
 - [Expo-Vorschau-Timing](expo-preview-timing.md) — Screenshots direkt nach einem Expo-Neustart können vor dem ersten Web-Bundle leer sein.
 - [EAS- und Replit-GitHub-Zugriff](eas-github-replit-access.md) — EAS-Zugriff auf ein Repository ersetzt nicht die Replit-GitHub-Verbindung fürs Projekt.
 - [EAS-Android-Signaturrechte](eas-android-signing-permissions.md) — Für neue Remote-Keystores braucht der EAS-Zugriff CREATE-Rechte oder zuvor angelegte Signaturdaten.
