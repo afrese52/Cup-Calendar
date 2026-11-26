@@ -1,7 +1,22 @@
 # Technische Vorprüfung: Datensicherheit
 
-Stand: 23. November 2026. Diese Notiz ist eine Arbeitsgrundlage, keine
+Stand: 26. November 2026. Diese Notiz ist eine Arbeitsgrundlage, keine
 abgeschlossene Play-Console-Erklärung oder Rechtsberatung.
+
+## Bearbeitungsstand in Google Play
+
+Im geprüften Store-Eintrag `de.cup.calender` wurden folgende Angaben
+gespeichert, aber nicht eingereicht oder veröffentlicht:
+
+- Datenschutzerklärung: `https://cupcal.af-software.app/datenschutz/`
+- Kontolöschseite: `https://cupcal.af-software.app/konto-loeschen/`
+- Datenerhebung: „Ja“, da Konto- und Favoritendaten übertragen werden.
+- Kontoerstellung: „Nutzername und Passwort“ für die E-Mail-/Passwortanmeldung.
+
+Die Erklärung zur Datensicherheit ist weiterhin ein unvollständiger Entwurf.
+Die gespeicherten Angaben wurden am 26. November im Browser bestätigt;
+eine spätere erneute Prüfung ist mangels wiederverwendbarer Sitzung offen.
+Nicht mit einem anderen Store-Eintrag oder einer neuen Paketkennung verwechseln.
 
 ## Im CupCal-Quellcode nachvollziehbare Datenflüsse
 
@@ -54,26 +69,52 @@ anhand der Play-Definitionen, der Dienstanbieter und des finalen Builds
 bestätigen. Auch eventuell beim Hosting oder in SDKs verarbeitete Diagnosedaten
 sind zu prüfen.
 
+## Technischer Abgleich für den noch offenen Entwurf
+
+| Bereich | Im aktuellen Quellcode nachvollziehbar | Vor endgültiger Bestätigung offen |
+| --- | --- | --- |
+| API-Verbindung | Die mobile App setzt die API-Adresse mit `https://` aus der Build-Domain zusammen. | Tatsächliche Domain und Netzwerkkonfiguration des Release-AAB prüfen. |
+| Supabase-Verbindung | Die Projektadresse stammt aus der Expo-Buildvariable. Die Normalisierung entfernt API-Pfade, erzwingt aber kein HTTPS. | Im konkreten Release eingebettete Adresse auf HTTPS prüfen, ohne Schlüssel zu veröffentlichen. |
+| Konto | E-Mail, Passwort und Konto-ID werden für die Anmeldung verarbeitet. | Zuordnung zu Googles Datenkategorien anhand der aktuellen Definitionen prüfen. |
+| Favoriten | Termin-IDs werden für angemeldete Konten kontobezogen synchronisiert. | Datenkategorie, Zweck und optionale Erhebung im Formular mit dem Release abgleichen. |
+| Standort | Laut technischer Vorprüfung nur lokale Regionsauswahl. | Im Release sicherstellen, dass keine Koordinaten an Dienste oder SDKs gesendet werden. |
+| Drittanbieter | In den direkten mobilen Abhängigkeiten ist kein Werbe-/Analytics-SDK erkennbar. | Eingebundene native und transitive SDKs des AAB sowie mögliche Diagnoseverarbeitung prüfen. |
+
+Die Frage „Werden alle Nutzerdaten bei der Übertragung verschlüsselt?“
+bleibt bis zum Release-Abgleich unbeantwortet. HTTPS im API-Quellcode
+allein belegt nicht sämtliche Datenübertragungen des Store-Builds.
+
 ## Vor Freigabe noch zu klären
 
-1. Die öffentliche Datenschutzerklärung ist unter
-   `https://cupcal.af-software.app/datenschutz/` vorgesehen und wird in der
-   App verlinkt. Nach Veröffentlichung den Link in der Play Console eintragen.
-2. Der Web-Löschpfad ist unter
-   `https://cupcal.af-software.app/konto-loeschen/` vorgesehen. Die Seite
-   authentifiziert das Konto im Browser und verwendet die bestehende
-   E-Mail-Bestätigung. Nach Veröffentlichung den Ablauf ohne installierte App
-   prüfen und den Link in der Play Console eintragen.
+1. Beide öffentlichen URLs antworteten bei der Prüfung am 26. November mit
+   HTTP 200 und wurden in der Play Console gespeichert. Vor Einreichung
+   erneut mit dem vorgesehenen Store-Eintrag abgleichen.
+2. Der Web-Löschpfad verwendet eine E-Mail-Bestätigung. Die vollständige
+   Löschung ohne installierte App bleibt als eigener Ablauf zu bestätigen;
+   Erreichbarkeit mit HTTP 200 allein belegt dies nicht.
 3. Das finale APK/AAB und seine tatsächlich eingebundenen SDKs prüfen; die
    Liste in `package.json` allein ist für die Play-Erklärung nicht ausreichend.
-4. Die bestätigten Fristen lauten: Konto- und Favoritendaten während der
-   aktiven Kontonutzung, Löschung binnen sieben Tagen nach Kontoschließung,
-   Sicherungskopien binnen sieben Tagen und Betriebsprotokolle nach 30 Tagen.
-   Vor dem Play-Console-Absenden muss der Kontoinhaber sie mit der tatsächlichen
-   Produktionskonfiguration und den Datenanbietern abgleichen.
+4. Konto- und Favoritendaten bleiben während der aktiven Kontonutzung
+   gespeichert. Die bestätigte Kontolöschung löscht das Konto unmittelbar;
+   Favoriten sind laut lokalem Datenbankschema über kaskadierende Löschung
+   daran gebunden. Das ist von der Aufbewahrung in Sicherungen zu unterscheiden.
+5. Der Betreiber hat für Supabase tägliche Sicherungen mit sieben Tagen
+   Aufbewahrung und Protokolle mit sieben Tagen Aufbewahrung gewählt.
+   Laut seiner Klarstellung gelten diese Fristen **erst nach dem Upgrade**.
+   Der Screenshot mit diesen Tarifleistungen ist kein Nachweis aktiver
+   Projekteinstellungen. Bis zum bestätigten Upgrade und Projektabgleich
+   sind dies geplante, nicht nachgewiesen aktive Fristen.
+6. Replit-Veröffentlichungsprotokolle werden laut Replit-Dokumentation
+   30 Tage aufbewahrt. Dies ist nicht dieselbe Protokollkategorie wie
+   Supabase-Protokolle und bestätigt keine Frist für andere Datenbestände.
+7. Vor Einreichung müssen Datenschutzerklärung, tatsächliche Einrichtung,
+   Release-AAB und die vollständige Play-Erklärung übereinstimmen.
+   Weder Upgrade noch neuer Build noch Einreichung sind durch diese Notiz
+   freigegeben.
 
 ## Quellen
 
 - [Google Play: Datensicherheit](https://support.google.com/googleplay/android-developer/answer/10787469?hl=de)
 - [Google Play: Kontolöschung](https://support.google.com/googleplay/android-developer/answer/13327111?hl=de)
 - [Google Play: Nutzerdaten-Richtlinie](https://support.google.com/googleplay/android-developer/answer/10144311?hl=de)
+- [Replit: Veröffentlichte App überwachen](https://docs.replit.com/features/publishing/monitoring-a-deployment)
