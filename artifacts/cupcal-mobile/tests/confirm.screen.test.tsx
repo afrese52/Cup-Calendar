@@ -692,6 +692,33 @@ test('löscht das Konto erst nach dem E-Mail-Link und meldet danach ab', async (
   expect(supabase.auth.signOut).toHaveBeenCalledWith({ scope: 'local' });
 });
 
+test('startet nach dem Schließen während des Codeaustauschs keine Kontolöschung', async () => {
+  const exchange = deferred<any>();
+  mockInitialUrl.current =
+    'https://cupcal.example/auth/confirm?flow=cupcal-account-deletion&deletion_token=signed-proof&code=one-time-code';
+  supabase.auth.exchangeCodeForSession.mockReturnValue(exchange.promise);
+  const view = await render(<ConfirmEmailScreen />);
+
+  await waitFor(() => {
+    expect(supabase.auth.exchangeCodeForSession).toHaveBeenCalledWith('one-time-code', undefined);
+  });
+
+  await act(async () => view.unmount());
+  await act(async () => {
+    exchange.resolve({
+      data: { session: { user: { id: 'account-id' } } },
+      error: null,
+    });
+    await exchange.promise;
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+
+  expect(mockDeletionConfirm).not.toHaveBeenCalled();
+  expect(removeBookmarksForDeletedUser).not.toHaveBeenCalled();
+  expect(supabase.auth.signOut).not.toHaveBeenCalled();
+});
+
 test('meldet sich auch ab, wenn lokale Favoriten nach erfolgreicher Löschung nicht bereinigt werden können', async () => {
   mockInitialUrl.current =
     'https://cupcal.example/auth/confirm?flow=cupcal-account-deletion&deletion_token=signed-proof&code=one-time-code';

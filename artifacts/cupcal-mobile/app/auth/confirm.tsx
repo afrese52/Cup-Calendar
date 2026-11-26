@@ -126,6 +126,8 @@ export default function ConfirmEmailScreen() {
           ? await confirmEmailCode(supabase.auth, callback.code, callback.flowId ?? undefined)
           : await establishAuthCallbackSession(supabase.auth, callback);
 
+        if (!isMounted) return;
+
         if (isDeletion) {
           if (!callback.deletionToken) {
             throw new Error('Der Kontolöschungs-Bestätigungscode fehlt.');
