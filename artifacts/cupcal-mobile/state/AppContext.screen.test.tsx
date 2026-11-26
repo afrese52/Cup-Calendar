@@ -806,6 +806,91 @@ test('verwirft alte vorbereitete Favoritenänderungen nach Ab- und erneuter Anme
   ).toBe(false);
 });
 
+test('verwirft vorbereitete Favoriten von Konto A nach dem Wechsel zu Konto B', async () => {
+  const accountAPreparation = deferred<Record<string, { isFavorite: boolean; updatedAt: string }>>();
+  let accountAPreparationResolved = false;
+  void accountAPreparation.promise.then(() => {
+    accountAPreparationResolved = true;
+  });
+  bookmarkStore.loadBookmarksForUser.mockImplementation((userId: string | null) =>
+    Promise.resolve(userId === 'konto-b' ? ['favorit-b'] : []),
+  );
+  bookmarkStore.prepareBookmarksForSync.mockImplementation((userId: string) =>
+    userId === 'konto-a'
+      ? accountAPreparation.promise
+      : Promise.resolve({
+          'favorit-b': {
+            isFavorite: true,
+            updatedAt: '2026-01-02T00:00:00.000Z',
+          },
+        }),
+  );
+
+  let accountBRemoteBookmark: RemoteBookmark | null = null;
+  mockedSupabase.fetchRemoteBookmarks.mockImplementation((userId: string) =>
+    Promise.resolve(userId === 'konto-b' && accountBRemoteBookmark
+      ? [accountBRemoteBookmark]
+      : []),
+  );
+  mockedSupabase.saveRemoteBookmark.mockImplementation(async (
+    eventId: string,
+    change: { isFavorite: boolean; updatedAt: string },
+  ) => {
+    accountBRemoteBookmark = {
+      event_id: eventId,
+      is_favorite: change.isFavorite,
+      updated_at: change.updatedAt,
+      revision: 1,
+    };
+  });
+
+  const view = await renderProvider();
+  await emitUser('konto-a');
+  await waitFor(() =>
+    expect(bookmarkStore.prepareBookmarksForSync).toHaveBeenCalledWith('konto-a'),
+  );
+
+  await emitUser('konto-b');
+  await waitFor(() => expect(mockedSupabase.saveRemoteBookmark).toHaveBeenCalledTimes(1));
+  await waitFor(() => expect(view.getByTestId('bookmark-ids').props.children).toBe('favorit-b'));
+  await waitFor(() => expect(view.getByTestId('bookmark-sync-status').props.children).toBe('synced'));
+
+  expect(accountAPreparationResolved).toBe(false);
+  expect(bookmarkStore.prepareBookmarksForSync).toHaveBeenCalledWith('konto-b');
+  expect(mockedSupabase.saveRemoteBookmark).toHaveBeenCalledWith('favorit-b', {
+    isFavorite: true,
+    updatedAt: '2026-01-02T00:00:00.000Z',
+  });
+  const accountBBookmarkIds = view.getByTestId('bookmark-ids').props.children;
+  const accountBSyncStatus = view.getByTestId('bookmark-sync-status').props.children;
+  const saveCallsBeforeOldPreparationResolves = mockedSupabase.saveRemoteBookmark.mock.calls.length;
+  const reconcileCallsBeforeOldPreparationResolves = bookmarkStore.reconcileBookmarks.mock.calls.length;
+
+  await act(async () => {
+    accountAPreparation.resolve({
+      'favorit-a': {
+        isFavorite: true,
+        updatedAt: '2026-01-01T00:00:00.000Z',
+      },
+    });
+    await accountAPreparation.promise;
+  });
+
+  expect(view.getByTestId('bookmark-ids').props.children).toBe(accountBBookmarkIds);
+  expect(view.getByTestId('bookmark-sync-status').props.children).toBe(accountBSyncStatus);
+  expect(mockedSupabase.saveRemoteBookmark).toHaveBeenCalledTimes(saveCallsBeforeOldPreparationResolves);
+  expect(bookmarkStore.reconcileBookmarks).toHaveBeenCalledTimes(reconcileCallsBeforeOldPreparationResolves);
+  expect(
+    (bookmarkStore.reconcileBookmarks.mock.calls as [string, RemoteBookmark[]][])
+      .every(([userId, remote]) =>
+        userId === 'konto-b' && remote.every((bookmark) => bookmark.event_id === 'favorit-b'),
+      ),
+  ).toBe(true);
+  expect(
+    mockedSupabase.saveRemoteBookmark.mock.calls.every(([eventId]) => eventId === 'favorit-b'),
+  ).toBe(true);
+});
+
 test('verwirft verspätetes Favoritenspeichern nach Ab- und erneuter Anmeldung desselben Kontos', async () => {
   const firstSessionSave = deferred<string[]>();
   let accountLoads = 0;
