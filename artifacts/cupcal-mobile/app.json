@@ -46,7 +46,7 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "CupCal nutzt deinen Standort nur zur Auswahl der nächstgelegenen Fortnite-Turnierregion. Standortkoordinaten werden nicht gespeichert oder gesendet.",
+          "locationWhenInUsePermission": "CupCal nutzt deinen ungefähren Standort nur auf deinem Gerät, um die nächstgelegene Fortnite-Turnierregion auszuwählen. Standortkoordinaten werden weder gespeichert noch übertragen. Du kannst die Region auch manuell wählen.",
           "isIosReducedAccuracyByDefault": true
         }
       ],

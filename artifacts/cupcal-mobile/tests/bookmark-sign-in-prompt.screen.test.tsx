@@ -15,7 +15,9 @@ const mockContext: { current: Record<string, any> } = { current: {} };
 jest.mock('@expo/vector-icons', () => ({ Feather: () => null }));
 jest.mock('expo-haptics', () => ({ selectionAsync: jest.fn() }));
 jest.mock('../services/calendarRegionPreference', () => ({
+  hasSeenLocationDisclosure: jest.fn(async () => true),
   loadCalendarRegionPreference: jest.fn(async () => null),
+  saveLocationDisclosureShown: jest.fn(async () => undefined),
   saveCalendarRegionPreference: jest.fn(async () => undefined),
 }));
 jest.mock('../services/deviceRegion', () => ({
@@ -82,7 +84,9 @@ const mockRouterPush = (jest.requireMock('expo-router') as {
   router: { push: jest.Mock };
 }).router.push;
 const mockRegionPreference = jest.requireMock('../services/calendarRegionPreference') as {
+  hasSeenLocationDisclosure: jest.Mock;
   loadCalendarRegionPreference: jest.Mock;
+  saveLocationDisclosureShown: jest.Mock;
   saveCalendarRegionPreference: jest.Mock;
 };
 const mockDeviceRegion = jest.requireMock('../services/deviceRegion') as {
@@ -149,6 +153,8 @@ beforeEach(() => {
   mockRouterPush.mockReset();
   mockToggleBookmark.mockReset().mockResolvedValue(undefined);
   mockRegionPreference.loadCalendarRegionPreference.mockReset().mockResolvedValue(null as never);
+  mockRegionPreference.hasSeenLocationDisclosure.mockReset().mockResolvedValue(true as never);
+  mockRegionPreference.saveLocationDisclosureShown.mockReset().mockResolvedValue(undefined as never);
   mockRegionPreference.saveCalendarRegionPreference.mockReset().mockResolvedValue(undefined as never);
   mockDeviceRegion.resolveDeviceRegion.mockReset().mockResolvedValue({
     status: 'permission-required',
@@ -177,6 +183,38 @@ test('zeigt im Kalender keinen Hinweis auf manuellen Import', async () => {
 
   expect(view.queryByText('MANUELLER IMPORT')).toBeNull();
   expect(view.getByText('CUPCAL')).toBeTruthy();
+});
+
+test('erklärt die Standortnutzung vor der ersten Abfrage und erlaubt den manuellen Weg', async () => {
+  mockRegionPreference.hasSeenLocationDisclosure.mockResolvedValue(false as never);
+
+  const view = await render(<CalendarScreen />);
+
+  expect(view.getByText('Region automatisch auswählen?')).toBeTruthy();
+  expect(view.getByText(/Koordinaten werden weder gespeichert noch übertragen/)).toBeTruthy();
+  expect(mockDeviceRegion.resolveDeviceRegion).not.toHaveBeenCalled();
+
+  await fireEvent.press(view.getByTestId('location-disclosure-manual'));
+
+  expect(mockDeviceRegion.resolveDeviceRegion).not.toHaveBeenCalled();
+  expect(mockRegionPreference.saveLocationDisclosureShown).toHaveBeenCalledTimes(1);
+  expect(mockRegionPreference.saveCalendarRegionPreference).toHaveBeenCalledWith({
+    region: 'Alle Regionen',
+    source: 'manual',
+  });
+  expect(view.getByTestId('calendar-filter-region-EU')).toBeTruthy();
+});
+
+test('fragt den Standort erst nach Zustimmung zur Erklärung ab', async () => {
+  mockRegionPreference.hasSeenLocationDisclosure.mockResolvedValue(false as never);
+
+  const view = await render(<CalendarScreen />);
+  expect(mockDeviceRegion.resolveDeviceRegion).not.toHaveBeenCalled();
+
+  await fireEvent.press(view.getByTestId('location-disclosure-continue'));
+
+  await waitFor(() => expect(mockDeviceRegion.resolveDeviceRegion).toHaveBeenCalledWith('initial'));
+  expect(mockRegionPreference.saveLocationDisclosureShown).toHaveBeenCalledTimes(1);
 });
 
 test('zeigt den nativen Favoritenspeicherfehler im Kalender', async () => {

@@ -2,7 +2,7 @@ import { Feather } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import type { LocationPermissionResponse } from 'expo-location';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AppState, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { AppState, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { EventCard } from '@/components/EventCard';
 import { MonthCalendar } from '@/components/MonthCalendar';
@@ -19,7 +19,9 @@ import {
   type EventCategory,
 } from '@/data/events';
 import {
+  hasSeenLocationDisclosure,
   loadCalendarRegionPreference,
+  saveLocationDisclosureShown,
   saveCalendarRegionPreference,
 } from '@/services/calendarRegionPreference';
 import {
@@ -107,10 +109,13 @@ export default function CalendarScreen() {
   const [isDetectingRegion, setIsDetectingRegion] = useState(false);
   const [locationPermission, setLocationPermission] =
     useState<LocationPermissionResponse | null>(null);
+  const [locationDisclosureVisible, setLocationDisclosureVisible] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
   const [monthExpanded, setMonthExpanded] = useState(false);
   const requestVersion = useRef(0);
   const manualSelectionMade = useRef(false);
+  const locationDisclosureSeen = useRef(false);
+  const pendingLocationRequest = useRef<'initial' | 'explicit'>('initial');
   const mounted = useRef(false);
   const regionSourceRef = useRef(regionSource);
   regionSourceRef.current = regionSource;
@@ -171,8 +176,9 @@ export default function CalendarScreen() {
     let cancelled = false;
 
     const initializeRegion = async () => {
+      let preference = null;
       try {
-        const preference = await loadCalendarRegionPreference();
+        preference = await loadCalendarRegionPreference();
         if (cancelled || manualSelectionMade.current) return;
 
         if (preference) {
@@ -180,7 +186,6 @@ export default function CalendarScreen() {
           setRegionSource(preference.source);
           if (preference.source === 'manual') {
             setRegionStatus('ready');
-            return;
           }
         }
       } catch {
@@ -189,12 +194,24 @@ export default function CalendarScreen() {
         }
       }
 
-      if (
-        !cancelled &&
-        !manualSelectionMade.current &&
-        requestVersion.current === 0
-      ) {
+      if (cancelled || manualSelectionMade.current || requestVersion.current !== 0) return;
+
+      let hasSeenDisclosure = false;
+      try {
+        hasSeenDisclosure = await hasSeenLocationDisclosure();
+      } catch {
+        // If local storage is unavailable, show the explanation rather than
+        // requesting location without it.
+      }
+      if (cancelled || manualSelectionMade.current || requestVersion.current !== 0) return;
+      if (preference?.source === 'manual') return;
+
+      if (hasSeenDisclosure) {
+        locationDisclosureSeen.current = true;
         await detectRegion('initial');
+      } else {
+        pendingLocationRequest.current = 'initial';
+        setLocationDisclosureVisible(true);
       }
     };
 
@@ -233,6 +250,12 @@ export default function CalendarScreen() {
   };
 
   const handleAutomaticRegion = async () => {
+    if (!locationDisclosureSeen.current) {
+      pendingLocationRequest.current = 'explicit';
+      setLocationDisclosureVisible(true);
+      return;
+    }
+
     if (regionStatus === 'settings-required' && Platform.OS !== 'web') {
       try {
         await Linking.openSettings();
@@ -244,6 +267,43 @@ export default function CalendarScreen() {
 
     manualSelectionMade.current = false;
     await detectRegion('explicit');
+  };
+
+  const continueWithAutomaticRegion = async () => {
+    const request = pendingLocationRequest.current;
+    locationDisclosureSeen.current = true;
+    setLocationDisclosureVisible(false);
+    await saveLocationDisclosureShown().catch(() => undefined);
+
+    if (request === 'explicit' && regionStatus === 'settings-required' && Platform.OS !== 'web') {
+      try {
+        await Linking.openSettings();
+      } catch {
+        setRegionMessage('Die Geräteeinstellungen konnten nicht geöffnet werden.');
+      }
+      return;
+    }
+
+    manualSelectionMade.current = false;
+    await detectRegion(request);
+  };
+
+  const continueManually = async () => {
+    locationDisclosureSeen.current = true;
+    setLocationDisclosureVisible(false);
+    manualSelectionMade.current = true;
+    requestVersion.current += 1;
+    setIsDetectingRegion(false);
+    setRegionSource('manual');
+    setRegionStatus('ready');
+    setRegionMessage(null);
+    setFilterOpen(true);
+    await Promise.all([
+      saveLocationDisclosureShown().catch(() => undefined),
+      saveCalendarRegionPreference({ region: 'Alle Regionen', source: 'manual' }).catch(() => {
+        setRegionMessage('Manuelle Auswahl konnte nicht gespeichert werden.');
+      }),
+    ]);
   };
 
   const filtersActive =
@@ -340,6 +400,55 @@ export default function CalendarScreen() {
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]} edges={['top']}>
+      <Modal
+        visible={locationDisclosureVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => void continueManually()}
+      >
+        <View style={styles.disclosureBackdrop}>
+          <View
+            accessibilityViewIsModal
+            style={[styles.disclosureCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+          >
+            <View style={[styles.disclosureIcon, { backgroundColor: colors.accent }]}>
+              <Feather name="map-pin" size={20} color={colors.primary} />
+            </View>
+            <Text accessibilityRole="header" style={[styles.disclosureTitle, { color: colors.foreground }]}>
+              Region automatisch auswählen?
+            </Text>
+            <Text style={[styles.disclosureCopy, { color: colors.mutedForeground }]}>
+              CupCal nutzt deinen ungefähren Standort, um die nächstgelegene Fortnite-Turnierregion zu finden.
+              Nur die ausgewählte Region wird auf deinem Gerät gespeichert. Koordinaten werden weder gespeichert
+              noch übertragen. Du kannst auch ohne Standortfreigabe fortfahren und später manuell filtern.
+            </Text>
+            <Pressable
+              accessibilityRole="button"
+              testID="location-disclosure-continue"
+              onPress={() => void continueWithAutomaticRegion()}
+              style={({ pressed }) => [
+                styles.disclosurePrimaryButton,
+                { backgroundColor: colors.primary },
+                pressed && styles.pressed,
+              ]}
+            >
+              <Text style={[styles.disclosurePrimaryText, { color: colors.primaryForeground }]}>
+                Automatisch auswählen
+              </Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              testID="location-disclosure-manual"
+              onPress={() => void continueManually()}
+              style={({ pressed }) => [styles.disclosureManualButton, pressed && styles.pressed]}
+            >
+              <Text style={[styles.disclosureManualText, { color: colors.primary }]}>
+                Manuell wählen
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
       <ScrollView
         contentContainerStyle={[
           styles.content,
@@ -703,6 +812,15 @@ export default function CalendarScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1 },
+  disclosureBackdrop: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.6)', justifyContent: 'center', padding: 24 },
+  disclosureCard: { borderWidth: 1, borderRadius: 22, padding: 22, alignItems: 'center', gap: 14 },
+  disclosureIcon: { width: 46, height: 46, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  disclosureTitle: { fontSize: 20, lineHeight: 26, fontWeight: '800', textAlign: 'center' },
+  disclosureCopy: { fontSize: 14, lineHeight: 21, textAlign: 'center' },
+  disclosurePrimaryButton: { width: '100%', minHeight: 48, borderRadius: 13, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16 },
+  disclosurePrimaryText: { fontSize: 14, fontWeight: '800' },
+  disclosureManualButton: { minHeight: 42, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 14 },
+  disclosureManualText: { fontSize: 14, fontWeight: '700' },
   content: { flexGrow: 1 },
   brandRow: { marginHorizontal: 20, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', minHeight: 28, marginBottom: 12, gap: 8 },
   brand: { flexDirection: 'row', alignItems: 'center', gap: 9 },
