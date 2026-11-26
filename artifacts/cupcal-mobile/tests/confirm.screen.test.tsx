@@ -150,6 +150,30 @@ test('tauscht den E-Mail-Bestätigungscode samt Flow-ID ein und zeigt CupCal-Erf
   expect(view.getByTestId('email-confirmation-return-button')).toBeTruthy();
 });
 
+test('meldet nach erfolgreichem Codeaustausch einen fehlgeschlagenen Sitzungsspeicher ohne Login-Erfolg', async () => {
+  mockInitialUrl.current =
+    'https://cupcal.example/auth/confirm?code=email-confirmation-code&flow_id=confirmation-flow-id';
+  const persistenceError = Object.assign(
+    new Error('Die Sitzung konnte auf diesem Gerät nicht dauerhaft gespeichert werden.'),
+    { code: 'cupcal_session_persistence_failed' },
+  );
+  supabase.auth.exchangeCodeForSession.mockRejectedValue(persistenceError);
+  const view = await render(<ConfirmEmailScreen />);
+
+  expect(await view.findByText(
+    'Deine E-Mail-Adresse ist bestätigt, aber die Sitzung konnte auf diesem Gerät nicht dauerhaft gespeichert werden. Du bist nicht angemeldet. Bitte melde dich erneut an.',
+  )).toBeTruthy();
+  expect(view.getByText('Bestätigung fehlgeschlagen')).toBeTruthy();
+  expect(view.getByText('Zur Anmeldung')).toBeTruthy();
+  expect(view.queryByText(
+    'Deine E-Mail-Adresse ist bestätigt. Du kannst CupCal jetzt verwenden.',
+  )).toBeNull();
+  expect(supabase.auth.exchangeCodeForSession).toHaveBeenCalledWith(
+    'email-confirmation-code',
+    { flowId: 'confirmation-flow-id' },
+  );
+});
+
 test('verarbeitet nacheinander Bestätigungslinks verschiedener Konten mit ihren Flow-IDs', async () => {
   mockInitialUrl.current =
     'cupcal-android://auth/confirm?code=account-a-code&flow_id=account-a-flow';
