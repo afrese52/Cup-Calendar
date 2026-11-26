@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { after, before, test } from 'node:test';
+import { after, afterEach, before, test } from 'node:test';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { act, createElement } from 'react';
@@ -14,12 +14,19 @@ let root;
 let vite;
 let App;
 let trackedEvents;
+let autoIntersect = true;
+let activeObserver;
 class TestIntersectionObserver {
   constructor(callback) {
     this.callback = callback;
+    activeObserver = this;
   }
 
   observe(target) {
+    if (autoIntersect) this.trigger(target);
+  }
+
+  trigger(target) {
     this.callback([{ isIntersecting: true, intersectionRatio: 1, target }]);
   }
 
@@ -69,12 +76,28 @@ before(async () => {
   });
 });
 
-async function renderApp(pathname) {
-  trackedEvents.length = 0;
+async function renderApp(pathname, clearEvents = true) {
+  if (clearEvents) trackedEvents.length = 0;
   await act(async () => {
     root.render(createElement(App, { pathname }));
   });
 }
+
+async function click(testId) {
+  const element = dom.window.document.querySelector(`[data-testid="${testId}"]`);
+  assert.ok(element, `Element mit data-testid="${testId}" muss vorhanden sein`);
+  await act(async () => element.click());
+}
+
+async function viewAvailabilitySection() {
+  const section = dom.window.document.querySelector('[data-analytics-section="availability"]');
+  assert.ok(section, 'Der Verfügbarkeitsbereich muss vorhanden sein');
+  await act(async () => activeObserver.trigger(section));
+}
+
+afterEach(() => {
+  autoIntersect = true;
+});
 
 after(async () => {
   if (root) {
@@ -87,6 +110,7 @@ after(async () => {
 for (const { testId, placement } of availabilityCtas) {
   test(`Status-CTA in ${placement} meldet das richtige Analytics-Ereignis`, async () => {
     trackedEvents.length = 0;
+    dom.window.sessionStorage.clear();
     const cta = dom.window.document.querySelector(`[data-testid="${testId}"]`);
 
     assert.ok(cta, `CTA mit data-testid="${testId}" muss auf der Startseite vorhanden sein`);
@@ -97,6 +121,46 @@ for (const { testId, placement } of availabilityCtas) {
     ]);
   });
 }
+
+test('Bereichsansichten vor dem Klick bleiben ohne CTA-Zuordnung', async () => {
+  autoIntersect = false;
+  dom.window.sessionStorage.clear();
+  await renderApp('/vor-dem-klick/');
+
+  await viewAvailabilitySection();
+  await click('button-download-status');
+  await renderApp('/nach-dem-klick/', false);
+  await viewAvailabilitySection();
+
+  assert.deepEqual(
+    trackedEvents.filter(([name]) => name === 'content_section_view'),
+    [
+      ['content_section_view', { section: 'availability', page: '/vor-dem-klick/' }],
+      ['content_section_view', { section: 'availability', page: '/nach-dem-klick/', cta_placement: 'header' }],
+    ],
+  );
+
+  autoIntersect = true;
+});
+
+test('Bei mehreren Statusklicks wird die zuletzt angeklickte Platzierung zugeordnet', async () => {
+  autoIntersect = false;
+  dom.window.sessionStorage.clear();
+  await renderApp('/mehrere-klicks/');
+
+  await click('button-availability');
+  await click('link-offline-info');
+  await viewAvailabilitySection();
+
+  assert.deepEqual(
+    trackedEvents.filter(([name]) => name === 'content_section_view'),
+    [
+      ['content_section_view', { section: 'availability', page: '/mehrere-klicks/', cta_placement: 'offline_band' }],
+    ],
+  );
+
+  autoIntersect = true;
+});
 
 test('Inhaltsereignisse aller CupCal-Themenseiten enthalten Seite und Bereich', async () => {
   const { seoTopicPages } = await vite.ssrLoadModule('/src/content/seo-pages.ts');

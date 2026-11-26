@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { ArrowDown, ArrowRight, Bookmark, CalendarDays, Check, Clock3, Download, Filter, WifiOff } from 'lucide-react';
-import { trackEvent } from './lib/analytics';
+import { getAvailabilityCtaPlacement, trackAvailabilityCtaClick, trackEvent } from './lib/analytics';
 import { confirmedStoreLinks, getOfficialStoreUrl, normalizeWebsitePath, seoTopicPages } from './content/seo-pages';
 import { deletionConfirmationPage, legalPages } from './content/legal-pages';
 import { SeoTopicPageView } from './pages/seo-topic-page';
@@ -59,7 +59,12 @@ function App({ pathname }: AppProps = {}) {
           if (!section || viewedSections.current.has(section)) continue;
 
           viewedSections.current.add(section);
-          trackEvent('content_section_view', { section, page: currentPath });
+          const ctaPlacement = section === 'availability' ? getAvailabilityCtaPlacement() : undefined;
+          trackEvent('content_section_view', {
+            section,
+            page: currentPath,
+            ...(ctaPlacement ? { cta_placement: ctaPlacement } : {}),
+          });
           observer.unobserve(entry.target);
         }
       },
@@ -106,7 +111,7 @@ function App({ pathname }: AppProps = {}) {
           target={androidStoreUrl ? '_blank' : undefined}
           rel={androidStoreUrl ? 'noopener noreferrer' : undefined}
           data-testid="button-download-status"
-          onClick={() => trackEvent('availability_cta_click', { placement: 'header' })}
+          onClick={() => trackAvailabilityCtaClick('header')}
         >
           <span>{androidStoreUrl ? 'Android herunterladen' : 'App-Status'}</span><ArrowRight aria-hidden="true" />
         </a>
@@ -137,7 +142,7 @@ function App({ pathname }: AppProps = {}) {
                 target={androidStoreUrl ? '_blank' : undefined}
                 rel={androidStoreUrl ? 'noopener noreferrer' : undefined}
                 data-testid="button-availability"
-                onClick={() => trackEvent('availability_cta_click', { placement: 'hero' })}
+                onClick={() => trackAvailabilityCtaClick('hero')}
               >
                 <Download aria-hidden="true" /> {androidStoreUrl ? 'Android herunterladen' : 'Download-Status'}
               </a>
@@ -310,7 +315,7 @@ function App({ pathname }: AppProps = {}) {
             className="button-dark"
             href="#verfuegbarkeit"
             data-testid="link-offline-info"
-            onClick={() => trackEvent('availability_cta_click', { placement: 'offline_band' })}
+            onClick={() => trackAvailabilityCtaClick('offline_band')}
           >
             CupCal kennenlernen <ArrowRight aria-hidden="true" />
           </a>
