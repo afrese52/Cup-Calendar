@@ -478,6 +478,53 @@ test('bestätigt Routenparameter, wenn die Start-URL bei offenem Bildschirm fehl
   });
 });
 
+test('verarbeitet nach URL-Lesefehler erst Routenparameter und dann wartenden Link genau einmal', async () => {
+  const initialUrl = deferred<string | null>();
+  mockInitialUrlPromise.current = initialUrl.promise;
+  mockRouteParams.current = {
+    code: 'route-confirmation-code',
+    flow_id: 'route-confirmation-flow',
+  };
+  supabase.auth.exchangeCodeForSession.mockImplementation(async (code: string) => {
+    const userId = code === 'route-confirmation-code' ? 'route-account' : 'pending-account';
+    const session = { user: { id: userId } };
+    mockPersistedSession = session;
+    return { data: { session }, error: null };
+  });
+  const view = await render(<ConfirmEmailScreen />);
+
+  await act(async () => {
+    mockUrlListener.current?.({
+      url: 'cupcal-android://auth/confirm?code=pending-confirmation-code&sb_flow_id=pending-confirmation-flow',
+    });
+    await Promise.resolve();
+  });
+  expect(supabase.auth.exchangeCodeForSession).not.toHaveBeenCalled();
+
+  await act(async () => {
+    initialUrl.reject(new Error('Start-URL konnte nicht gelesen werden.'));
+    await initialUrl.promise.catch(() => undefined);
+  });
+
+  await waitFor(() => {
+    expect(supabase.auth.exchangeCodeForSession).toHaveBeenCalledTimes(2);
+    expect(supabase.auth.exchangeCodeForSession).toHaveBeenNthCalledWith(
+      1,
+      'route-confirmation-code',
+      { flowId: 'route-confirmation-flow' },
+    );
+    expect(supabase.auth.exchangeCodeForSession).toHaveBeenNthCalledWith(
+      2,
+      'pending-confirmation-code',
+      { flowId: 'pending-confirmation-flow' },
+    );
+    expect(mockPersistedSession?.user.id).toBe('pending-account');
+    expect(view.getByText(
+      'Deine E-Mail-Adresse ist bestätigt. Du kannst CupCal jetzt verwenden.',
+    )).toBeTruthy();
+  });
+});
+
 test('ändert nach dem Schließen bei verspätetem Fehler keinen Seitenzustand', async () => {
   const exchange = deferred<any>();
   const stateUpdates = trackStateUpdatesAfterUnmount();

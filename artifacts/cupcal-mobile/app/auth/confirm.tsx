@@ -202,39 +202,40 @@ export default function ConfirmEmailScreen() {
       void enqueueCallback(parseAuthCallbackUrl(url));
     });
 
-    void Linking.getInitialURL()
-      .then((url) => {
-        const browserUrl = Platform.OS === 'web' && typeof window !== 'undefined'
-          ? window.location.href
-          : null;
-        const initialUrl = url ?? browserUrl;
-        const initialCallback = initialUrl ? parseAuthCallbackUrl(initialUrl) : {};
-        const hasInitialCallback = Object.values(initialCallback).some(Boolean);
-        const callback = hasInitialCallback
-          ? {
-            code: initialCallback.code ?? routeParams.code,
-            accessToken: initialCallback.accessToken ?? routeParams.accessToken,
-            refreshToken: initialCallback.refreshToken ?? routeParams.refreshToken,
-            flowId: initialCallback.flowId ?? routeParams.flowId,
-            flow: initialCallback.flow ?? routeParams.flow,
-            deletionToken: initialCallback.deletionToken ?? routeParams.deletionToken,
-            error: initialCallback.error ?? routeParams.error,
-            errorDescription: initialCallback.errorDescription ?? routeParams.errorDescription,
-          }
-          : hasRouteCallback
-            ? routeParams
-            : {};
-        void enqueueCallback(callback);
-      })
-      .catch(() => {
-        void enqueueCallback(routeParams);
-      })
-      .finally(() => {
-        initialUrlResolved = true;
-        for (const url of pendingUrls) {
-          void enqueueCallback(parseAuthCallbackUrl(url));
+    const getInitialCallback = (url: string | null): AuthCallbackParams => {
+      const browserUrl = Platform.OS === 'web' && typeof window !== 'undefined'
+        ? window.location.href
+        : null;
+      const initialUrl = url ?? browserUrl;
+      const initialCallback = initialUrl ? parseAuthCallbackUrl(initialUrl) : {};
+      const hasInitialCallback = Object.values(initialCallback).some(Boolean);
+      const callback = hasInitialCallback
+        ? {
+          code: initialCallback.code ?? routeParams.code,
+          accessToken: initialCallback.accessToken ?? routeParams.accessToken,
+          refreshToken: initialCallback.refreshToken ?? routeParams.refreshToken,
+          flowId: initialCallback.flowId ?? routeParams.flowId,
+          flow: initialCallback.flow ?? routeParams.flow,
+          deletionToken: initialCallback.deletionToken ?? routeParams.deletionToken,
+          error: initialCallback.error ?? routeParams.error,
+          errorDescription: initialCallback.errorDescription ?? routeParams.errorDescription,
         }
-        pendingUrls.length = 0;
+        : hasRouteCallback
+          ? routeParams
+          : {};
+      return callback;
+    };
+
+    void Linking.getInitialURL()
+      .then(getInitialCallback)
+      .catch(() => routeParams)
+      .then(async (callback) => {
+        await enqueueCallback(callback);
+        while (pendingUrls.length > 0) {
+          const url = pendingUrls.shift();
+          if (url) await enqueueCallback(parseAuthCallbackUrl(url));
+        }
+        initialUrlResolved = true;
       });
 
     return () => {
