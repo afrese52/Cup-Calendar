@@ -47,6 +47,20 @@ const isPasswordValidationError = (message: string | null) =>
 const isWeakPasswordError = (message: string | null) =>
   message === 'Das Passwort ist zu kurz oder zu unsicher. Bitte wähle ein stärkeres Passwort.';
 
+const formatRetryWait = (seconds: number) => {
+  if (seconds < 60) {
+    return `${seconds} ${seconds === 1 ? 'Sekunde' : 'Sekunden'}`;
+  }
+
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = seconds % 60;
+  const minuteLabel = `${minutes} ${minutes === 1 ? 'Minute' : 'Minuten'}`;
+  if (remainingSeconds === 0) return minuteLabel;
+
+  const secondLabel = `${remainingSeconds} ${remainingSeconds === 1 ? 'Sekunde' : 'Sekunden'}`;
+  return `${minuteLabel} und ${secondLabel}`;
+};
+
 export default function ResetPasswordScreen() {
   const colors = useColors();
   const [isCheckingLink, setIsCheckingLink] = useState(true);
@@ -233,10 +247,12 @@ export default function ResetPasswordScreen() {
         setPassword('');
         setConfirmPassword('');
       }
-      const message = hasRecoverySession
-        ? friendlyAuthError(error, 'Das Passwort konnte nicht gespeichert werden. Bitte versuche es erneut.')
-        : 'Die Wiederherstellungssitzung ist abgelaufen oder ungültig. Bitte fordere in den Einstellungen einen neuen Wiederherstellungslink an.';
       const retryAfterSeconds = hasRecoverySession ? getRateLimitRetryAfterSeconds(error) : null;
+      const message = !hasRecoverySession
+        ? 'Die Wiederherstellungssitzung ist abgelaufen oder ungültig. Bitte fordere in den Einstellungen einen neuen Wiederherstellungslink an.'
+        : retryAfterSeconds !== null
+          ? `Zu viele Versuche in kurzer Zeit. Bitte warte noch ${formatRetryWait(retryAfterSeconds)} und versuche es dann erneut.`
+          : friendlyAuthError(error, 'Das Passwort konnte nicht gespeichert werden. Bitte versuche es erneut.');
       if (retryAfterSeconds !== null) {
         setRetryAvailableAt(Date.now() + retryAfterSeconds * 1_000);
         setRetryWaitSeconds(retryAfterSeconds);
@@ -388,7 +404,7 @@ export default function ResetPasswordScreen() {
             testID="reset-password-retry-countdown"
             style={[styles.retryCountdown, { color: colors.mutedForeground }]}
           >
-            Du kannst es in {retryWaitSeconds} {retryWaitSeconds === 1 ? 'Sekunde' : 'Sekunden'} erneut versuchen.
+            Du kannst es in {formatRetryWait(retryWaitSeconds)} erneut versuchen.
           </Text>
         ) : null}
 
@@ -427,7 +443,7 @@ export default function ResetPasswordScreen() {
               {isSaving
                 ? 'Wird gespeichert …'
                 : retryWaitSeconds > 0
-                  ? `Bitte warten (${retryWaitSeconds} s)`
+                  ? `Bitte warten (${formatRetryWait(retryWaitSeconds)})`
                   : 'Passwort speichern'}
             </Text>
           </Pressable>

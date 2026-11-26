@@ -673,6 +673,47 @@ test.each(['ios', 'android'] as const)(
   },
 );
 
+test.each([
+  {
+    seconds: 59,
+    duration: '59 Sekunden',
+  },
+  {
+    seconds: 61,
+    duration: '1 Minute und 1 Sekunde',
+  },
+])('formatiert eine Wartezeit von $seconds Sekunden passend zur Minutengrenze', async ({ seconds, duration }) => {
+  mockSaveNewPassword.mockRejectedValueOnce(
+    Object.assign(new Error('Too many requests'), {
+      code: 'over_request_rate_limit',
+      status: 429,
+      retryAfter: seconds,
+    }),
+  );
+  const view = await render(<ResetPasswordScreen />);
+
+  await waitFor(() => expect(view.getByTestId('reset-password-submit-button')).toBeTruthy());
+  await fireEvent.changeText(view.getByTestId('reset-password-input'), 'Mein-neues-Passwort-123');
+  await fireEvent.changeText(view.getByTestId('reset-password-confirm-input'), 'Mein-neues-Passwort-123');
+  jest.useFakeTimers({ now: Date.now() });
+  try {
+    await fireEvent.press(view.getByTestId('reset-password-submit-button'));
+
+    expect(
+      view.getByText(
+        `Zu viele Versuche in kurzer Zeit. Bitte warte noch ${duration} und versuche es dann erneut.`,
+      ),
+    ).toBeTruthy();
+    expect(view.getByTestId('reset-password-retry-countdown').props.children.join('')).toBe(
+      `Du kannst es in ${duration} erneut versuchen.`,
+    );
+    expect(view.getByText(`Bitte warten (${duration})`)).toBeTruthy();
+  } finally {
+    await act(async () => view.unmount());
+    jest.useRealTimers();
+  }
+});
+
 test('gibt bei einem unerwarteten Speicherfehler eine zugängliche nächste Aktion aus', async () => {
   mockSaveNewPassword.mockRejectedValue(new Error('Unexpected server error'));
   const view = await render(<ResetPasswordScreen />);
