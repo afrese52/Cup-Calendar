@@ -529,8 +529,15 @@ test('liest eine verlässliche Wartezeit aus Supabase-Fehlerdetails', async (t) 
       assert.equal(getRateLimitRetryAfterSeconds(error, now), expected);
     });
   }
-  await t.test('verwirft fehlende oder ungültige Wartezeiten', () => {
+  await t.test('akzeptiert die Obergrenze und verwirft fehlende, ungültige oder übergroße Werte', () => {
+    assert.equal(getRateLimitRetryAfterSeconds({ retryAfter: 86_400 }, now), 86_400);
+    assert.equal(getRateLimitRetryAfterSeconds({}, now), null);
     assert.equal(getRateLimitRetryAfterSeconds({ headers: { 'retry-after': 'soon' } }, now), null);
+    assert.equal(getRateLimitRetryAfterSeconds({ retryAfter: 0 }, now), null);
+    assert.equal(getRateLimitRetryAfterSeconds({ retryAfter: -1 }, now), null);
+    assert.equal(getRateLimitRetryAfterSeconds({ retryAfter: Number.POSITIVE_INFINITY }, now), null);
+    assert.equal(getRateLimitRetryAfterSeconds({ retryAfter: 86_401 }, now), null);
+    assert.equal(getRateLimitRetryAfterSeconds({ retryAfter: '1e100' }, now), null);
     assert.equal(getRateLimitRetryAfterSeconds({ retryAfter: 90_000 }, now), null);
   });
   await t.test('zeigt konkrete Sekunden im verständlichen Hinweis an', () => {

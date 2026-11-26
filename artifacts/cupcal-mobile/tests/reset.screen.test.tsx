@@ -9,6 +9,16 @@ const mockRouterReplace = jest.fn();
 let mockRecoveryPending = true;
 let mockPreventRemoveEnabled = false;
 let mockPreventRemoveCallback: ((options: { data: { action: unknown }; repeat: () => void }) => void) | undefined;
+const mockGetRateLimitRetryAfterSeconds = (error: unknown) => {
+  if (!error || typeof error !== 'object' || !('retryAfter' in error)) return null;
+  const value = (error as { retryAfter?: unknown }).retryAfter;
+  if (typeof value === 'number') {
+    return Number.isFinite(value) && value > 0 && value <= 86_400 ? Math.ceil(value) : null;
+  }
+  if (typeof value !== 'string' || !/^\d+(?:\.\d+)?$/.test(value.trim())) return null;
+  const seconds = Number(value.trim());
+  return Number.isFinite(seconds) && seconds > 0 && seconds <= 86_400 ? Math.ceil(seconds) : null;
+};
 const mockUsePreventRemove = jest.fn(
   (preventRemove: boolean, callback?: (options: { data: { action: unknown }; repeat: () => void }) => void) => {
     mockPreventRemoveEnabled = preventRemove;
@@ -83,11 +93,8 @@ jest.mock('@/services/supabase', () => ({
         'status' in error &&
         (error as { status?: unknown }).status === 429)
     ) {
-      const retryAfter =
-        typeof error === 'object' && error !== null && 'retryAfter' in error
-          ? Number((error as { retryAfter?: unknown }).retryAfter)
-          : 0;
-      if (retryAfter > 0) {
+      const retryAfter = mockGetRateLimitRetryAfterSeconds(error);
+      if (retryAfter !== null) {
         return `Zu viele Versuche in kurzer Zeit. Bitte warte noch ${retryAfter} ${retryAfter === 1 ? 'Sekunde' : 'Sekunden'} und versuche es dann erneut.`;
       }
       return 'Zu viele Versuche in kurzer Zeit. Warte bitte einige Minuten und versuche es dann erneut.';
@@ -108,9 +115,7 @@ jest.mock('@/services/supabase', () => ({
     return fallback;
   },
   getRateLimitRetryAfterSeconds: (error: unknown) => {
-    if (!error || typeof error !== 'object' || !('retryAfter' in error)) return null;
-    const seconds = Number((error as { retryAfter?: unknown }).retryAfter);
-    return Number.isFinite(seconds) && seconds > 0 ? Math.ceil(seconds) : null;
+    return mockGetRateLimitRetryAfterSeconds(error);
   },
 }));
 
@@ -673,6 +678,67 @@ test.each(['ios', 'android'] as const)(
   },
 );
 
+test('hält das Speichern bis zur exakten abgerundeten Ablaufgrenze gesperrt und behält beide Eingaben', async () => {
+  mockSaveNewPassword
+    .mockReset()
+    .mockRejectedValueOnce(
+      Object.assign(new Error('Too many requests'), {
+        code: 'over_request_rate_limit',
+        status: 429,
+        retryAfter: 1.001,
+      }),
+    )
+    .mockResolvedValueOnce(undefined);
+  const view = await render(<ResetPasswordScreen />);
+
+  await waitFor(() => expect(view.getByTestId('reset-password-submit-button')).toBeTruthy());
+  await fireEvent.changeText(view.getByTestId('reset-password-input'), 'Mein-neues-Passwort-123');
+  await fireEvent.changeText(view.getByTestId('reset-password-confirm-input'), 'Mein-neues-Passwort-123');
+  jest.useFakeTimers({ now: Date.now() });
+  try {
+    await fireEvent.press(view.getByTestId('reset-password-submit-button'));
+
+    expect(view.getByTestId('reset-password-retry-countdown').props.children.join('')).toBe(
+      'Du kannst es in 2 Sekunden erneut versuchen.',
+    );
+    expect(view.getByTestId('reset-password-submit-button').props.accessibilityState).toMatchObject({
+      disabled: true,
+      busy: false,
+    });
+    expect(view.getByTestId('reset-password-input').props.value).toBe('Mein-neues-Passwort-123');
+    expect(view.getByTestId('reset-password-confirm-input').props.value).toBe('Mein-neues-Passwort-123');
+
+    await act(async () => {
+      jest.advanceTimersByTime(1_999);
+    });
+    expect(view.getByTestId('reset-password-submit-button').props.accessibilityState).toMatchObject({
+      disabled: true,
+      busy: false,
+    });
+    expect(view.getByTestId('reset-password-input').props.value).toBe('Mein-neues-Passwort-123');
+    expect(view.getByTestId('reset-password-confirm-input').props.value).toBe('Mein-neues-Passwort-123');
+    expect(mockSaveNewPassword).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      jest.advanceTimersByTime(1);
+    });
+    expect(view.getByTestId('reset-password-submit-button').props.accessibilityState).toMatchObject({
+      disabled: false,
+      busy: false,
+    });
+    expect(view.getByTestId('reset-password-input').props.value).toBe('Mein-neues-Passwort-123');
+    expect(view.getByTestId('reset-password-confirm-input').props.value).toBe('Mein-neues-Passwort-123');
+    expect(mockSaveNewPassword).toHaveBeenCalledTimes(1);
+
+    await fireEvent.press(view.getByTestId('reset-password-submit-button'));
+    expect(await view.findByText('Passwort geändert')).toBeTruthy();
+    expect(mockSaveNewPassword).toHaveBeenCalledTimes(2);
+  } finally {
+    await act(async () => view.unmount());
+    jest.useRealTimers();
+  }
+});
+
 test.each([
   {
     seconds: 59,
@@ -712,6 +778,44 @@ test.each([
     await act(async () => view.unmount());
     jest.useRealTimers();
   }
+});
+
+test.each([
+  ['fehlender Wert', undefined],
+  ['Nullwert', null],
+  ['leerer Text', ''],
+  ['nicht numerischer Text', 'später'],
+  ['Null', 0],
+  ['negative Zahl', -1],
+  ['unendlicher Wert', Infinity],
+  ['nicht endliche Zahl', NaN],
+  ['Wert über der Obergrenze', 86_401],
+  ['sehr großer Wert', '1e100'],
+])('startet für eine ungültige Serverwartezeit (%s) keinen Countdown', async (_label, retryAfter) => {
+  const error = Object.assign(new Error('Too many requests'), {
+    code: 'over_request_rate_limit',
+    status: 429,
+    ...(retryAfter === undefined ? {} : { retryAfter }),
+  });
+  mockSaveNewPassword.mockRejectedValueOnce(error);
+  const view = await render(<ResetPasswordScreen />);
+
+  await waitFor(() => expect(view.getByTestId('reset-password-submit-button')).toBeTruthy());
+  await fireEvent.changeText(view.getByTestId('reset-password-input'), 'Mein-neues-Passwort-123');
+  await fireEvent.changeText(view.getByTestId('reset-password-confirm-input'), 'Mein-neues-Passwort-123');
+  await fireEvent.press(view.getByTestId('reset-password-submit-button'));
+
+  expect(
+    await view.findByText('Zu viele Versuche in kurzer Zeit. Warte bitte einige Minuten und versuche es dann erneut.'),
+  ).toBeTruthy();
+  expect(view.queryByTestId('reset-password-retry-countdown')).toBeNull();
+  expect(view.getByTestId('reset-password-submit-button').props.accessibilityState).toMatchObject({
+    disabled: false,
+    busy: false,
+  });
+  expect(view.getByTestId('reset-password-input').props.value).toBe('Mein-neues-Passwort-123');
+  expect(view.getByTestId('reset-password-confirm-input').props.value).toBe('Mein-neues-Passwort-123');
+  await act(async () => view.unmount());
 });
 
 test('gibt bei einem unerwarteten Speicherfehler eine zugängliche nächste Aktion aus', async () => {
