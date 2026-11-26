@@ -240,6 +240,14 @@ export function friendlyAuthError(
     message.includes('network')
     || message.includes('fetch failed')
     || message.includes('failed to fetch')
+    || message.includes('networkerror')
+    || message.includes('load failed')
+    || (
+      typeof errorDetails === 'object'
+      && errorDetails !== null
+      && 'name' in errorDetails
+      && errorDetails.name === 'AuthRetryableFetchError'
+    )
   ) {
     return 'Keine Verbindung möglich. Prüfe deine Internetverbindung und versuche es erneut.';
   }

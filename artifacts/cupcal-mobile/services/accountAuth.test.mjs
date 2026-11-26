@@ -225,6 +225,55 @@ test('zeigt einen verständlichen Fehler bei abgelehnter Anmeldung', async () =>
   });
 });
 
+test('erkennt native und Supabase-spezifische Netzwerkfehler', async (t) => {
+  const expected =
+    'Keine Verbindung möglich. Prüfe deine Internetverbindung und versuche es erneut.';
+  const cases = [
+    ['iOS-Fehler ohne Netzwerkbegriff', new TypeError('Load failed')],
+    ['Supabase-Wiederholungsfehler', Object.assign(new Error('Request failed'), {
+      name: 'AuthRetryableFetchError',
+    })],
+  ];
+
+  for (const [name, error] of cases) {
+    await t.test(name, () => {
+      assert.equal(friendlyAuthError(error), expected);
+    });
+  }
+});
+
+test('erlaubt nach einem abgelehnten Netzwerkversuch eine erneute Anmeldung', async () => {
+  const receivedCredentials = [];
+  const auth = createAuth({
+    signInWithPassword: async (credentials) => {
+      receivedCredentials.push(credentials);
+      if (receivedCredentials.length === 1) {
+        throw new TypeError('Network request failed');
+      }
+      return { error: null };
+    },
+  });
+  const options = {
+    mode: 'sign-in',
+    email: 'test@example.invalid',
+    password: 'test-password',
+    requestPasswordReset: async () => {},
+  };
+
+  assert.deepEqual(await submitAccountAuth(auth, options), {
+    ok: false,
+    error: 'Keine Verbindung möglich. Prüfe deine Internetverbindung und versuche es erneut.',
+  });
+  assert.deepEqual(await submitAccountAuth(auth, options), {
+    ok: true,
+    message: 'Du bist angemeldet.',
+  });
+  assert.deepEqual(receivedCredentials, [
+    { email: 'test@example.invalid', password: 'test-password' },
+    { email: 'test@example.invalid', password: 'test-password' },
+  ]);
+});
+
 test('registriert erfolgreich mit und ohne sofortige Sitzung', async (t) => {
   await t.test('Konto wird direkt angemeldet', async () => {
     let receivedSignUpOptions;

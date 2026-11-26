@@ -452,6 +452,37 @@ test('ermöglicht nach abgelehnter Anmeldung einen korrigierten zweiten Versuch'
   expect(await view.findByText('Du bist angemeldet.')).toBeTruthy();
 });
 
+test('ermöglicht nach einem Netzwerkabbruch einen erneuten Anmeldeversuch', async () => {
+  auth.signInWithPassword.mockRejectedValueOnce(new TypeError('Network request failed'));
+  const view = await openSettings();
+  await enterCredentials(view);
+  const submitButton = view.getByTestId('auth-submit-button');
+
+  await fireEvent.press(submitButton);
+
+  const errorMessage = await view.findByTestId('auth-error-message');
+  expect(errorMessage.props.children).toBe(
+    'Keine Verbindung möglich. Prüfe deine Internetverbindung und versuche es erneut.',
+  );
+  await waitFor(() => {
+    expect(view.getByTestId('auth-submit-button').props.accessibilityState).toEqual({
+      disabled: false,
+      busy: false,
+    });
+  });
+  expect(view.getByTestId('auth-email-input').props.value).toBe('test@example.invalid');
+  expect(view.getByTestId('auth-password-input').props.value).toBe('test-password');
+
+  await fireEvent.press(submitButton);
+
+  expect(auth.signInWithPassword).toHaveBeenCalledTimes(2);
+  expect(auth.signInWithPassword).toHaveBeenNthCalledWith(2, {
+    email: 'test@example.invalid',
+    password: 'test-password',
+  });
+  expect(await view.findByTestId('account-session-status')).toBeTruthy();
+});
+
 test('sendet ein kurzes Bestandskennwort und zeigt nur den verständlichen Anmeldefehler', async () => {
   const rawSupabaseMessage = 'Password should be at least 6 characters';
   auth.signInWithPassword.mockResolvedValue({
