@@ -36,3 +36,4 @@
 - [Live-Komprimierung hinter Proxys](cupcal-live-compression-proxy.md) — Die vorgeschaltete Live-Schicht kann Analytics in Identity-HTML einfügen; dekomprimierte und unkomprimierte HTML-Bytes deshalb nicht pauschal gleichsetzen.
 - [Speicherfehler nach Codeaustausch](supabase-session-save-failures.md) — Ein PKCE-Codeaustausch kann serverseitig erfolgreich sein, bevor ein fehlgeschlagenes lokales Schreiben die Sitzung verwirft.
 - [Android-Paketkennung für Play](android-package-id.md) — Wird die App-Kennung nach einem Play-Test geändert, entsteht ein separater Play-Eintrag statt eines Updates.
+- [Supabase-Aufbewahrung nach Upgrade](supabase-retention-activation.md) — Sieben Tage für Backups und Logs sind vereinbart, gelten aber erst nach dem Supabase-Upgrade.
