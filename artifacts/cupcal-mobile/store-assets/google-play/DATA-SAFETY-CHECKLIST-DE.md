@@ -113,17 +113,15 @@ allein belegt nicht sämtliche Datenübertragungen des Store-Builds.
    gespeichert. Die bestätigte Kontolöschung löscht das Konto unmittelbar;
    Favoriten sind laut lokalem Datenbankschema über kaskadierende Löschung
    daran gebunden. Das ist von der Aufbewahrung in Sicherungen zu unterscheiden.
-5. Der Betreiber hat für Supabase tägliche Sicherungen mit sieben Tagen
-   Aufbewahrung und Protokolle mit sieben Tagen Aufbewahrung gewählt.
-   Laut seiner Klarstellung gelten diese Fristen **erst nach dem Upgrade**.
-   Der Screenshot mit diesen Tarifleistungen ist kein Nachweis aktiver
-   Projekteinstellungen. Bis zum bestätigten Upgrade und Projektabgleich
-   sind dies geplante, nicht nachgewiesen aktive Fristen.
+5. Der Betreiber hat am 26. November 2026 bestätigt, dass für Supabase
+   tägliche Sicherungen mit sieben Tagen Aufbewahrung und Protokolle mit
+   sieben Tagen Aufbewahrung jetzt eingerichtet sind. Dies ist eine
+   Nutzerrückmeldung, keine unabhängige Dashboard-Prüfung.
 6. Replit-Veröffentlichungsprotokolle werden laut Replit-Dokumentation
    30 Tage aufbewahrt. Dies ist nicht dieselbe Protokollkategorie wie
    Supabase-Protokolle und bestätigt keine Frist für andere Datenbestände.
 7. Vor Einreichung müssen Datenschutzerklärung, tatsächliche Einrichtung,
-   Release-AAB und die vollständige Play-Erklärung übereinstimmen.
+   vorgesehenes Release-AAB und die vollständige Play-Erklärung übereinstimmen.
    Weder Upgrade noch neuer Build noch Einreichung sind durch diese Notiz
    freigegeben.
 
