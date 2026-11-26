@@ -255,9 +255,10 @@ export default function SettingsScreen() {
   }, [showDeleteConfirmation]);
 
   useEffect(() => {
-    const wasRequestingPasswordReset =
-      previousRequestedAuthModeRef.current === 'forgot-password';
+    const previousRequestedAuthMode = previousRequestedAuthModeRef.current;
     previousRequestedAuthModeRef.current = requestedAuthMode;
+    const routeModeChanged = previousRequestedAuthMode !== requestedAuthMode;
+    if (routeModeChanged) recoveryEmailRevisionRef.current += 1;
 
     if (requestedAuthMode === 'forgot-password') {
       setAuthMode('forgot-password');
@@ -269,14 +270,13 @@ export default function SettingsScreen() {
       return;
     }
 
-    if (!wasRequestingPasswordReset) return;
+    if (previousRequestedAuthMode !== 'forgot-password') return;
 
     setAuthMode('sign-in');
     setAuthError(null);
     recoveryErrorEmailRef.current = null;
     if (recoverySuccessEmailRef.current !== null) setAuthMessage(null);
     setPassword('');
-    recoveryEmailRevisionRef.current += 1;
   }, [requestedAuthMode]);
 
   useEffect(() => {

@@ -1405,24 +1405,36 @@ test('entfernt eine erfolgreiche Wiederherstellungsmeldung beim Zurückwechseln 
   });
 });
 
-test('zeigt nach Verlassen der Linkanfrage keine verspätete Wiederherstellungsfehlermeldung', async () => {
-  let finishReset!: (result: { error: Error }) => void;
-  auth.resetPasswordForEmail.mockImplementation(
-    () => new Promise((resolve) => { finishReset = resolve; }),
-  );
-  mockRouteParams.authMode = 'forgot-password';
-  const view = await openSettings();
-  await fireEvent.changeText(view.getByTestId('auth-email-input'), 'test@example.invalid');
-  await fireEvent.press(view.getByTestId('auth-submit-button'));
+test.each([
+  ['Fehler', { error: new Error('Email rate limit exceeded') }],
+  ['Erfolg', { error: null }],
+] as const)(
+  'verwirft eine verspätete Wiederherstellungsantwort (%s) nach Wechsel des Routenmodus',
+  async (_resultType, result) => {
+    let finishReset!: (result: { error: Error | null }) => void;
+    auth.resetPasswordForEmail.mockImplementation(
+      () => new Promise((resolve) => { finishReset = resolve; }),
+    );
+    mockRouteParams.authMode = 'forgot-password';
+    const view = await openSettings();
+    await fireEvent.changeText(view.getByTestId('auth-email-input'), 'test@example.invalid');
+    await fireEvent.press(view.getByTestId('auth-submit-button'));
 
-  mockRouteParams.authMode = undefined;
-  await view.rerender(<SettingsScreen />);
-  await waitFor(() => expect(view.getByText('Bei CupCal anmelden')).toBeTruthy());
-  await act(async () => finishReset({ error: new Error('Email rate limit exceeded') }));
+    mockRouteParams.authMode = undefined;
+    await view.rerender(<SettingsScreen />);
+    await waitFor(() => {
+      expect(view.getByText('Bei CupCal anmelden')).toBeTruthy();
+      expect(view.queryByTestId('auth-error-message')).toBeNull();
+      expect(view.queryByTestId('auth-success-message')).toBeNull();
+    });
 
-  expect(view.queryByTestId('auth-error-message')).toBeNull();
-  expect(view.queryByTestId('auth-success-message')).toBeNull();
-});
+    await act(async () => finishReset(result));
+
+    expect(view.queryByTestId('auth-error-message')).toBeNull();
+    expect(view.queryByTestId('auth-success-message')).toBeNull();
+    expect(view.getByText('Bei CupCal anmelden')).toBeTruthy();
+  },
+);
 
 test('zeigt im direkt geöffneten Wiederherstellungsmodus den Fehler einer neuen Linkanfrage verständlich an', async () => {
   mockRouteParams.authMode = 'forgot-password';
