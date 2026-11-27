@@ -13,10 +13,16 @@ Die Variablen müssen beim Starten des Expo-Entwicklungsservers beziehungsweise 
 
 Für EAS-Builds müssen `EXPO_PUBLIC_SUPABASE_URL` und
 `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY` im Expo-Projekt unter der Umgebung
-`preview` hinterlegt sein. Sowohl das Preview-Profil als auch das Android-
-Produktionsprofil verwenden diese Umgebung, damit Vorschau und Store-Build
-dieselben Supabase-Werte erhalten. Änderungen an den Expo-Variablen wirken
-sich erst auf neu erstellte App-Builds aus.
+hinterlegt sein, die zum EAS-Profil gehört: Das Preview-Profil verwendet
+`preview`, das Android-Produktionsprofil `production`. Beide Expo-Umgebungen
+müssen beide Variablen enthalten. Prüfe oder ergänze sie im Expo-Dashboard unter
+**Project → Environment variables** in der jeweils passenden Umgebung. Falls
+Werte fehlen, übernimm die Supabase-Projektbasis-URL und ausschließlich den
+öffentlichen Publishable-Key aus dem Replit-Secrets-Speicher; verwende niemals
+einen Service-Role- oder Secret-Key. Gib Werte nicht in Chat, Logs oder
+Build-Ausgaben ein. `eas env:list preview` und `eas env:list production`
+zeigen, ob die Variablennamen hinterlegt sind. Änderungen wirken sich erst auf
+neu erstellte App-Builds aus.
 
 ### Prüfung vor EAS-Builds
 
@@ -24,7 +30,9 @@ Der Hook `eas-build-pre-install` prüft beide öffentlichen Variablen, bevor
 EAS Abhängigkeiten installiert und den nativen Build vorbereitet. Fehlen
 Werte, ist die Projektadresse keine HTTPS-Basisadresse oder ist der Schlüssel
 kein öffentlicher Publishable-/Legacy-Anon-Key, bricht der Build mit einer
-deutschen Meldung ab. Variablenwerte werden nicht ausgegeben.
+deutschen Meldung ab. Variablenwerte werden nicht ausgegeben. Bei einem Fehler
+ergänze die genannten Variablen in der Umgebung des ausgewählten EAS-Profils
+(Preview: `preview`, Produktion: `production`) und starte den Build danach neu.
 
 Die Prüfung verwendet bewusst nur die beiden `EXPO_PUBLIC_SUPABASE_*`
 Buildvariablen und keinen stillen Rückgriff auf serverseitige Variablen.

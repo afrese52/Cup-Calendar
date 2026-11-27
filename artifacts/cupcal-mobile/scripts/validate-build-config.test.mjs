@@ -96,6 +96,8 @@ test('CLI fails before a build when configuration is absent', () => {
   assert.match(result.stderr, /Build abgebrochen/);
   assert.match(result.stderr, /EXPO_PUBLIC_SUPABASE_URL fehlt/);
   assert.match(result.stderr, /EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY fehlt/);
+  assert.match(result.stderr, /preview → preview, production → production/);
+  assert.match(result.stderr, /niemals einen Service-Role- oder Secret-Key/);
 });
 
 test('CLI succeeds with fixtures and never prints URLs or keys', () => {
@@ -147,7 +149,7 @@ test('production keeps store AAB output, remote version increments and the chose
   const { build, cli } = readJson('../eas.json');
   assert.equal(build.production.extends, 'preview');
   assert.equal(build.preview.environment, 'preview');
-  assert.equal(build.production.environment, 'preview');
+  assert.equal(build.production.environment, 'production');
   assert.equal(build.production.distribution, 'store');
   assert.equal(build.production.android.buildType, 'app-bundle');
   assert.equal(build.production.android.autoIncrement, 'versionCode');

@@ -65,7 +65,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
   if (errors.length) {
     console.error('[CupCal] Build abgebrochen: öffentliche Supabase-Konfiguration fehlt oder ist ungültig.');
     for (const error of errors) console.error(`- ${error}`);
-    console.error('Hinterlege beide EXPO_PUBLIC_SUPABASE_* Variablen in der vom EAS-Profil gewählten Expo-Umgebung. Serverseitige Replit-Variablen ersetzen diese Buildwerte nicht.');
+    console.error('Öffne im Expo-Dashboard Project → Environment variables und ergänze die fehlenden Variablen in der EAS-Umgebung des Profils (preview → preview, production → production). Replit-Servervariablen ersetzen diese Buildwerte nicht. Verwende nur die Supabase-Projektbasis und den öffentlichen Publishable-Key, niemals einen Service-Role- oder Secret-Key. Prüfe die Namen mit eas env:list <preview|production>.');
     process.exitCode = 1;
   } else {
     console.log('[CupCal] Öffentliche Supabase-Buildkonfiguration formal geprüft. Keine Verbindung oder Schlüsselgültigkeit bestätigt.');
