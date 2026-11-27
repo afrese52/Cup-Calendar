@@ -117,7 +117,11 @@ Es wurde nichts eingereicht oder veröffentlicht. Die Pflichtfrage zur
 Verschlüsselung ist inzwischen im gespeicherten Entwurf mit „Ja“ beantwortet.
 Der durchgeführte statische Abgleich des neuen
 AAB und TLS-Handshakes bestätigen HTTPS/WSS für die nachvollzogenen
-App-Datenwege; ein vollständiger Laufzeit-/SDK-Nachweis liegt nicht vor.
+App-Datenwege. Die ergänzende Geräteprüfung vom 27. November 2026 zeigt
+in bereitgestellten PCAPdroid-Nachweisen HTTPS zu CupCal und Supabase sowie
+separate DNS-Abfragen; der Betreiber meldet erfolgreiche Kernabläufe
+einschließlich Regionswahl. Ein vollständiger Laufzeit-/SDK-Nachweis
+liegt damit weiterhin nicht vor.
 Dateizuordnung, Ergebnis und Grenzen stehen in
 [RELEASE-V2-TRANSPORT-AUDIT-DE.md](./RELEASE-V2-TRANSPORT-AUDIT-DE.md).
 Datentypen, Datennutzung und Vorschau (Schritte 3–5) wurden durch diese
