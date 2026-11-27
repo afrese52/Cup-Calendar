@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { calendarRegionFilters, type CalendarRegionFilter } from '../data/events';
+import { calendarRegionFilters, type CalendarRegionFilter } from '../data/events.ts';
 
 const REGION_PREFERENCE_KEY = 'cupcal.calendar-region-filter.v1';
 const LOCATION_DISCLOSURE_KEY = 'cupcal.location-disclosure-shown.v1';
@@ -47,8 +47,15 @@ export async function loadCalendarRegionPreference(): Promise<CalendarRegionPref
 
 export async function saveCalendarRegionPreference(
   preference: CalendarRegionPreference,
+  storageApi: Pick<typeof storage, 'setItem'> = storage,
 ): Promise<void> {
-  await storage.setItem(REGION_PREFERENCE_KEY, JSON.stringify(preference));
+  await storageApi.setItem(
+    REGION_PREFERENCE_KEY,
+    JSON.stringify({
+      region: preference.region,
+      source: preference.source,
+    }),
+  );
 }
 
 export async function hasSeenLocationDisclosure(): Promise<boolean> {
