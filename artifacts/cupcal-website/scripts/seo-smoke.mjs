@@ -401,47 +401,61 @@ async function runSmokeTest() {
       const legalPage = legalPagesByUrl.get(sitemapUrl);
       if (isHomePage || isCalendarAppPage) {
         const [application] = schemaNodesOfType(schemaNodes, 'SoftwareApplication');
-        if (!remoteUrl || application) {
-          assert.ok(application, `${sitemapPageUrl.pathname} enthält keine SoftwareApplication-Angabe.`);
-          const expectedDescription = isHomePage ? homePageDescription : topicPage?.description;
-          if (remoteUrl) {
-            assertPlatformAvailability(
-              application.description ?? '',
-              'android',
-              confirmedStoreLinks.android !== null,
-              `${sitemapPageUrl.pathname}: SoftwareApplication-Beschreibung`,
-            );
-            assertPlatformAvailability(
-              application.description ?? '',
-              'ios',
-              confirmedStoreLinks.ios !== null,
-              `${sitemapPageUrl.pathname}: SoftwareApplication-Beschreibung`,
-            );
-          } else {
-            assert.equal(
-              application.description,
-              expectedDescription,
-              `${sitemapPageUrl.pathname} hat eine vom Store-Status abweichende App-Beschreibung.`,
-            );
-          }
-          for (const [platform, name] of [
-            ['android', 'CupCal für Android'],
-            ['ios', 'CupCal für iOS'],
-          ]) {
-            const offer = application.offers?.find((candidate) => candidate.name === name);
-            const confirmedUrl = confirmedStoreLinks[platform];
-            assert.ok(offer, `${sitemapPageUrl.pathname} enthält kein strukturiertes ${platform}-Angebot.`);
-            assert.equal(
-              offer.availability,
-              confirmedUrl ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
-              `${sitemapPageUrl.pathname} kennzeichnet ${platform} nicht gemäß der Store-Freigabe.`,
-            );
-            assert.equal(
-              offer.url ?? null,
-              confirmedUrl ? new URL(confirmedUrl).href : null,
-              `${sitemapPageUrl.pathname} verlinkt ${platform} ohne bestätigte Store-URL oder lässt den bestätigten Link aus.`,
-            );
-          }
+        assert.ok(application, `${sitemapPageUrl.pathname} enthält keine SoftwareApplication-Angabe.`);
+        assert.equal(
+          application['@id'],
+          `${SITE_ORIGIN}/#cupcal-app`,
+          `${sitemapPageUrl.pathname} hat keine stabile CupCal-App-Schema-ID.`,
+        );
+        assert.equal(application.name, 'CupCal', `${sitemapPageUrl.pathname} hat einen falschen App-Namen.`);
+        assert.equal(
+          application.applicationCategory,
+          'UtilitiesApplication',
+          `${sitemapPageUrl.pathname} hat eine falsche App-Kategorie.`,
+        );
+        assert.deepEqual(
+          application.operatingSystem,
+          ['Android', 'iOS'],
+          `${sitemapPageUrl.pathname} nennt nicht beide unterstützten Betriebssysteme.`,
+        );
+        const expectedDescription = isHomePage ? homePageDescription : topicPage?.description;
+        if (remoteUrl) {
+          assertPlatformAvailability(
+            application.description ?? '',
+            'android',
+            confirmedStoreLinks.android !== null,
+            `${sitemapPageUrl.pathname}: SoftwareApplication-Beschreibung`,
+          );
+          assertPlatformAvailability(
+            application.description ?? '',
+            'ios',
+            confirmedStoreLinks.ios !== null,
+            `${sitemapPageUrl.pathname}: SoftwareApplication-Beschreibung`,
+          );
+        } else {
+          assert.equal(
+            application.description,
+            expectedDescription,
+            `${sitemapPageUrl.pathname} hat eine vom Store-Status abweichende App-Beschreibung.`,
+          );
+        }
+        for (const [platform, name] of [
+          ['android', 'CupCal für Android'],
+          ['ios', 'CupCal für iOS'],
+        ]) {
+          const offer = application.offers?.find((candidate) => candidate.name === name);
+          const confirmedUrl = confirmedStoreLinks[platform];
+          assert.ok(offer, `${sitemapPageUrl.pathname} enthält kein strukturiertes ${platform}-Angebot.`);
+          assert.equal(
+            offer.availability,
+            confirmedUrl ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
+            `${sitemapPageUrl.pathname} kennzeichnet ${platform} nicht gemäß der Store-Freigabe.`,
+          );
+          assert.equal(
+            offer.url ?? null,
+            confirmedUrl ? new URL(confirmedUrl).href : null,
+            `${sitemapPageUrl.pathname} verlinkt ${platform} ohne bestätigte Store-URL oder lässt den bestätigten Link aus.`,
+          );
         }
       }
       if (topicPage) {
