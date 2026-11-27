@@ -1,6 +1,12 @@
 import { useEffect, useRef } from 'react';
 import { ArrowDown, ArrowRight, Bookmark, CalendarDays, Check, Clock3, Download, Filter, WifiOff } from 'lucide-react';
-import { getAvailabilityCtaPlacement, trackAvailabilityCtaClick, trackEvent } from './lib/analytics';
+import {
+  getAvailabilityCtaPlacement,
+  trackAvailabilityCtaClick,
+  trackEvent,
+  trackTopicNavigationClick,
+  trackTopicPageEntry,
+} from './lib/analytics';
 import { confirmedStoreLinks, getOfficialStoreUrl, normalizeWebsitePath, seoTopicPages } from './content/seo-pages';
 import { deletionConfirmationPage, legalPages } from './content/legal-pages';
 import { SeoTopicPageView } from './pages/seo-topic-page';
@@ -44,6 +50,10 @@ function App({ pathname }: AppProps = {}) {
   );
   const topicPage = seoTopicPages.find((page) => page.path === currentPath);
   const legalPage = [...legalPages, deletionConfirmationPage].find((page) => page.path === currentPath);
+
+  useEffect(() => {
+    if (topicPage) trackTopicPageEntry(topicPage.slug);
+  }, [topicPage?.slug]);
 
   useEffect(() => {
     if (typeof IntersectionObserver === 'undefined') return;
@@ -401,10 +411,7 @@ function App({ pathname }: AppProps = {}) {
               key={page.slug}
               data-testid={`link-topic-${page.slug}`}
               aria-label={`${page.eyebrow}: ${page.h1}`}
-              onClick={() => trackEvent('site_navigation_click', {
-                destination: page.slug,
-                placement: 'home_topic_directory',
-              })}
+              onClick={() => trackTopicNavigationClick(page.slug, 'home_topic_directory')}
             >
               <span className="topic-card-label">{page.eyebrow}</span>
               <strong>{page.h1}</strong>
@@ -425,10 +432,7 @@ function App({ pathname }: AppProps = {}) {
                 href={page.path}
                 key={page.slug}
                 data-testid={`link-footer-${page.slug}`}
-                onClick={() => trackEvent('site_navigation_click', {
-                  destination: page.slug,
-                  placement: 'footer',
-                })}
+                onClick={() => trackTopicNavigationClick(page.slug, 'footer')}
               >
                 {page.eyebrow}
               </a>

@@ -215,4 +215,56 @@ test('Startseite verlinkt alle Themenseiten und erfasst Ziel sowie Platzierung',
       ['site_navigation_click', { destination: page.slug, placement: 'footer' }],
     ]);
   }
+  dom.window.sessionStorage.clear();
+});
+
+test('Themenseitenbesuche ordnen den tatsächlichen Einstieg der Startseite zu', async () => {
+  const { seoTopicPages } = await vite.ssrLoadModule('/src/content/seo-pages.ts');
+
+  for (const page of seoTopicPages) {
+    for (const placement of ['home_topic_directory', 'footer']) {
+      dom.window.sessionStorage.clear();
+      trackedEvents.length = 0;
+      await renderApp('/');
+
+      const homepageLink = placement === 'footer'
+        ? `[data-testid="link-footer-${page.slug}"]`
+        : `[data-testid="link-topic-${page.slug}"]`;
+      const link = dom.window.document.querySelector(homepageLink);
+      assert.ok(link, `Einstieg ${placement} für ${page.slug} muss vorhanden sein`);
+      link.addEventListener('click', (event) => event.preventDefault(), { once: true });
+      await act(async () => link.click());
+      await renderApp(page.path, false);
+
+      assert.deepEqual(
+        trackedEvents.filter(([name]) => name === 'topic_page_entry'),
+        [['topic_page_entry', { destination: page.slug, placement }]],
+        `Der Besuch auf ${page.path} muss dem Einstieg ${placement} zugeordnet werden`,
+      );
+      assert.equal(dom.window.sessionStorage.length, 0, 'Die verbrauchte Zuordnung darf nicht erneut zählen');
+    }
+  }
+});
+
+test('Direkte und nicht passende Themenseitenbesuche erhalten keine Einstiegszuordnung', async () => {
+  const { seoTopicPages } = await vite.ssrLoadModule('/src/content/seo-pages.ts');
+  assert.ok(seoTopicPages.length > 1, 'Mindestens zwei Themenseiten müssen vorhanden sein');
+
+  dom.window.sessionStorage.clear();
+  trackedEvents.length = 0;
+  await renderApp(seoTopicPages[0].path);
+  assert.equal(trackedEvents.some(([name]) => name === 'topic_page_entry'), false);
+
+  dom.window.sessionStorage.setItem(
+    'cupcal:topic-entry-attribution',
+    JSON.stringify({
+      destination: seoTopicPages[0].slug,
+      placement: 'footer',
+      clickedAt: Date.now(),
+    }),
+  );
+  trackedEvents.length = 0;
+  await renderApp(seoTopicPages[1].path);
+  assert.equal(trackedEvents.some(([name]) => name === 'topic_page_entry'), false);
+  assert.equal(dom.window.sessionStorage.length, 0, 'Eine nicht passende alte Zuordnung muss verworfen werden');
 });
