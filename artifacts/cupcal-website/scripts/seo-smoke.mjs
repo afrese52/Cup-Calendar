@@ -57,6 +57,13 @@ function extractMetaDescription(html) {
   return tag ? decodeHtml(readAttribute(tag, 'content') ?? '') : '';
 }
 
+function extractMetaContentByAttribute(html, attribute, value) {
+  const tag = [...html.matchAll(/<meta\b[^>]*>/gi)]
+    .map((match) => match[0])
+    .find((candidate) => readAttribute(candidate, attribute)?.toLowerCase() === value);
+  return tag ? decodeHtml(readAttribute(tag, 'content') ?? '') : '';
+}
+
 function extractCanonical(html) {
   const tag = html.match(/<link\b(?=[^>]*\brel=["']canonical["'])[^>]*>/i)?.[0];
   return tag ? readAttribute(tag, 'href') : null;
@@ -343,6 +350,16 @@ async function runSmokeTest() {
       assert.ok(description, `${sitemapPageUrl.pathname} hat keine Meta-Beschreibung.`);
       assert.ok(!observedDescriptions.has(description), `Doppelte Meta-Beschreibung: ${sitemapPageUrl.pathname}`);
       observedDescriptions.add(description);
+      assert.equal(
+        extractMetaContentByAttribute(html, 'property', 'og:description'),
+        description,
+        `Open-Graph-Beschreibung weicht auf ${sitemapPageUrl.pathname} von der Meta-Beschreibung ab.`,
+      );
+      assert.equal(
+        extractMetaContentByAttribute(html, 'name', 'twitter:description'),
+        description,
+        `Twitter-Beschreibung weicht auf ${sitemapPageUrl.pathname} von der Meta-Beschreibung ab.`,
+      );
       assert.doesNotMatch(
         extractRobotsDirectives(html).join(' '),
         /\b(?:noindex|none)\b/i,
