@@ -350,6 +350,22 @@ h1, h2, h3, p { margin-top: 0; }
  *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
 @media (forced-colors: active) {
+  .topic-directory .topic-card,
+  .footer .topic-footer-links a {
+    color: LinkText;
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 3px;
+  }
+  .topic-directory .topic-card {
+    border-color: CanvasText;
+    background-color: Canvas;
+  }
+  .topic-directory .topic-card-label,
+  .topic-directory .topic-card-description,
+  .topic-directory .topic-card-link {
+    color: inherit;
+  }
   .topic-shell .nav-links a,
   .topic-shell .topic-breadcrumb a,
   .topic-shell .topic-footer-home,

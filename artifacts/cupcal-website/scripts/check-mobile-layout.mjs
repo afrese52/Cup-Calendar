@@ -673,6 +673,9 @@ async function inspectForcedColors(send) {
       const currentNav = nav?.querySelector('a[aria-current="page"]');
       const breadcrumbLink = breadcrumb?.querySelector('a[href]');
       const currentBreadcrumb = breadcrumb?.querySelector('[aria-current="page"]');
+      const topicDirectory = document.querySelector('.topic-directory');
+      const topicCards = Array.from(topicDirectory?.querySelectorAll('.topic-card') ?? []);
+      const footerTopicLinks = Array.from(document.querySelectorAll('.footer .topic-footer-links a'));
       const styles = (element) => {
         const style = getComputedStyle(element);
         return {
@@ -684,6 +687,22 @@ async function inspectForcedColors(send) {
           outlineColor: style.outlineColor,
         };
       };
+      const describeTopicLink = (element) => {
+        const rect = element.getBoundingClientRect();
+        const style = getComputedStyle(element);
+        return {
+          href: element.getAttribute('href'),
+          label: (element.getAttribute('aria-label') || element.innerText || element.textContent || '')
+            .replace(/\\s+/g, ' ').trim(),
+          visible: style.display !== 'none' && style.visibility !== 'hidden' &&
+            Number(style.opacity) > 0 && rect.width > 0 && rect.height > 0,
+          color: style.color,
+          backgroundColor: style.backgroundColor,
+          borderColor: style.borderTopColor,
+          borderWidth: style.borderTopWidth,
+          textDecorationLine: style.textDecorationLine,
+        };
+      };
       navLink?.focus();
       const navFocusVisible = Boolean(navLink?.matches(':focus-visible'));
       const navFocus = navLink ? styles(navLink) : null;
@@ -693,6 +712,15 @@ async function inspectForcedColors(send) {
       breadcrumbLink?.focus();
       const breadcrumbFocusVisible = Boolean(breadcrumbLink?.matches(':focus-visible'));
       const breadcrumbFocus = breadcrumbLink ? styles(breadcrumbLink) : null;
+      document.documentElement.style.scrollBehavior = 'auto';
+      const topicCard = topicCards[0];
+      topicCard?.focus();
+      const topicCardFocusVisible = Boolean(topicCard?.matches(':focus-visible'));
+      const topicCardFocus = topicCard ? styles(topicCard) : null;
+      const footerTopicLink = footerTopicLinks[0];
+      footerTopicLink?.focus();
+      const footerTopicLinkFocusVisible = Boolean(footerTopicLink?.matches(':focus-visible'));
+      const footerTopicLinkFocus = footerTopicLink ? styles(footerTopicLink) : null;
       return {
         forcedColorsActive: matchMedia('(forced-colors: active)').matches,
         navVisible: Boolean(nav && nav.getBoundingClientRect().width > 0),
@@ -705,6 +733,13 @@ async function inspectForcedColors(send) {
         currentNavFocus,
         breadcrumbFocusVisible,
         breadcrumbFocus,
+        homepageTopicDirectoryVisible: Boolean(topicDirectory && topicDirectory.getBoundingClientRect().width > 0),
+        homepageTopicCards: topicCards.map(describeTopicLink),
+        homepageFooterTopicLinks: footerTopicLinks.map(describeTopicLink),
+        homepageTopicCardFocusVisible: topicCardFocusVisible,
+        homepageTopicCardFocus: topicCardFocus,
+        homepageFooterTopicLinkFocusVisible: footerTopicLinkFocusVisible,
+        homepageFooterTopicLinkFocus: footerTopicLinkFocus,
       };
     })()`,
     returnByValue: true,
@@ -826,31 +861,66 @@ function assertForcedColors(page, result) {
     && isOpaque(style.outlineColor);
 
   if (!result.forcedColorsActive) issues.push('forced-colors: active wurde nicht aktiviert');
-  if (!result.navVisible || !result.navLink) issues.push('Themennavigation ist nicht sichtbar');
-  if (!result.navLink?.textDecorationLine.includes('underline')) {
-    issues.push('Links der Themennavigation sind nicht zusätzlich unterstrichen');
-  }
-  if (
-    !isOpaque(result.currentNav?.backgroundColor)
-    || result.currentNav?.color === result.currentNav?.backgroundColor
-    || !result.currentNav?.textDecorationLine.includes('underline')
-  ) {
-    issues.push('Aktueller Themenlink ist nicht deutlich vom übrigen Linktext unterscheidbar');
-  }
-  if (
-    !isOpaque(result.currentBreadcrumb?.backgroundColor)
-    || result.currentBreadcrumb?.color === result.currentBreadcrumb?.backgroundColor
-  ) {
-    issues.push('Aktuelle Seite in der Brotkrumennavigation ist nicht deutlich markiert');
-  }
-  if (!hasFocusOutline(result.navFocusVisible, result.navFocus)) {
-    issues.push('Fokusrahmen der Themennavigation ist nicht sichtbar');
-  }
-  if (!hasFocusOutline(result.currentNavFocusVisible, result.currentNavFocus)) {
-    issues.push('Fokusrahmen des aktuellen Themenlinks ist nicht sichtbar');
-  }
-  if (!hasFocusOutline(result.breadcrumbFocusVisible, result.breadcrumbFocus)) {
-    issues.push('Fokusrahmen des Brotkrumenlinks ist nicht sichtbar');
+  if (page.path === '/') {
+    const expectedPaths = seoTopicPages.map((topic) => topic.path);
+    if (!result.homepageTopicDirectoryVisible || result.homepageTopicCards.length !== expectedPaths.length) {
+      issues.push('Themenbereich der Startseite fehlt oder zeigt nicht alle Karten');
+    }
+    for (const expectedPath of expectedPaths) {
+      const card = result.homepageTopicCards.find((link) => link.href === expectedPath);
+      if (
+        !card || !card.visible || !card.label || !isOpaque(card.color) ||
+        !isOpaque(card.backgroundColor) || card.color === card.backgroundColor ||
+        !isOpaque(card.borderColor) || Number.parseFloat(card.borderWidth) < 1 ||
+        !card.textDecorationLine.includes('underline')
+      ) {
+        issues.push(`Themenkarte ${expectedPath} ist im Kontrastmodus nicht gut erkennbar`);
+      }
+    }
+    if (result.homepageFooterTopicLinks.length !== expectedPaths.length) {
+      issues.push('Footer zeigt nicht alle Themenlinks');
+    }
+    for (const expectedPath of expectedPaths) {
+      const link = result.homepageFooterTopicLinks.find((target) => target.href === expectedPath);
+      if (!link || !link.visible || !link.label || !isOpaque(link.color) ||
+        !link.textDecorationLine.includes('underline')
+      ) {
+        issues.push(`Footerlink ${expectedPath} ist im Kontrastmodus nicht gut erkennbar`);
+      }
+    }
+    if (!hasFocusOutline(result.homepageTopicCardFocusVisible, result.homepageTopicCardFocus)) {
+      issues.push('Fokusrahmen der Startseiten-Themenkarte ist nicht sichtbar');
+    }
+    if (!hasFocusOutline(result.homepageFooterTopicLinkFocusVisible, result.homepageFooterTopicLinkFocus)) {
+      issues.push('Fokusrahmen des Footer-Themenlinks ist nicht sichtbar');
+    }
+  } else {
+    if (!result.navVisible || !result.navLink) issues.push('Themennavigation ist nicht sichtbar');
+    if (!result.navLink?.textDecorationLine.includes('underline')) {
+      issues.push('Links der Themennavigation sind nicht zusätzlich unterstrichen');
+    }
+    if (
+      !isOpaque(result.currentNav?.backgroundColor)
+      || result.currentNav?.color === result.currentNav?.backgroundColor
+      || !result.currentNav?.textDecorationLine.includes('underline')
+    ) {
+      issues.push('Aktueller Themenlink ist nicht deutlich vom übrigen Linktext unterscheidbar');
+    }
+    if (
+      !isOpaque(result.currentBreadcrumb?.backgroundColor)
+      || result.currentBreadcrumb?.color === result.currentBreadcrumb?.backgroundColor
+    ) {
+      issues.push('Aktuelle Seite in der Brotkrumennavigation ist nicht deutlich markiert');
+    }
+    if (!hasFocusOutline(result.navFocusVisible, result.navFocus)) {
+      issues.push('Fokusrahmen der Themennavigation ist nicht sichtbar');
+    }
+    if (!hasFocusOutline(result.currentNavFocusVisible, result.currentNavFocus)) {
+      issues.push('Fokusrahmen des aktuellen Themenlinks ist nicht sichtbar');
+    }
+    if (!hasFocusOutline(result.breadcrumbFocusVisible, result.breadcrumbFocus)) {
+      issues.push('Fokusrahmen des Brotkrumenlinks ist nicht sichtbar');
+    }
   }
 
   assert.deepEqual(
@@ -1202,15 +1272,13 @@ async function run() {
           `${page.path} · ${viewport.label}: Inhalte, Logos und Bedienelemente sichtbar; kein Seitenüberlauf.`,
         );
       }
-      if (page.path !== '/') {
-        await configureViewport(devTools.send, { width: 1280, height: 900, mobile: false });
-        await devTools.navigate(new URL(page.path, baseUrl).href);
-        await waitForPage(devTools.send);
-        const forcedColorsResult = await inspectForcedColors(devTools.send);
-        assertForcedColors(page, forcedColorsResult);
-        await devTools.send('Emulation.setEmulatedMedia', { features: [] });
-        console.log(`${page.path} · Windows-Kontrastmodus: Navigation, Breadcrumbs und Fokusrahmen sichtbar.`);
-      }
+      await configureViewport(devTools.send, { width: 1280, height: 900, mobile: false });
+      await devTools.navigate(new URL(page.path, baseUrl).href);
+      await waitForPage(devTools.send);
+      const forcedColorsResult = await inspectForcedColors(devTools.send);
+      assertForcedColors(page, forcedColorsResult);
+      await devTools.send('Emulation.setEmulatedMedia', { features: [] });
+      console.log(`${page.path} · Windows-Kontrastmodus: Links, Beschriftungen und Fokus sichtbar.`);
     }
     if (blockWebFonts) {
       const blockedRequests = devTools.getBlockedWebFontFailures();
