@@ -11,7 +11,13 @@ import { seoTopicPages } from '../src/content/seo-pages.ts';
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const publicRoot = path.join(projectRoot, 'dist/public');
 const viewports = [
-  { label: '320×844 Hochformat', width: 320, height: 844 },
+  // Fixed DevTools CSS-pixel emulation avoids depending on the runner's window or browser zoom.
+  {
+    label: '400 % Browserzoom (320 CSS-Pixel, fest emuliert)',
+    width: 320,
+    height: 844,
+    mobile: true,
+  },
   { label: '360×800 Hochformat', width: 360, height: 800 },
   {
     label: '200 % Zoom (1280×900 → 640×450 CSS-Pixel)',
