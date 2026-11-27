@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --config vite.config.ts --host 0.0.0.0",
-    "build": "vite build --config vite.config.ts && NODE_ENV=production node scripts/prerender.mjs && pnpm run test:seo-store-links && node --test scripts/store-availability-validation.test.mjs && node scripts/seo-smoke.mjs",
+    "build": "vite build --config vite.config.ts && NODE_ENV=production node scripts/prerender.mjs && pnpm run test:mobile-layout && pnpm run test:seo-store-links && node --test scripts/store-availability-validation.test.mjs && node scripts/seo-smoke.mjs",
     "serve": "vite preview --config vite.config.ts --host 0.0.0.0",
     "serve:production": "node server/serve.js",
     "test:analytics": "node --test src/App.analytics.test.mjs",
