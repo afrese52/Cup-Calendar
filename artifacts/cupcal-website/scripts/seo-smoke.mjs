@@ -7,6 +7,8 @@ import { createStaticServer } from '../server/serve.js';
 import {
   confirmedStoreLinks,
   homePageDescription,
+  SEO_DESCRIPTION_MAX_LENGTH,
+  SEO_DESCRIPTION_MIN_LENGTH,
   seoTopicPages,
   SITE_ORIGIN,
 } from '../src/content/seo-pages.ts';
@@ -55,6 +57,15 @@ function extractTitle(html) {
 function extractMetaDescription(html) {
   const tag = html.match(/<meta\b(?=[^>]*\bname=["']description["'])[^>]*>/i)?.[0];
   return tag ? decodeHtml(readAttribute(tag, 'content') ?? '') : '';
+}
+
+function assertMetaDescription(description, pathname) {
+  assert.ok(description, `${pathname} hat keine Meta-Beschreibung.`);
+  assert.ok(
+    description.length >= SEO_DESCRIPTION_MIN_LENGTH
+      && description.length <= SEO_DESCRIPTION_MAX_LENGTH,
+    `${pathname} hat eine Meta-Beschreibung mit ${description.length} Zeichen; erlaubt sind ${SEO_DESCRIPTION_MIN_LENGTH} bis ${SEO_DESCRIPTION_MAX_LENGTH} Zeichen.`,
+  );
 }
 
 function extractMetaContentByAttribute(html, attribute, value) {
@@ -259,6 +270,7 @@ async function runSmokeTest() {
     );
     assertContentType(homepageResponse, 'text/html', 'Die Startseite');
     const homepageHtml = await homepageResponse.text();
+    assertMetaDescription(extractMetaDescription(homepageHtml), '/');
     assert.equal(extractCanonical(homepageHtml), homepageUrl, 'Die Canonical-URL der Startseite muss der Domainwurzel entsprechen.');
     if (remoteUrl) {
       assertPublishedReleaseStatus(homepageHtml, 'Die Startseite', {
@@ -347,7 +359,7 @@ async function runSmokeTest() {
       observedTitles.add(title);
 
       const description = extractMetaDescription(html);
-      assert.ok(description, `${sitemapPageUrl.pathname} hat keine Meta-Beschreibung.`);
+      assertMetaDescription(description, sitemapPageUrl.pathname);
       assert.ok(!observedDescriptions.has(description), `Doppelte Meta-Beschreibung: ${sitemapPageUrl.pathname}`);
       observedDescriptions.add(description);
       assert.equal(

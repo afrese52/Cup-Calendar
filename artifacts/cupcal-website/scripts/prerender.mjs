@@ -161,6 +161,8 @@ try {
       confirmedStoreLinks,
       createSoftwareApplicationSchema,
       homePageDescription,
+      SEO_DESCRIPTION_MAX_LENGTH,
+      SEO_DESCRIPTION_MIN_LENGTH,
       seoTopicPages,
       SITE_ORIGIN,
     },
@@ -265,8 +267,16 @@ try {
     if (page.title.length < 45 || page.title.length > 65) {
       throw new Error(`Der Seitentitel für ${page.path} ist zu kurz oder zu lang.`);
     }
-    if (page.description.length < 145 || page.description.length > 165) {
-      throw new Error(`Die Meta-Beschreibung für ${page.path} ist zu kurz oder zu lang.`);
+    if (!page.description) {
+      throw new Error(`Die Meta-Beschreibung für ${page.path} fehlt.`);
+    }
+    if (
+      page.description.length < SEO_DESCRIPTION_MIN_LENGTH
+      || page.description.length > SEO_DESCRIPTION_MAX_LENGTH
+    ) {
+      throw new Error(
+        `Die Meta-Beschreibung für ${page.path} hat ${page.description.length} Zeichen; erlaubt sind ${SEO_DESCRIPTION_MIN_LENGTH} bis ${SEO_DESCRIPTION_MAX_LENGTH} Zeichen.`,
+      );
     }
     const { html, renderedLength } = renderPage(page.path, page.h1, page);
     const outputPath = path.join(

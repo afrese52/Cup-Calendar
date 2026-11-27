@@ -1,4 +1,6 @@
 export const SITE_ORIGIN = 'https://cupcal.af-software.app';
+export const SEO_DESCRIPTION_MIN_LENGTH = 145;
+export const SEO_DESCRIPTION_MAX_LENGTH = 165;
 
 // Erst nach Betreiberfreigabe mit offiziellen CupCal-Store-Seiten befüllen.
 export interface ConfirmedStoreLinks {
