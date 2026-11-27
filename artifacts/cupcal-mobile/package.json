@@ -14,7 +14,7 @@
     "test:supabase-password-live": "node scripts/runSupabasePasswordLiveTests.mjs",
     "test:supabase-password-recovery-live": "node scripts/runSupabasePasswordLiveTests.mjs --suite recovery",
     "test:screen": "jest --config jest.config.cjs --runInBand",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "pnpm --filter @workspace/api-client-react exec tsc -b && tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
