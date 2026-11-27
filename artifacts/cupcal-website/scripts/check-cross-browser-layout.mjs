@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { spawn } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -33,6 +34,129 @@ function closeServer(server) {
   return new Promise((resolve, reject) => {
     server.close((error) => (error ? reject(error) : resolve()));
   });
+}
+
+function stopProcess(child) {
+  if (child.exitCode !== null || child.signalCode !== null) return Promise.resolve();
+  return new Promise((resolve) => {
+    const timeout = setTimeout(() => {
+      child.kill('SIGKILL');
+      resolve();
+    }, 2_000);
+    timeout.unref?.();
+    child.once('exit', () => {
+      clearTimeout(timeout);
+      resolve();
+    });
+    child.kill('SIGTERM');
+  });
+}
+
+function startVirtualDisplay() {
+  return new Promise((resolve, reject) => {
+    const server = spawn('Xvfb', [
+      '-displayfd', '1',
+      '-screen', '0', '1280x1024x24',
+      '-nolisten', 'tcp',
+      '-noreset',
+    ], { stdio: ['ignore', 'pipe', 'pipe'] });
+    let output = '';
+    let stderr = '';
+    let settled = false;
+    const timeout = setTimeout(() => {
+      fail(new Error(`Xvfb не запустился за 10 секунд. ${stderr.trim()}`));
+    }, 10_000);
+
+    const fail = (error) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      void stopProcess(server);
+      reject(error);
+    };
+
+    server.once('error', (error) => {
+      fail(new Error(`Не удалось запустить виртуальный экран Xvfb: ${error.message}`));
+    });
+    server.once('exit', (code, signal) => {
+      if (!settled) {
+        fail(new Error(`Xvfb завершился при запуске (${signal ?? code}). ${stderr.trim()}`));
+      }
+    });
+    server.stdout.setEncoding('utf8').on('data', (chunk) => {
+      output += chunk;
+      const displayNumber = output.match(/^\s*(\d+)\s*$/m)?.[1];
+      if (!displayNumber || settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      resolve({ display: `:${displayNumber}`, stop: () => stopProcess(server) });
+    });
+    server.stderr.setEncoding('utf8').on('data', (chunk) => {
+      stderr = `${stderr}${chunk}`.slice(-1_000);
+    });
+  });
+}
+
+async function launchWebKit(browserType) {
+  let displayServer;
+  const shouldStartVirtualDisplay = process.platform === 'linux'
+    && (!process.env.DISPLAY || Boolean(process.env.REPLIT_LD_LIBRARY_PATH));
+
+  try {
+    if (shouldStartVirtualDisplay) displayServer = await startVirtualDisplay();
+    const display = displayServer?.display || process.env.DISPLAY;
+    if (!display || process.platform !== 'linux') {
+      return {
+        browser: await browserType.launch(browserLaunchOptions('WebKit (Safari-Engine)')),
+        close: async () => displayServer?.stop(),
+      };
+    }
+
+    const browserDirectory = path.join(path.dirname(browserType.executablePath()), 'minibrowser-gtk');
+    const browserEnvironment = {
+      ...process.env,
+      DISPLAY: display,
+      WEBKIT_EXEC_PATH: path.join(browserDirectory, 'bin'),
+      WEBKIT_INJECTED_BUNDLE_PATH: path.join(browserDirectory, 'lib'),
+      WEBKIT_FORCE_COMPLEX_TEXT: '1',
+      LIBGL_ALWAYS_SOFTWARE: '1',
+      LD_LIBRARY_PATH: [
+        path.join(browserDirectory, 'lib'),
+        path.join(browserDirectory, 'sys/lib'),
+        process.env.REPLIT_LD_LIBRARY_PATH,
+        process.env.LD_LIBRARY_PATH,
+      ].filter(Boolean).join(':'),
+    };
+
+    if (process.env.REPLIT_LD_LIBRARY_PATH) {
+      // Playwright's Debian dependency check does not inspect Replit's Nix library path.
+      process.env.PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS = '1';
+      browserEnvironment.PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS = '1';
+      const glibNetworkingLibrary = process.env.REPLIT_LD_LIBRARY_PATH
+        .split(':')
+        .find((directory) => directory.includes('-glib-networking-') && directory.endsWith('/lib'));
+      if (glibNetworkingLibrary) {
+        browserEnvironment.GIO_EXTRA_MODULES = [
+          process.env.GIO_EXTRA_MODULES,
+          path.join(glibNetworkingLibrary, 'gio/modules'),
+        ].filter(Boolean).join(':');
+      }
+    }
+
+    return {
+      browser: await browserType.launch({
+        headless: false,
+        timeout: 20_000,
+        executablePath: process.env.WEBKIT_EXECUTABLE_PATH
+          || path.join(browserDirectory, 'bin/MiniBrowser'),
+        env: browserEnvironment,
+      }),
+      close: async () => displayServer?.stop(),
+    };
+  } catch (error) {
+    await displayServer?.stop();
+    throw error;
+  }
 }
 
 function browserLaunchOptions(name) {
@@ -180,8 +304,15 @@ function assertLayout(browserName, route, viewport, result) {
 
 async function runBrowser(browserName, browserType, baseUrl, basePath, pages) {
   let browser;
+  let closeAuxiliary = async () => {};
   try {
-    browser = await browserType.launch(browserLaunchOptions(browserName));
+    if (browserName.startsWith('WebKit')) {
+      const launched = await launchWebKit(browserType);
+      browser = launched.browser;
+      closeAuxiliary = launched.close;
+    } else {
+      browser = await browserType.launch(browserLaunchOptions(browserName));
+    }
   } catch (error) {
     throw new Error(
       `${browserName} konnte nicht gestartet werden; keine Seiten- oder Ansichtsprüfung ausgeführt. ${error.message}`,
@@ -225,7 +356,11 @@ async function runBrowser(browserName, browserType, baseUrl, basePath, pages) {
       }
     }
   } finally {
-    await browser.close();
+    try {
+      await browser.close();
+    } finally {
+      await closeAuxiliary();
+    }
   }
   return passed;
 }

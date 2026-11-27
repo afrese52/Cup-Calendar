@@ -120,6 +120,8 @@ und der WebKit-Engine (Safari-Engine) bei schmalen Hoch- und Querformaten. Er
 prüft, ob „DM Sans“ und „Barlow Condensed“ geladen werden, und meldet
 abgeschnittene Überschriften, Navigationstexte, Schaltflächen oder
 Seitenüberläufe mit Seite, Ansicht und betroffenem Text.
+Im Replit-Linuxlauf startet WebKit unter einem kurzlebigen Xvfb-Display; die
+benötigten Nix-Pakete sind in der Projektkonfiguration hinterlegt.
 
 Nach dem Produktionsbuild ausführen:
 

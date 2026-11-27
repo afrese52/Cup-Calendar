@@ -40,3 +40,4 @@
 - [Supabase-Aufbewahrung nach Upgrade](supabase-retention-activation.md) — Sieben Tage für Backups und Logs sind vereinbart, gelten aber erst nach dem Supabase-Upgrade.
 - [Expo-Release-Manifest prüfen](expo-release-manifest-audits.md) — Native Abhängigkeiten können Rechte ergänzen; für Store-Angaben das fertige AAB statt nur die Expo-Konfiguration prüfen.
 - [Bestätigungslink-Idempotenz](confirmation-link-idempotency.md) — Ein offener Bestätigungsbildschirm muss bereits verarbeitete Linkkennungen auch nach anderen Ereignissen dauerhaft ignorieren.
+- [WebKit-Tests in Replit](webkit-replit-tests.md) — Playwright WebKit braucht GTK unter Xvfb, Nix-Bibliotheken und ein geladenes GIO-TLS-Modul.
