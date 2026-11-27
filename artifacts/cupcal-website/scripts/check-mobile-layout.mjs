@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { access, mkdtemp, readFile, rm } from 'node:fs/promises';
+import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -154,6 +154,7 @@ function connectToDevTools(webSocketUrl) {
   const loadWaiters = new Set();
   const requestUrls = new Map();
   const failedRequests = [];
+  const webFontResponses = [];
   let commandId = 0;
   const ready = new Promise((resolve, reject) => {
     socket.addEventListener('open', resolve, { once: true });
@@ -164,6 +165,11 @@ function connectToDevTools(webSocketUrl) {
     const message = JSON.parse(event.data);
     if (message.method === 'Network.requestWillBeSent') {
       requestUrls.set(message.params.requestId, message.params.request.url);
+    } else if (message.method === 'Network.responseReceived') {
+      const { response } = message.params;
+      if (/^https:\/\/fonts\.(?:googleapis|gstatic)\.com\//.test(response.url)) {
+        webFontResponses.push({ url: response.url, status: response.status });
+      }
     } else if (message.method === 'Network.loadingFailed') {
       failedRequests.push({
         url: requestUrls.get(message.params.requestId) ?? '',
@@ -220,6 +226,9 @@ function connectToDevTools(webSocketUrl) {
     getBlockedWebFontFailures: () => failedRequests.filter((request) =>
       request.blockedReason === 'inspector' &&
       /^https:\/\/fonts\.(?:googleapis|gstatic)\.com\//.test(request.url)
+    ),
+    getSuccessfulWebFontResponses: () => webFontResponses.filter((response) =>
+      response.status >= 200 && response.status < 300
     ),
   };
 }
@@ -753,8 +762,299 @@ function assertForcedColors(page, result) {
   );
 }
 
+async function getFontComparisonSnapshot(send, selectors) {
+  const response = await send('Runtime.evaluate', {
+    expression: `(() => {
+      const selectors = ${JSON.stringify(selectors)};
+      const regions = Object.fromEntries(Object.entries(selectors).map(([name, selectorList]) => {
+        const elements = selectorList.flatMap((selector) =>
+          Array.from(document.querySelectorAll(selector))
+        );
+        const bounds = elements.map((element) => {
+          const rect = element.getBoundingClientRect();
+          return {
+            left: rect.left,
+            top: rect.top,
+            right: rect.right,
+            bottom: rect.bottom,
+          };
+        }).filter((rect) =>
+          rect.right > 0 && rect.bottom > 0 &&
+          rect.left < innerWidth && rect.top < innerHeight
+        );
+        return [name, bounds];
+      }));
+      return {
+        regions,
+        loadedFamilies: Array.from(document.fonts)
+          .filter((font) => font.status === 'loaded')
+          .map((font) => font.family.replace(/["']/g, '').trim()),
+      };
+    })()`,
+    returnByValue: true,
+  });
+  if (!response.result?.value) {
+    throw new Error(
+      response.exceptionDetails?.exception?.description ??
+        response.exceptionDetails?.text ??
+        'Chromium konnte die Fontvergleichsbereiche nicht ermitteln.',
+    );
+  }
+  return response.result.value;
+}
+
+async function prepareScreenshot(send) {
+  await send('Runtime.evaluate', {
+    expression: `(() => {
+      const style = document.createElement('style');
+      style.textContent = \`*, *::before, *::after {
+        animation: none !important;
+        transition: none !important;
+        caret-color: transparent !important;
+      }\`;
+      document.head.append(style);
+      window.scrollTo(0, 0);
+    })()`,
+    returnByValue: true,
+  });
+  await delay(50);
+}
+
+async function captureScreenshot(send, filePath) {
+  const result = await send('Page.captureScreenshot', {
+    format: 'png',
+    fromSurface: true,
+    captureBeyondViewport: false,
+  });
+  await writeFile(filePath, Buffer.from(result.data, 'base64'));
+  return result.data;
+}
+
+async function compareFontScreenshots(send, webFontImage, fallbackImage, webFontRegions, fallbackRegions) {
+  const response = await send('Runtime.evaluate', {
+    expression: `(() => new Promise((resolve, reject) => {
+      const webFontImage = new Image();
+      const fallbackImage = new Image();
+      const webFontData = ${JSON.stringify(webFontImage)};
+      const fallbackData = ${JSON.stringify(fallbackImage)};
+      const regionSets = ${JSON.stringify({
+        webFont: webFontRegions,
+        fallback: fallbackRegions,
+      })};
+      let loaded = 0;
+      const fail = () => reject(new Error('Chromium konnte ein Vergleichsbild nicht laden.'));
+      const ready = () => {
+        loaded += 1;
+        if (loaded !== 2) return;
+        const canvas = document.createElement('canvas');
+        canvas.width = webFontImage.naturalWidth;
+        canvas.height = webFontImage.naturalHeight;
+        const context = canvas.getContext('2d', { willReadFrequently: true });
+        context.drawImage(webFontImage, 0, 0);
+        const webFontPixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+        context.clearRect(0, 0, canvas.width, canvas.height);
+        context.drawImage(fallbackImage, 0, 0);
+        const fallbackPixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+        const measurements = {};
+
+        for (const name of Object.keys(regionSets.webFont)) {
+          const rectangles = [
+            ...regionSets.webFont[name],
+            ...regionSets.fallback[name],
+          ];
+          if (!rectangles.length) {
+            measurements[name] = { compared: false, reason: 'Kein sichtbarer Bereich' };
+            continue;
+          }
+          const left = Math.max(0, Math.floor(Math.min(...rectangles.map((rect) => rect.left))));
+          const top = Math.max(0, Math.floor(Math.min(...rectangles.map((rect) => rect.top))));
+          const right = Math.min(canvas.width, Math.ceil(Math.max(...rectangles.map((rect) => rect.right))));
+          const bottom = Math.min(canvas.height, Math.ceil(Math.max(...rectangles.map((rect) => rect.bottom))));
+          let changedPixels = 0;
+          let comparedPixels = 0;
+          for (let y = top; y < bottom; y += 1) {
+            for (let x = left; x < right; x += 1) {
+              const offset = (y * canvas.width + x) * 4;
+              const delta = Math.max(
+                Math.abs(webFontPixels[offset] - fallbackPixels[offset]),
+                Math.abs(webFontPixels[offset + 1] - fallbackPixels[offset + 1]),
+                Math.abs(webFontPixels[offset + 2] - fallbackPixels[offset + 2]),
+              );
+              if (delta > 32) changedPixels += 1;
+              comparedPixels += 1;
+            }
+          }
+          const size = (bounds) => bounds.length
+            ? {
+                width: Math.round(Math.max(...bounds.map((rect) => rect.right)) -
+                  Math.min(...bounds.map((rect) => rect.left))),
+                height: Math.round(Math.max(...bounds.map((rect) => rect.bottom)) -
+                  Math.min(...bounds.map((rect) => rect.top))),
+              }
+            : null;
+          measurements[name] = {
+            compared: true,
+            changedPixels,
+            comparedPixels,
+            changedPercent: comparedPixels
+              ? Number((changedPixels / comparedPixels * 100).toFixed(2))
+              : 0,
+            webFontSize: size(regionSets.webFont[name]),
+            fallbackSize: size(regionSets.fallback[name]),
+          };
+        }
+        resolve({
+          screenshotSize: { width: canvas.width, height: canvas.height },
+          measurements,
+        });
+      };
+      webFontImage.onload = ready;
+      fallbackImage.onload = ready;
+      webFontImage.onerror = fail;
+      fallbackImage.onerror = fail;
+      webFontImage.src = 'data:image/png;base64,' + webFontData;
+      fallbackImage.src = 'data:image/png;base64,' + fallbackData;
+    }))()`,
+    awaitPromise: true,
+    returnByValue: true,
+  });
+  if (!response.result?.value) {
+    throw new Error(
+      response.exceptionDetails?.exception?.description ??
+        response.exceptionDetails?.text ??
+        'Chromium konnte den Font-Bildvergleich nicht ausführen.',
+    );
+  }
+  return response.result.value;
+}
+
+function fontComparisonSelectors(page) {
+  if (page.path === '/') {
+    return {
+      Überschrift: ['.hero h1'],
+      Navigation: ['.home-topbar .nav-links', '.home-topbar .nav-cta'],
+      Schaltflächen: ['.hero-actions a'],
+    };
+  }
+  return {
+    Überschrift: ['.topic-hero h1', '.legal-article h1'],
+    Navigation: ['nav[aria-label="CupCal-Themen"]', '.topbar .nav-cta'],
+    Schaltflächen: ['.topic-store-ctas a', '.legal-action'],
+  };
+}
+
+function comparisonName(page, viewport) {
+  const pageName = page.path === '/'
+    ? 'startseite'
+    : page.path.replace(/^\/|\/$/g, '').replaceAll('/', '-');
+  return `${pageName}-${viewport.width}x${viewport.height}`;
+}
+
+async function runFontComparison(devTools, baseUrl, pages, outputDirectory) {
+  const { send } = devTools;
+  const results = [];
+  const successfulResponses = devTools.getSuccessfulWebFontResponses;
+  const blockedFailures = devTools.getBlockedWebFontFailures;
+  await rm(outputDirectory, { recursive: true, force: true });
+  await mkdir(outputDirectory, { recursive: true });
+  await send('Network.setCacheDisabled', { cacheDisabled: true });
+
+  for (const page of pages) {
+    const selectors = fontComparisonSelectors(page);
+    for (const viewport of viewports) {
+      const name = comparisonName(page, viewport);
+      await configureViewport(send, viewport);
+      await send('Network.setBlockedURLs', { urls: [] });
+      await send('Network.clearBrowserCache');
+      const successfulBefore = successfulResponses().length;
+      await send('Page.navigate', { url: new URL(page.path, baseUrl).href });
+      await waitForPage(send);
+      await prepareScreenshot(send);
+      const webFontSnapshot = await getFontComparisonSnapshot(send, selectors);
+      for (const family of ['DM Sans', 'Barlow Condensed']) {
+        assert.ok(
+          webFontSnapshot.loadedFamilies.some((loaded) => loaded.toLowerCase() === family.toLowerCase()),
+          `${page.path} bei ${viewport.label}: Webfont „${family}“ wurde nicht geladen; ` +
+            'der Bildvergleich braucht eine bestätigte Webfont-Aufnahme.',
+        );
+      }
+      const webFontPath = path.join(outputDirectory, `${name}-webfonts.png`);
+      const webFontImage = await captureScreenshot(send, webFontPath);
+      const webFontLayout = await inspectPage(send, page.path);
+      assertPageLayout(page, viewport, webFontLayout);
+      assert.ok(
+        successfulResponses().length > successfulBefore,
+        `${page.path} bei ${viewport.label}: Kein erfolgreicher Google-Font-Abruf im Webfont-Lauf.`,
+      );
+
+      const blockedBefore = blockedFailures().length;
+      await send('Network.setBlockedURLs', {
+        urls: ['https://fonts.googleapis.com/*', 'https://fonts.gstatic.com/*'],
+      });
+      await send('Network.clearBrowserCache');
+      await send('Page.navigate', { url: new URL(page.path, baseUrl).href });
+      await waitForPage(send);
+      await prepareScreenshot(send);
+      const fallbackSnapshot = await getFontComparisonSnapshot(send, selectors);
+      const fallbackPath = path.join(outputDirectory, `${name}-fallback.png`);
+      const fallbackImage = await captureScreenshot(send, fallbackPath);
+      const fallbackLayout = await inspectPage(send, page.path);
+      assertPageLayout(page, viewport, fallbackLayout);
+      assert.ok(
+        blockedFailures().length > blockedBefore,
+        `${page.path} bei ${viewport.label}: Die Webfont-Anfragen wurden im Fallback-Lauf nicht blockiert.`,
+      );
+
+      const comparison = await compareFontScreenshots(
+        send,
+        webFontImage,
+        fallbackImage,
+        webFontSnapshot.regions,
+        fallbackSnapshot.regions,
+      );
+      const result = {
+        page: page.path,
+        viewport: { width: viewport.width, height: viewport.height, label: viewport.label },
+        screenshots: {
+          webFonts: path.relative(projectRoot, webFontPath),
+          fallback: path.relative(projectRoot, fallbackPath),
+        },
+        ...comparison,
+      };
+      results.push(result);
+      const differences = Object.entries(comparison.measurements)
+        .filter(([, measurement]) => measurement.compared && measurement.changedPercent >= 0.5)
+        .map(([region, measurement]) => `${region} ${measurement.changedPercent}%`)
+        .join(', ');
+      console.log(
+        `${page.path} · ${viewport.label}: ` +
+          (differences ? `sichtbare Fontabweichungen: ${differences}` : 'keine auffälligen Pixelabweichungen') +
+          ' (Maßänderungen werden nur berichtet, nicht als Vergleichsfehler gewertet).',
+      );
+    }
+  }
+
+  const reportPath = path.join(outputDirectory, 'report.json');
+  await writeFile(reportPath, `${JSON.stringify({
+    generatedAt: new Date().toISOString(),
+    threshold: {
+      changedPixelChannelDelta: 32,
+      reportedAtOrAbovePercent: 0.5,
+      layoutMetricDifferencesAreFailures: false,
+    },
+    results,
+  }, null, 2)}\n`);
+  await send('Network.setBlockedURLs', { urls: [] });
+  console.log(
+    `Fontvergleich abgeschlossen: ${results.length} Ansichten. ` +
+      `Screenshots und Bericht: ${path.relative(projectRoot, outputDirectory)}.`,
+  );
+}
+
 async function run() {
   const blockWebFonts = process.argv.includes('--block-web-fonts');
+  const compareFonts = process.argv.includes('--compare-fonts');
+  assert.ok(!(blockWebFonts && compareFonts), 'Nutze entweder --block-web-fonts oder --compare-fonts, nicht beides.');
   const html = await readFile(path.join(publicRoot, 'index.html'), 'utf8').catch(() => {
     throw new Error('Kein Produktionsbuild gefunden. Führe zuerst „pnpm run build“ aus.');
   });
@@ -774,6 +1074,16 @@ async function run() {
     await devTools.send('Page.enable');
     await devTools.send('Runtime.enable');
     await devTools.send('Network.enable');
+    const pages = [{ path: '/', title: 'Startseite' }, ...seoTopicPages];
+    if (compareFonts) {
+      await runFontComparison(
+        devTools,
+        baseUrl,
+        pages,
+        path.join(projectRoot, '../../generated-artifacts/cupcal-font-comparison'),
+      );
+      return;
+    }
     if (blockWebFonts) {
       await devTools.send('Network.setBlockedURLs', {
         urls: ['https://fonts.googleapis.com/*', 'https://fonts.gstatic.com/*'],
@@ -781,7 +1091,6 @@ async function run() {
       console.log('Externe Webfonts blockiert (fonts.googleapis.com und fonts.gstatic.com).');
     }
 
-    const pages = [{ path: '/', title: 'Startseite' }, ...seoTopicPages];
     for (const page of pages) {
       for (const viewport of viewports) {
         await configureViewport(devTools.send, viewport);

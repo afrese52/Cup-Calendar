@@ -18,6 +18,7 @@
     "test:mobile-layout": "node scripts/check-mobile-layout.mjs",
     "test:cross-browser-layout": "node scripts/check-cross-browser-layout.mjs",
     "test:font-fallback": "node scripts/check-mobile-layout.mjs --block-web-fonts && node scripts/check-mobile-cls.mjs --block-web-fonts",
+    "test:font-comparison": "PORT=${PORT:-3000} BASE_PATH=${BASE_PATH:-/} pnpm run build && node scripts/check-mobile-layout.mjs --compare-fonts",
     "test:large-text": "node scripts/check-mobile-layout.mjs",
     "test:cls": "node scripts/check-mobile-cls.mjs",
     "test:mobile-performance": "node scripts/check-mobile-performance.mjs",
