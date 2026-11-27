@@ -494,8 +494,11 @@ async function runSmokeTest() {
             'Google Fonts',
             'Deutschland',
             'Replit',
-            'nicht bekannt',
-            'nicht bestätigt',
+            '27. November 2026',
+            'i.replit.com/script.js',
+            'Autoscale-Bereitstellung',
+            'geografische Region',
+            'window.umami',
           ]) {
             assert.ok(
               renderedText.includes(requiredText),

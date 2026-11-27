@@ -116,16 +116,20 @@ Passwort-Wiederherstellungen, E-Mailänderungen (einschließlich beider
 Bestätigungen bei sicherem E-Mailwechsel) sowie die dokumentierten
 Sicherheitsbenachrichtigungen ohne Verifizierungstoken.
 
-**Noch nicht aktiviert:** Die Supabase-Auth-Einstellung wurde nicht geändert.
-Im Workspace ist keine Supabase-Verwaltungsintegration verfügbar; die
-vorhandenen App-Zugangsdaten bieten keinen bestätigten Zugriff auf die
-Dashboard-Hook-Konfiguration. Für diesen Workspace liegt außerdem keine
-veröffentlichte HTTPS-URL vor, die Supabase als externen Hook erreichen
-könnte. Vor echtem Versand müssen IONOS-Mailboxdaten und das von Supabase
-erzeugte Hook-Geheimnis sicher in den Replit-Secrets hinterlegt sowie die
-öffentliche HTTPS-URL des bereitgestellten API-Servers im Supabase-Dashboard
-eingetragen werden. Eine App-Veröffentlichung oder
-Auth-Konfigurationsänderung wurde nicht vorgenommen.
+**Nicht als aktiv eingerichtet:** Die Supabase-Auth-Einstellung wurde bei
+dieser Prüfung nicht eingesehen oder geändert; eine Aktivierung ist daher nicht
+belegt. Bis der Send Email Hook im Supabase-Dashboard nachweislich aktiviert
+ist, wird IONOS SMTP nicht als aktiv verwendet aufgeführt. Der Endpunkt im
+Quellcode allein belegt keinen laufenden E-Mailversand.
+
+Die öffentliche CupCal-Bereitstellung ist inzwischen unter
+`https://cupcal.af-software.app` erreichbar; die API-Gesundheitsprüfung
+antwortet. Diese Erreichbarkeit aktiviert den Auth-Hook jedoch nicht. Vor
+echtem Versand müssen die IONOS-Mailboxdaten und das von Supabase erzeugte
+Hook-Geheimnis sicher in den Replit-Secrets hinterlegt sowie die öffentliche
+HTTPS-URL des API-Servers im Supabase-Dashboard eingetragen und der Hook dort
+aktiviert werden. Bei dieser Prüfung wurde keine Änderung an der App-
+Veröffentlichung oder Auth-Konfiguration vorgenommen.
 
 ## Sicherheitsprüfungen ohne echte Kontolöschung
 

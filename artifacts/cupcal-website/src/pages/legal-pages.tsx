@@ -168,10 +168,14 @@ export function LegalPageView({ page }: { page: LegalPageMetadata }) {
           deine IP-Adresse und Browserinformationen.
         </p>
         <p>
-          Bei einer Prüfung einer Live-Antwort wurde zeitweise ein Replit-Analytics-Skript beobachtet.
-          Ob es dauerhaft aktiv ist, ist nicht bestätigt. Falls es geladen wird, kann Replit technische
-          Nutzungsdaten zur Website verarbeiten. CupCal bindet kein Umami-Skript ein und verwendet in der
-          App kein eigenes Werbe- oder Analyse-SDK.
+          Eine Live-Prüfung am 27. November 2026 zeigte in den HTML-Antworten von cupcal.af-software.app
+          und cup-cal-calendar-for-fn.replit.app das Skript https://i.replit.com/script.js. Replit-Analytics
+          war damit in diesen Antworten eingebunden; Replit kann technische Nutzungsdaten verarbeiten.
+          Aus der Antwort lässt sich nicht ablesen, welche einzelnen Daten Replit tatsächlich speichert
+          oder wo sie verarbeitet werden. CupCal bindet selbst kein Umami-Skript ein. Die Website ruft
+          eigene Ereignisse nur über eine vorhandene window.umami-Schnittstelle ab; ohne diese
+          Schnittstelle sendet der Code keine CupCal-Ereignisse. Die mobile App verwendet kein Werbe-
+          oder Analyse-SDK.
         </p>
       </section>
       <section className="legal-section" aria-labelledby="privacy-providers">
@@ -184,8 +188,11 @@ export function LegalPageView({ page }: { page: LegalPageMetadata }) {
             <a href="https://supabase.com/privacy" target="_blank" rel="noopener noreferrer">Datenschutz bei Supabase</a>.
           </li>
           <li>
-            <strong>Replit:</strong> Hosting der CupCal-Web- und API-Dienste sowie gegebenenfalls
-            technische Website-Analytics. Die konkrete Hosting- und Verarbeitungsregion ist nicht bekannt.
+            <strong>Replit:</strong> Hosting der CupCal-Website und API über die veröffentlichte
+            Autoscale-Bereitstellung unter cupcal.af-software.app. Die verfügbaren Bereitstellungsdaten
+            enthalten keine geografische Region; der Hosting- und Verarbeitungsort ist daher nicht
+            bestätigt. Replit-Analytics war in der Live-Prüfung vom 27. November 2026 in den geprüften
+            Website-Antworten eingebunden.
             Weitere Informationen:{' '}
             <a href="https://replit.com/privacy" target="_blank" rel="noopener noreferrer">Datenschutz bei Replit</a>.
           </li>
