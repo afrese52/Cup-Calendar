@@ -189,6 +189,10 @@ test('Startseite verlinkt alle Themenseiten und erfasst Ziel sowie Platzierung',
     const directoryLink = dom.window.document.querySelector(`[data-testid="link-topic-${page.slug}"]`);
     assert.ok(directoryLink, `Themenseite ${page.slug} muss im Themenbereich der Startseite verlinkt sein`);
     assert.equal(directoryLink.getAttribute('href'), page.path);
+    assert.equal(directoryLink.tagName, 'A', `Themenseite ${page.slug} muss ein echter Link sein`);
+    assert.equal(directoryLink.tabIndex, 0, `Themenseite ${page.slug} muss per Tastatur erreichbar sein`);
+    assert.ok(directoryLink.textContent.trim(), `Themenseite ${page.slug} braucht sichtbaren Linktext`);
+    assert.ok(directoryLink.getAttribute('aria-label')?.trim(), `Themenseite ${page.slug} braucht einen zugänglichen Namen`);
 
     trackedEvents.length = 0;
     directoryLink.addEventListener('click', (event) => event.preventDefault(), { once: true });
@@ -200,6 +204,9 @@ test('Startseite verlinkt alle Themenseiten und erfasst Ziel sowie Platzierung',
     const footerLink = dom.window.document.querySelector(`[data-testid="link-footer-${page.slug}"]`);
     assert.ok(footerLink, `Themenseite ${page.slug} muss auch im Footer verlinkt sein`);
     assert.equal(footerLink.getAttribute('href'), page.path);
+    assert.equal(footerLink.tagName, 'A', `Footerlink ${page.slug} muss ein echter Link sein`);
+    assert.equal(footerLink.tabIndex, 0, `Footerlink ${page.slug} muss per Tastatur erreichbar sein`);
+    assert.ok(footerLink.textContent.trim(), `Footerlink ${page.slug} braucht sichtbaren Linktext`);
 
     trackedEvents.length = 0;
     footerLink.addEventListener('click', (event) => event.preventDefault(), { once: true });

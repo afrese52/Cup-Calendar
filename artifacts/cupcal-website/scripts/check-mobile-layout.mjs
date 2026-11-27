@@ -260,20 +260,93 @@ async function waitForPage(send) {
   await delay(150);
 }
 
-async function inspectPage(send, route) {
+async function pressTab(send) {
+  await send('Input.dispatchKeyEvent', {
+    type: 'keyDown',
+    key: 'Tab',
+    code: 'Tab',
+    windowsVirtualKeyCode: 9,
+  });
+  await send('Input.dispatchKeyEvent', {
+    type: 'keyUp',
+    key: 'Tab',
+    code: 'Tab',
+    windowsVirtualKeyCode: 9,
+  });
+}
+
+async function inspectKeyboardTopicLink(send) {
+  const response = await send('Runtime.evaluate', {
+    expression: `(() => {
+      const element = document.activeElement;
+      const inDirectory = element?.matches('.topic-directory .topic-card');
+      const inFooter = element?.matches('.footer .topic-footer-links a');
+      if (!inDirectory && !inFooter) return null;
+      const rect = element.getBoundingClientRect();
+      const style = getComputedStyle(element);
+      const visible = style.display !== 'none' && style.visibility !== 'hidden' &&
+        Number(style.opacity) > 0 && rect.width > 0 && rect.height > 0;
+      return {
+        group: inDirectory ? 'directory' : 'footer',
+        href: element.getAttribute('href'),
+        accessibleName: (element.getAttribute('aria-label') || element.innerText || element.textContent || '')
+          .replace(/\\s+/g, ' ').trim(),
+        visibleText: (element.innerText || element.textContent || '').replace(/\\s+/g, ' ').trim(),
+        hasLink: element.tagName === 'A' && Boolean(element.getAttribute('href')),
+        visible,
+        insideViewport: rect.left >= -1 && rect.right <= innerWidth + 1 &&
+          rect.top >= -1 && rect.bottom <= innerHeight + 1,
+        contentFits: element.scrollWidth <= element.clientWidth + 1 &&
+          element.scrollHeight <= element.clientHeight + 1,
+        focusRingVisible: element.matches(':focus-visible') &&
+          style.outlineStyle === 'solid' && Number.parseFloat(style.outlineWidth) >= 3,
+      };
+    })()`,
+    returnByValue: true,
+  });
+  if (!response.result) {
+    throw new Error('Die Tastaturposition konnte nicht ausgewertet werden.');
+  }
+  return response.result.value;
+}
+
+async function inspectPage(send, route, { checkKeyboardTopicLinks = false } = {}) {
+  let skipLinkFocus;
+  let keyboardTopicLinks;
   if (route === '/') {
-    await send('Input.dispatchKeyEvent', {
-      type: 'keyDown',
-      key: 'Tab',
-      code: 'Tab',
-      windowsVirtualKeyCode: 9,
-    });
-    await send('Input.dispatchKeyEvent', {
-      type: 'keyUp',
-      key: 'Tab',
-      code: 'Tab',
-      windowsVirtualKeyCode: 9,
-    });
+    await pressTab(send);
+    if (checkKeyboardTopicLinks) {
+      await send('Runtime.evaluate', {
+        expression: "document.documentElement.style.scrollBehavior = 'auto'",
+      });
+      const skipResponse = await send('Runtime.evaluate', {
+        expression: `(() => {
+          const link = document.querySelector('.skip-link');
+          const style = link && getComputedStyle(link);
+          const rect = link?.getBoundingClientRect();
+          return {
+            active: document.activeElement === link,
+            visible: Boolean(link && style.display !== 'none' && style.visibility !== 'hidden' &&
+              Number(style.opacity) > 0 && rect.width > 0 && rect.height > 0),
+            insideViewport: Boolean(rect && rect.left >= -1 && rect.right <= innerWidth + 1 &&
+              rect.top >= -1 && rect.bottom <= innerHeight + 1),
+          };
+        })()`,
+        returnByValue: true,
+      });
+      skipLinkFocus = skipResponse.result?.value;
+      keyboardTopicLinks = [];
+      const seenLinks = new Set();
+      for (let index = 0; index < 24 && keyboardTopicLinks.length < 6; index += 1) {
+        await pressTab(send);
+        const link = await inspectKeyboardTopicLink(send);
+        if (!link) continue;
+        const key = `${link.group}:${link.href}`;
+        if (seenLinks.has(key)) continue;
+        seenLinks.add(key);
+        keyboardTopicLinks.push(link);
+      }
+    }
   }
   const response = await send('Runtime.evaluate', {
     expression: `(() => {
@@ -566,7 +639,13 @@ async function inspectPage(send, route) {
         'Chromium konnte die Layoutmessung nicht auswerten.',
     );
   }
-  return response.result.value;
+  const result = response.result.value;
+  if (skipLinkFocus) result.homepageSkipLinkFocused = skipLinkFocus;
+  if (keyboardTopicLinks) {
+    result.keyboardTopicLinks = keyboardTopicLinks;
+    result.keyboardTopicLinksChecked = true;
+  }
+  return result;
 }
 
 async function inspectForcedColors(send) {
@@ -678,6 +757,25 @@ function assertPageLayout(page, viewport, result) {
       !target.contentFits
     )) {
       issues.push('Mindestens ein Aktions- oder Themenlink der Startseite lässt sich nicht sichtbar fokussieren');
+    }
+    if (result.keyboardTopicLinksChecked) {
+      const expectedPaths = seoTopicPages.map((topic) => topic.path);
+      if (result.keyboardTopicLinks.length !== expectedPaths.length * 2) {
+        issues.push('Nicht alle Themen- und Footerlinks werden mit der Tab-Taste erreicht');
+      }
+      for (const group of ['directory', 'footer']) {
+        for (const expectedPath of expectedPaths) {
+          const link = result.keyboardTopicLinks.find((target) =>
+            target.group === group && target.href === expectedPath
+          );
+          if (
+            !link || !link.hasLink || !link.accessibleName || !link.visibleText ||
+            !link.visible || !link.insideViewport || !link.contentFits || !link.focusRingVisible
+          ) {
+            issues.push(`Themenlink ${expectedPath} in ${group} ist nicht gut lesbar oder per Tastatur sichtbar`);
+          }
+        }
+      }
     }
   } else {
     if (!result.navigationVisible || result.navigationLinks.length !== 3) issues.push('Themen-Navigation ist nicht vollständig sichtbar');
@@ -1096,7 +1194,9 @@ async function run() {
         await configureViewport(devTools.send, viewport);
         await devTools.navigate(new URL(page.path, baseUrl).href);
         await waitForPage(devTools.send);
-        const result = await inspectPage(devTools.send, page.path);
+        const result = await inspectPage(devTools.send, page.path, {
+          checkKeyboardTopicLinks: page.path === '/' && viewport.width <= 360 && viewport.height >= 800,
+        });
         assertPageLayout(page, viewport, result);
         console.log(
           `${page.path} · ${viewport.label}: Inhalte, Logos und Bedienelemente sichtbar; kein Seitenüberlauf.`,
