@@ -126,3 +126,17 @@ mtime_ms = 1795688809096
 storage_uri = "gcs://replit-rams-assets-archer/rams/assets/repl:fba06988-5dc0-49ce-a88d-6c2b15091cfa/746797f6-4a4b-49ef-8287-9c0e31cdf9f4/f6726a65-878a-4a9f-9720-51fa780b6bc6"
 storage_version_token = "1795688836697036"
 content_type = "text/markdown"
+
+[[outputs]]
+id = "BBA9CNYUeKhcgA-AMWubG"
+uri = "file://artifacts/cupcal-mobile/store-assets/google-play/ADVERTISING-ID-AUDIT-DE.md"
+type = "text"
+title = "Prüfbericht zur Werbe-ID-Erklärung"
+description = "Geprüftes Release-AAB, vorbereitete Nein-Antwort und verbleibender Play-Console-Nachweis."
+logical_id = "17c2fe78-e605-4fd3-bbc8-694b9bdc1a03"
+content_hash = "sha256:f501bbab8228309b91a1ee9c7ee949f2a16382c9b755f3c72e6b39dc5786bd3b"
+size = 10114
+mtime_ms = 1795771166073
+storage_uri = "gcs://replit-rams-assets-archer/rams/assets/repl:fba06988-5dc0-49ce-a88d-6c2b15091cfa/17c2fe78-e605-4fd3-bbc8-694b9bdc1a03/58293155-517a-469b-87f6-56360f9ba351"
+storage_version_token = "1795771195421119"
+content_type = "text/markdown"

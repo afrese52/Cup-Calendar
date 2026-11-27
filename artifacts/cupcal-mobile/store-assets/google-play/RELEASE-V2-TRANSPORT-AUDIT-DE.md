@@ -77,6 +77,12 @@ Firebase Analytics, Crashlytics, Sentry, Amplitude, Mixpanel oder
 Google-Mobile-Ads. Google-Standortdienste und Expo Location sind enthalten.
 Eine Markersuche ist keine vollständige Prüfung aller nativen SDKs.
 
+Der ergänzende [Werbe-ID-Abgleich vom 27. November 2026](./ADVERTISING-ID-AUDIT-DE.md)
+bestätigt für genau dieses AAB das Fehlen der AD_ID-Berechtigung und
+dokumentiert einen erweiterten SDK-Markerabgleich sowie die vorbereitete
+Console-Antwort. Die aktuelle Zuordnung zu aktiven Play-Artefakten und
+der gespeicherte Erklärungsstatus bleiben dort ausdrücklich offen.
+
 ## Einordnung für Google Play
 
 **Für die nachvollzogenen App-Datenwege stützen die Befunde die Antwort
