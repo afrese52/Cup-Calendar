@@ -704,6 +704,7 @@ export default function SettingsScreen() {
                       disabled: isSubmittingAuth,
                       busy: submittingAction === 'delete-account',
                     }}
+                    focusable={!isSubmittingAuth}
                     testID="delete-account-confirm-button"
                     disabled={isSubmittingAuth}
                     onPress={() => void sendAccountDeletionLink()}
@@ -727,6 +728,7 @@ export default function SettingsScreen() {
                     accessibilityLabel="Abbrechen"
                     accessibilityHint="Schließt die Bestätigung, ohne einen Link anzufordern."
                     accessibilityState={{ disabled: isSubmittingAuth }}
+                    focusable={!isSubmittingAuth}
                     testID="delete-account-cancel-button"
                     disabled={isSubmittingAuth}
                     onPress={() => {

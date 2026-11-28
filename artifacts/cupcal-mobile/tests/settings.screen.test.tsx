@@ -2533,6 +2533,81 @@ test('sendet nach Bestätigung einen zeitlich befristeten Löschlink an das ange
   });
 });
 
+async function renderBrowserKeyboardButton(sourceButton: { props: Record<string, unknown> }) {
+  jest.doMock('react-native-web/dist/cjs/modules/useHover', () => ({
+    __esModule: true,
+    default: () => {},
+  }));
+  const BrowserPressable = (
+    jest.requireActual('react-native-web') as { Pressable: React.ComponentType<any> }
+  ).Pressable;
+  const sourceOnClick = sourceButton.props.onClick as
+    | ((event: { altKey: boolean; preventDefault: () => void; stopPropagation: () => void }) => void)
+    | undefined;
+  if (!sourceOnClick) throw new Error('Der Browser-Button besitzt keine Aktivierungsaktion.');
+
+  const browserView = await render(
+    <BrowserPressable
+      accessibilityRole="button"
+      disabled={sourceButton.props.focusable === false || sourceButton.props.disabled === true}
+      onPress={() =>
+        sourceOnClick({
+          altKey: false,
+          preventDefault: jest.fn(),
+          stopPropagation: jest.fn(),
+        })}
+    />,
+  );
+  if (!browserView.root) throw new Error('Der Browser-Button wurde nicht gerendert.');
+  return browserView.root;
+}
+
+function pressBrowserButtonWithKey(button: { props: Record<string, unknown> }, key: string) {
+  if (!['Enter', ' ', 'Spacebar'].includes(key)) {
+    throw new Error(`Nicht unterstützte Taste für einen Browser-Button: ${key}`);
+  }
+  expect(button.props.role).toBe('button');
+  expect(button.props.tabIndex).toBe(0);
+  let handleKeyUp: ((event: unknown) => void) | undefined;
+  const previousDocument = Object.getOwnPropertyDescriptor(globalThis, 'document');
+  Object.defineProperty(globalThis, 'document', {
+    configurable: true,
+    value: {
+      addEventListener: (_type: string, listener: (event: unknown) => void) => {
+        handleKeyUp = listener;
+      },
+      removeEventListener: jest.fn(),
+    },
+  });
+
+  try {
+    const target = {
+      tagName: 'DIV',
+      getAttribute: (attribute: string) => (attribute === 'role' ? 'button' : null),
+    };
+    const event = {
+      key,
+      target,
+      currentTarget: target,
+      nativeEvent: { type: 'keydown' },
+      persist: jest.fn(),
+      preventDefault: jest.fn(),
+      stopPropagation: jest.fn(),
+    };
+    const onKeyDown = button.props.onKeyDown as ((event: unknown) => void) | undefined;
+    if (!onKeyDown) throw new Error('Der Browser-Button besitzt keinen Tastatur-Handler.');
+    onKeyDown(event);
+    if (!handleKeyUp) throw new Error('Der Browser-Button hat keinen Tastaturabschluss registriert.');
+    handleKeyUp({ ...event, nativeEvent: { type: 'keyup' } });
+  } finally {
+    if (previousDocument) {
+      Object.defineProperty(globalThis, 'document', previousDocument);
+    } else {
+      Reflect.deleteProperty(globalThis, 'document');
+    }
+  }
+}
+
 test.each(['ios', 'android'] as const)(
   'ordnet den Löschdialog und seine Rückmeldungen für %s zugänglich',
   async (platform) => {
@@ -2634,6 +2709,31 @@ test.each(['ios', 'android'] as const)(
   },
 );
 
+test('schließt der Browser-Löschdialog per Tastatur-Abbrechen ohne API-Anfrage', async () => {
+  const originalPlatformOS = Platform.OS;
+  Object.defineProperty(Platform, 'OS', { configurable: true, value: 'web' });
+  const mockedApi = jest.requireMock('@workspace/api-client-react') as {
+    __requestAccountDeletion: jest.Mock;
+  };
+
+  try {
+    auth.getSession.mockResolvedValue({ data: { session: testSession }, error: null });
+    const view = await render(<SettingsScreen />);
+    expect(await view.findByText('test@example.invalid')).toBeTruthy();
+    await fireEvent.press(view.getByTestId('delete-account-button'));
+
+    const cancelButton = view.getByTestId('delete-account-cancel-button');
+    expect(cancelButton.props.accessibilityRole).toBe('button');
+    const browserCancelButton = await renderBrowserKeyboardButton(cancelButton);
+    await act(async () => pressBrowserButtonWithKey(browserCancelButton, ' '));
+
+    expect(view.queryByTestId('delete-account-confirmation-dialog')).toBeNull();
+    expect(mockedApi.__requestAccountDeletion).not.toHaveBeenCalled();
+  } finally {
+    Object.defineProperty(Platform, 'OS', { configurable: true, value: originalPlatformOS });
+  }
+});
+
 test.each(['ios', 'android'] as const)(
   'macht einen Fehler beim Anfordern des Kontolöschlinks auf %s hörbar',
   async (platform) => {
@@ -2706,16 +2806,28 @@ test('verhindert doppelte Kontolöschanfragen im Browser und erlaubt nach einem 
     await fireEvent.press(view.getByTestId('delete-account-button'));
 
     const confirmButton = view.getByTestId('delete-account-confirm-button');
-    await act(async () => {
-      confirmButton.props.onClick();
-      confirmButton.props.onClick();
-    });
+    expect(confirmButton.props.accessibilityRole).toBe('button');
+    const browserConfirmButton = await renderBrowserKeyboardButton(confirmButton);
+    await act(async () => pressBrowserButtonWithKey(browserConfirmButton, 'Enter'));
 
     expect(mockedApi.__requestAccountDeletion).toHaveBeenCalledTimes(1);
-    expect(view.getByTestId('delete-account-confirm-button').props.accessibilityState).toMatchObject({
+    const pendingButton = view.getByTestId('delete-account-confirm-button');
+    expect(pendingButton.props.accessibilityState).toMatchObject({
       disabled: true,
       busy: true,
     });
+    expect(pendingButton.props.focusable).toBe(false);
+    const browserPendingButton = await renderBrowserKeyboardButton(pendingButton);
+    expect(browserPendingButton.props.tabIndex).toBe(-1);
+    const pendingOnClick = pendingButton.props.onClick as
+      | ((event: { altKey: boolean; preventDefault: () => void; stopPropagation: () => void }) => void)
+      | undefined;
+    if (!pendingOnClick) throw new Error('Der laufende Browser-Button besitzt keinen Click-Handler.');
+    await act(async () => {
+      pendingOnClick({ altKey: false, preventDefault: jest.fn(), stopPropagation: jest.fn() });
+      pendingOnClick({ altKey: false, preventDefault: jest.fn(), stopPropagation: jest.fn() });
+    });
+    expect(mockedApi.__requestAccountDeletion).toHaveBeenCalledTimes(1);
 
     await act(async () => {
       finishFirstDeletionRequest({
@@ -2731,7 +2843,10 @@ test('verhindert doppelte Kontolöschanfragen im Browser und erlaubt nach einem 
       busy: false,
     });
 
-    await fireEvent.press(view.getByTestId('delete-account-confirm-button'));
+    const browserRetryButton = await renderBrowserKeyboardButton(
+      view.getByTestId('delete-account-confirm-button'),
+    );
+    await act(async () => pressBrowserButtonWithKey(browserRetryButton, 'Enter'));
 
     expect(await view.findByText(/Bestätigungslink an test@example\.invalid gesendet/)).toBeTruthy();
     expect(view.queryByTestId('delete-account-confirmation-title')).toBeNull();

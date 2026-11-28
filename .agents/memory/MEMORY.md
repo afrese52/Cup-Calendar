@@ -41,3 +41,4 @@
 - [Expo-Release-Manifest prüfen](expo-release-manifest-audits.md) — Native Abhängigkeiten können Rechte ergänzen; für Store-Angaben das fertige AAB statt nur die Expo-Konfiguration prüfen.
 - [Bestätigungslink-Idempotenz](confirmation-link-idempotency.md) — Ein offener Bestätigungsbildschirm muss bereits verarbeitete Linkkennungen auch nach anderen Ereignissen dauerhaft ignorieren.
 - [WebKit-Tests in Replit](webkit-replit-tests.md) — Playwright WebKit braucht GTK unter Xvfb, Nix-Bibliotheken und ein geladenes GIO-TLS-Modul.
+- [React-Native-Web-Tastaturtests](react-native-web-keyboard-tests.md) — Den RNW-Tastaturpfad im Screen-Renderer mit echten Pressable-Key-Handlern testen, nicht nur `onClick` aufrufen.
