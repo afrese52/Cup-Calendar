@@ -3,14 +3,13 @@ import {
   useGetSearchConsoleReport,
   useGetSearchConsoleStatus,
 } from '@workspace/api-client-react';
-import { File as ExpoFile, Paths } from 'expo-file-system';
 import { Stack, useRouter } from 'expo-router';
-import * as Sharing from 'expo-sharing';
 import React, { useState } from 'react';
 import { ActivityIndicator, Alert, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useColors } from '@/hooks/useColors';
 import { buildSearchConsoleCsv, type SearchConsoleCsvPeriods } from '@/services/search-console-csv';
+import { shareSearchConsoleCsv } from '@/services/share-search-console-csv';
 
 const DEFAULT_URL = 'https://cupcal.af-software.app/';
 
@@ -185,9 +184,9 @@ export default function SearchConsoleScreen() {
 
     setExporting(true);
     try {
-      const csv = buildSearchConsoleCsv(report.data, loadedPeriods);
-      const filename = `cupcal-suchbegriffe-${loadedPeriods.startDate}-${loadedPeriods.endDate}.csv`;
       if (Platform.OS === 'web') {
+        const csv = buildSearchConsoleCsv(report.data, loadedPeriods);
+        const filename = `cupcal-suchbegriffe-${loadedPeriods.startDate}-${loadedPeriods.endDate}.csv`;
         const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
         const link = document.createElement('a');
         link.href = url;
@@ -197,14 +196,7 @@ export default function SearchConsoleScreen() {
         link.remove();
         window.setTimeout(() => URL.revokeObjectURL(url), 1000);
       } else {
-        const file = new ExpoFile(Paths.cache, filename);
-        file.create({ overwrite: true });
-        await file.write(csv);
-        await Sharing.shareAsync(file.uri, {
-          dialogTitle: 'CupCal-Suchbegriffe exportieren',
-          mimeType: 'text/csv',
-          UTI: 'public.comma-separated-values-text',
-        });
+        await shareSearchConsoleCsv(report.data, loadedPeriods);
       }
     } catch {
       Alert.alert(
