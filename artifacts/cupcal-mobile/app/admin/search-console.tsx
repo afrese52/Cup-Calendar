@@ -41,6 +41,73 @@ function formatDevice(device: string) {
   }
 }
 
+type CanonicalComparisonState = 'match' | 'different' | 'unavailable';
+
+function compareCanonicals(userCanonical: string | null, googleCanonical: string | null) {
+  const website = userCanonical?.trim() || null;
+  const google = googleCanonical?.trim() || null;
+  const state: CanonicalComparisonState = !website || !google
+    ? 'unavailable'
+    : website === google
+      ? 'match'
+      : 'different';
+  return { state, website, google };
+}
+
+function CanonicalComparison({
+  userCanonical,
+  googleCanonical,
+  colors,
+}: {
+  userCanonical: string | null;
+  googleCanonical: string | null;
+  colors: ReturnType<typeof useColors>;
+}) {
+  const comparison = compareCanonicals(userCanonical, googleCanonical);
+  const statusColor = comparison.state === 'match'
+    ? colors.success
+    : comparison.state === 'different'
+      ? colors.warning
+      : colors.mutedForeground;
+  const statusText = comparison.state === 'match'
+    ? 'Canonical-Adressen stimmen überein'
+    : comparison.state === 'different'
+      ? 'Abweichung: Google verwendet eine andere Canonical-Adresse'
+      : 'Vergleich nicht möglich: Canonical-Adresse fehlt';
+
+  return (
+    <View style={[styles.canonicalPanel, { backgroundColor: colors.input, borderColor: colors.border }]}>
+      <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>CANONICAL-ADRESSEN</Text>
+      <Text style={[styles.canonicalLabel, { color: colors.mutedForeground }]}>Website-Canonical</Text>
+      <Text
+        selectable
+        accessibilityLabel={`Website-Canonical: ${comparison.website ?? 'Nicht verfügbar'}`}
+        style={[styles.canonicalUrl, { color: colors.foreground }]}
+      >
+        {comparison.website ?? 'Nicht verfügbar'}
+      </Text>
+      <Text style={[styles.canonicalLabel, styles.googleCanonicalLabel, { color: colors.mutedForeground }]}>
+        Google-Canonical
+      </Text>
+      <Text
+        selectable
+        accessibilityLabel={`Google-Canonical: ${comparison.google ?? 'Nicht verfügbar'}`}
+        style={[styles.canonicalUrl, { color: colors.foreground }]}
+      >
+        {comparison.google ?? 'Nicht verfügbar'}
+      </Text>
+      <View style={[styles.canonicalStatus, { borderColor: statusColor }]}>
+        <Feather
+          name={comparison.state === 'match' ? 'check-circle' : comparison.state === 'different' ? 'alert-triangle' : 'info'}
+          size={15}
+          color={statusColor}
+        />
+        <Text style={[styles.canonicalStatusText, { color: statusColor }]}>{statusText}</Text>
+      </View>
+    </View>
+  );
+}
+
 export default function SearchConsoleScreen() {
   const colors = useColors();
   const router = useRouter();
@@ -276,9 +343,11 @@ export default function SearchConsoleScreen() {
             <Text style={[styles.help, { color: colors.mutedForeground }]}>
               Letzter Crawl: {formatDate(result.indexing.lastCrawlTime)}
             </Text>
-            {result.indexing.googleCanonical ? (
-              <Text style={[styles.help, { color: colors.mutedForeground }]}>Google-Kanonisch: {result.indexing.googleCanonical}</Text>
-            ) : null}
+            <CanonicalComparison
+              userCanonical={result.indexing.userCanonical}
+              googleCanonical={result.indexing.googleCanonical}
+              colors={colors}
+            />
             <Text style={[styles.sectionLabel, { color: colors.mutedForeground, marginTop: 18 }]}>SUCHLEISTUNG IM ZEITRAUM</Text>
             <Text style={[styles.resultValue, { color: colors.foreground }]}>
               {result.performance.clicks} Klicks · {result.performance.impressions} Impressionen
@@ -404,6 +473,12 @@ const styles = StyleSheet.create({
   notice: { borderWidth: 1, borderRadius: 14, padding: 13, fontSize: 13, lineHeight: 19, marginBottom: 14 },
   resultUrl: { fontSize: 13, fontWeight: '700', marginBottom: 18 },
   resultValue: { fontSize: 14, fontWeight: '700', lineHeight: 20 },
+  canonicalPanel: { borderWidth: 1, borderRadius: 12, padding: 12, marginTop: 12 },
+  canonicalLabel: { fontSize: 11, fontWeight: '700', marginTop: 3 },
+  googleCanonicalLabel: { marginTop: 11 },
+  canonicalUrl: { fontSize: 11, lineHeight: 16, marginTop: 3 },
+  canonicalStatus: { flexDirection: 'row', alignItems: 'center', gap: 7, borderWidth: 1, borderRadius: 9, padding: 9, marginTop: 12 },
+  canonicalStatusText: { flex: 1, fontSize: 11, fontWeight: '700', lineHeight: 16 },
   emptyQueries: { fontSize: 13, lineHeight: 19, marginTop: 10 },
   queryList: { marginTop: 8 },
   queryRow: { borderBottomWidth: StyleSheet.hairlineWidth, paddingVertical: 10 },

@@ -75,6 +75,40 @@ async function renderScreen() {
   );
 }
 
+async function renderCanonicalReport(userCanonical: string | null, googleCanonical: string | null) {
+  mockFetch
+    .mockResolvedValueOnce(Response.json({
+      configured: true,
+      property: 'https://cupcal.af-software.app/',
+      serviceAccountEmail: 'cupcal-search@project.iam.gserviceaccount.com',
+    }))
+    .mockResolvedValueOnce(Response.json({
+      property: 'https://cupcal.af-software.app/',
+      data: [{
+        url: 'https://cupcal.af-software.app/',
+        indexing: {
+          verdict: 'PASS',
+          coverageState: 'Indexiert',
+          robotsTxtState: null,
+          indexingState: 'INDEXING_ALLOWED',
+          lastCrawlTime: null,
+          pageFetchState: null,
+          googleCanonical,
+          userCanonical,
+        },
+        performance: { clicks: 0, impressions: 0, ctr: 0, position: null },
+        countries: [],
+        devices: [],
+        queries: [],
+        queryComparisons: [],
+      }],
+    }));
+  const view = await renderScreen();
+  await view.findByText('Google-Dienstkonto ist eingerichtet.');
+  await fireEvent.press(view.getByLabelText('Suchdaten abrufen'));
+  return view;
+}
+
 test('zeigt den Hinweis, wenn Google-Zugangsdaten noch nicht eingerichtet sind', async () => {
   mockFetch.mockResolvedValueOnce(Response.json({
     configured: false,
@@ -110,7 +144,7 @@ test('lädt Indexstatus und Suchleistung mit der CupCal-Admin-Sitzung', async ()
           lastCrawlTime: '2026-11-19T10:36:01Z',
           pageFetchState: null,
           googleCanonical: 'https://cupcal.af-software.app/',
-          userCanonical: null,
+          userCanonical: 'https://www.cupcal.af-software.app/',
         },
         performance: { clicks: 12, impressions: 340, ctr: 0.035, position: 8.2 },
         countries: [
@@ -153,6 +187,10 @@ test('lädt Indexstatus und Suchleistung mit der CupCal-Admin-Sitzung', async ()
   await fireEvent.press(view.getByText('Suchdaten abrufen'));
 
   expect(await view.findByText('Eingereicht und indexiert')).toBeTruthy();
+  expect(view.getByText('Website-Canonical')).toBeTruthy();
+  expect(view.getByLabelText('Website-Canonical: https://www.cupcal.af-software.app/')).toBeTruthy();
+  expect(view.getByLabelText('Google-Canonical: https://cupcal.af-software.app/')).toBeTruthy();
+  expect(await view.findByText('Abweichung: Google verwendet eine andere Canonical-Adresse')).toBeTruthy();
   expect(await view.findByText('12 Klicks · 340 Impressionen')).toBeTruthy();
   expect(await view.findByText('DEU')).toBeTruthy();
   expect(await view.findByText('Mobilgerät')).toBeTruthy();
@@ -200,6 +238,14 @@ test('lädt Indexstatus und Suchleistung mit der CupCal-Admin-Sitzung', async ()
   ));
 });
 
+test('kennzeichnet übereinstimmende Canonical-Adressen klar', async () => {
+  const canonical = 'https://cupcal.af-software.app/turnierkalender-app/';
+  const view = await renderCanonicalReport(canonical, canonical);
+
+  expect(await view.findByText('Canonical-Adressen stimmen überein')).toBeTruthy();
+  expect(view.getAllByText(canonical)).toHaveLength(2);
+});
+
 test('erklärt, wenn für eine Seite keine sichtbaren Suchbegriffe vorliegen', async () => {
   mockFetch
     .mockResolvedValueOnce(Response.json({
@@ -236,6 +282,8 @@ test('erklärt, wenn für eine Seite keine sichtbaren Suchbegriffe vorliegen', a
   expect(await view.findByText(
     'Für diese Seite wurden in beiden Zeiträumen keine sichtbaren Suchbegriffe gemeldet.',
   )).toBeTruthy();
+  expect(await view.findByText('Vergleich nicht möglich: Canonical-Adresse fehlt')).toBeTruthy();
+  expect(view.getAllByText('Nicht verfügbar')).toHaveLength(2);
   expect(view.getByText(/Google blendet seltene oder anonymisierte Suchanfragen/)).toBeTruthy();
   expect(view.getByText(
     'Google hat für diese Seite im gewählten Zeitraum keine Länderwerte geliefert.',

@@ -222,6 +222,11 @@ function asString(value: unknown): string | null {
   return typeof value === "string" ? value : null;
 }
 
+function asCanonicalUrl(value: unknown): string | null {
+  const canonical = asString(value)?.trim();
+  return canonical || null;
+}
+
 function asNumber(value: unknown, fallback = 0): number {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
 }
@@ -425,8 +430,8 @@ export function createSearchConsoleClient(options: {
             indexingState: asString(index["indexingState"]),
             lastCrawlTime: asString(index["lastCrawlTime"]),
             pageFetchState: asString(index["pageFetchState"]),
-            googleCanonical: asString(index["googleCanonical"]),
-            userCanonical: asString(index["userCanonical"]),
+            googleCanonical: asCanonicalUrl(index["googleCanonical"]),
+            userCanonical: asCanonicalUrl(index["userCanonical"]),
           },
           performance: {
             clicks: asNumber(row["clicks"]),
