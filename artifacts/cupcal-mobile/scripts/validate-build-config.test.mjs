@@ -155,3 +155,13 @@ test('production keeps store AAB output, remote version increments and the chose
   assert.equal(build.production.android.autoIncrement, 'versionCode');
   assert.equal(cli.appVersionSource, 'remote');
 });
+
+test('EAS Update uses distinct preview and production channels with a fingerprint runtime', () => {
+  const { expo } = readJson('../app.json');
+  const { build } = readJson('../eas.json');
+  assert.equal(expo.updates.url, `https://u.expo.dev/${expo.extra.eas.projectId}`);
+  assert.deepEqual(expo.runtimeVersion, { policy: 'fingerprint' });
+  assert.equal(build.preview.channel, 'preview');
+  assert.equal(build.production.channel, 'production');
+  assert.ok(readJson('../package.json').dependencies['expo-updates']);
+});

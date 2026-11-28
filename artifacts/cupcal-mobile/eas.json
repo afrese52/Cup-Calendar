@@ -6,6 +6,7 @@
     "preview": {
       "distribution": "internal",
       "environment": "preview",
+      "channel": "preview",
       "env": {
         "EXPO_PUBLIC_DOMAIN": "cupcal.af-software.app"
       },
@@ -20,6 +21,7 @@
     "production": {
       "extends": "preview",
       "environment": "production",
+      "channel": "production",
       "distribution": "store",
       "android": {
         "buildType": "app-bundle",

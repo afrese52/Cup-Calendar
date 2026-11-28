@@ -3,6 +3,12 @@
     "name": "CupCal: Kalender für FN",
     "slug": "cupcol-for-fn",
     "version": "1.0.0",
+    "runtimeVersion": {
+      "policy": "fingerprint"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/112401ab-4241-4e9c-b7c8-857b508ceb05"
+    },
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "cupcal-android",
