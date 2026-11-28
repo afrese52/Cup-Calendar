@@ -51,6 +51,33 @@ function formatDevice(device: string) {
   }
 }
 
+const PAGE_FETCH_STATE_LABELS: Record<string, string> = {
+  SUCCESSFUL: 'Abruf erfolgreich',
+  SOFT_404: 'Seite scheint nicht vorhanden zu sein (Soft-404)',
+  BLOCKED_ROBOTS_TXT: 'Durch robots.txt blockiert',
+  NOT_FOUND: 'Seite nicht gefunden',
+  ACCESS_DENIED: 'Zugriff verweigert',
+  SERVER_ERROR: 'Serverfehler beim Abruf',
+  REDIRECT_ERROR: 'Weiterleitungsfehler',
+  BLOCKED_4XX: 'Durch einen 4xx-Fehler blockiert',
+  INTERNAL_CRAWL_ERROR: 'Interner Google-Crawlfehler',
+};
+
+const ROBOTS_TXT_STATE_LABELS: Record<string, string> = {
+  ALLOWED: 'Abruf durch robots.txt erlaubt',
+  DISALLOWED: 'Durch robots.txt nicht erlaubt',
+  ROBOTS_TXT_STATE_UNSPECIFIED: 'Google meldet keinen Robotsstatus',
+};
+
+function formatInspectionState(value: string | null, labels: Record<string, string>) {
+  const normalizedValue = value?.trim();
+  if (!normalizedValue) return 'Nicht verfügbar';
+  return labels[normalizedValue] ?? normalizedValue
+    .toLowerCase()
+    .replaceAll('_', ' ')
+    .replace(/\b\w/g, (character) => character.toLocaleUpperCase('de-DE'));
+}
+
 type CanonicalComparisonState = 'match' | 'different' | 'unavailable';
 
 function compareCanonicals(userCanonical: string | null, googleCanonical: string | null) {
@@ -359,6 +386,12 @@ export default function SearchConsoleScreen() {
             <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>INDEXIERUNG</Text>
             <Text style={[styles.resultValue, { color: result.indexing.verdict === 'PASS' ? colors.success : colors.foreground }]}>
               {result.indexing.coverageState ?? result.indexing.verdict ?? 'Kein Indexierungsstatus verfügbar'}
+            </Text>
+            <Text style={[styles.help, { color: colors.mutedForeground }]}>
+              Google-Abruf: {formatInspectionState(result.indexing.pageFetchState, PAGE_FETCH_STATE_LABELS)}
+            </Text>
+            <Text style={[styles.help, { color: colors.mutedForeground }]}>
+              Robots.txt: {formatInspectionState(result.indexing.robotsTxtState, ROBOTS_TXT_STATE_LABELS)}
             </Text>
             <Text style={[styles.help, { color: colors.mutedForeground }]}>
               Letzter Crawl: {formatDate(result.indexing.lastCrawlTime)}

@@ -75,7 +75,12 @@ async function renderScreen() {
   );
 }
 
-async function renderCanonicalReport(userCanonical: string | null, googleCanonical: string | null) {
+async function renderCanonicalReport(
+  userCanonical: string | null,
+  googleCanonical: string | null,
+  pageFetchState: string | null = null,
+  robotsTxtState: string | null = null,
+) {
   mockFetch
     .mockResolvedValueOnce(Response.json({
       configured: true,
@@ -89,10 +94,10 @@ async function renderCanonicalReport(userCanonical: string | null, googleCanonic
         indexing: {
           verdict: 'PASS',
           coverageState: 'Indexiert',
-          robotsTxtState: null,
+          robotsTxtState,
           indexingState: 'INDEXING_ALLOWED',
           lastCrawlTime: null,
-          pageFetchState: null,
+          pageFetchState,
           googleCanonical,
           userCanonical,
           canonicalHistory: { firstDetectedAt: null, lastChangedAt: null },
@@ -140,10 +145,10 @@ test('lädt Indexstatus und Suchleistung mit der CupCal-Admin-Sitzung', async ()
         indexing: {
           verdict: 'PASS',
           coverageState: 'Eingereicht und indexiert',
-          robotsTxtState: null,
+          robotsTxtState: 'ALLOWED',
           indexingState: 'INDEXING_ALLOWED',
           lastCrawlTime: '2026-11-19T10:36:01Z',
-          pageFetchState: null,
+          pageFetchState: 'SUCCESSFUL',
           googleCanonical: 'https://cupcal.af-software.app/',
           userCanonical: 'https://www.cupcal.af-software.app/',
           canonicalHistory: {
@@ -192,6 +197,8 @@ test('lädt Indexstatus und Suchleistung mit der CupCal-Admin-Sitzung', async ()
   await fireEvent.press(view.getByText('Suchdaten abrufen'));
 
   expect(await view.findByText('Eingereicht und indexiert')).toBeTruthy();
+  expect(await view.findByText('Google-Abruf: Abruf erfolgreich')).toBeTruthy();
+  expect(await view.findByText('Robots.txt: Abruf durch robots.txt erlaubt')).toBeTruthy();
   expect(view.getByText('Website-Canonical')).toBeTruthy();
   expect(view.getByLabelText('Website-Canonical: https://www.cupcal.af-software.app/')).toBeTruthy();
   expect(view.getByLabelText('Google-Canonical: https://cupcal.af-software.app/')).toBeTruthy();
@@ -257,6 +264,18 @@ test('kennzeichnet übereinstimmende Canonical-Adressen klar', async () => {
   expect(view.getAllByText(canonical)).toHaveLength(2);
 });
 
+test('erklärt blockierte Abrufe und Robots-Freigaben verständlich', async () => {
+  const view = await renderCanonicalReport(
+    null,
+    null,
+    'BLOCKED_ROBOTS_TXT',
+    'DISALLOWED',
+  );
+
+  expect(await view.findByText('Google-Abruf: Durch robots.txt blockiert')).toBeTruthy();
+  expect(await view.findByText('Robots.txt: Durch robots.txt nicht erlaubt')).toBeTruthy();
+});
+
 test('erklärt, wenn für eine Seite keine sichtbaren Suchbegriffe vorliegen', async () => {
   mockFetch
     .mockResolvedValueOnce(Response.json({
@@ -295,6 +314,8 @@ test('erklärt, wenn für eine Seite keine sichtbaren Suchbegriffe vorliegen', a
     'Für diese Seite wurden in beiden Zeiträumen keine sichtbaren Suchbegriffe gemeldet.',
   )).toBeTruthy();
   expect(await view.findByText('Vergleich nicht möglich: Canonical-Adresse fehlt')).toBeTruthy();
+  expect(await view.findByText('Google-Abruf: Nicht verfügbar')).toBeTruthy();
+  expect(await view.findByText('Robots.txt: Nicht verfügbar')).toBeTruthy();
   expect(view.getAllByText('Nicht verfügbar')).toHaveLength(2);
   expect(view.getByText(/Google blendet seltene oder anonymisierte Suchanfragen/)).toBeTruthy();
   expect(view.getByText(
