@@ -14,7 +14,10 @@ import {
 } from '../src/content/seo-pages.ts';
 import { deletionConfirmationPage, legalPages } from '../src/content/legal-pages.ts';
 import { assertStoreLinksConfirmed } from './store-link-validation.mjs';
-import { assertPlatformAvailability } from './store-availability-validation.mjs';
+import {
+  assertPlatformAvailability,
+  assertPlatformAvailabilityIfMentioned,
+} from './store-availability-validation.mjs';
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const publicRoot = path.join(projectRoot, 'dist/public');
@@ -392,6 +395,32 @@ async function runSmokeTest() {
       assert.equal(headings.length, 1, `${sitemapPageUrl.pathname} muss genau eine H1 enthalten.`);
 
       const schemaNodes = extractStructuredData(html, sitemapPageUrl.pathname);
+      const availabilitySources = [
+        {
+          label: `${sitemapPageUrl.pathname}: Seiteninhalt`,
+          value: extractRenderedText(html),
+        },
+        {
+          label: `${sitemapPageUrl.pathname}: Meta-Beschreibung`,
+          value: description,
+        },
+        ...schemaNodes
+          .filter((node) => typeof node.description === 'string')
+          .map((node) => ({
+            label: `${sitemapPageUrl.pathname}: Schema.org-Beschreibung (${Array.isArray(node['@type']) ? node['@type'].join(', ') : node['@type'] ?? 'Daten'})`,
+            value: node.description,
+          })),
+      ];
+      for (const { label, value } of availabilitySources) {
+        for (const platform of ['android', 'ios']) {
+          assertPlatformAvailabilityIfMentioned(
+            value,
+            platform,
+            confirmedStoreLinks[platform] !== null,
+            label,
+          );
+        }
+      }
       const schemaIds = schemaNodes
         .map((node) => node['@id'])
         .filter((id) => typeof id === 'string');

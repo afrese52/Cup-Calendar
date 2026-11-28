@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { assertPlatformAvailability } from './store-availability-validation.mjs';
+import {
+  assertPlatformAvailability,
+  assertPlatformAvailabilityIfMentioned,
+} from './store-availability-validation.mjs';
 
 test('erkennt aktuelle geplante Android- und offene iOS-Formulierungen', () => {
   assert.doesNotThrow(() => assertPlatformAvailability(
@@ -49,5 +52,59 @@ test('lehnt fehlende und falsche Verfügbarkeitsaussagen ab', () => {
   assert.throws(
     () => assertPlatformAvailability('iOS-Termin offen.', 'ios', true, 'Startseite'),
     /kennzeichnet ios nicht als verfügbar/,
+  );
+});
+
+test('prüft jede erwähnte Plattform, lässt Seiten ohne Store-Aussage aber unverändert', () => {
+  assert.doesNotThrow(() => assertPlatformAvailabilityIfMentioned(
+    'Turniertermine im Kalender finden.',
+    'android',
+    false,
+    '/turniertermine-organisieren/: Seiteninhalt',
+  ));
+  assert.doesNotThrow(() => assertPlatformAvailabilityIfMentioned(
+    'Android noch nicht verfügbar; iOS-Termin offen.',
+    'android',
+    false,
+    '/andere-seite/: Seiteninhalt',
+  ));
+  assert.doesNotThrow(() => assertPlatformAvailabilityIfMentioned(
+    'Android noch nicht verfügbar; iOS-Termin offen.',
+    'ios',
+    false,
+    '/andere-seite/: Seiteninhalt',
+  ));
+  assert.doesNotThrow(() => assertPlatformAvailabilityIfMentioned(
+    'iOS jetzt im App Store verfügbar.',
+    'ios',
+    true,
+    '/andere-seite/: Seiteninhalt',
+  ));
+  assert.throws(
+    () => assertPlatformAvailabilityIfMentioned(
+      'Android kann auf dem Gerät installiert werden.',
+      'android',
+      false,
+      '/andere-seite/: Schema.org-Beschreibung',
+    ),
+    /\/andere-seite\/: Schema\.org-Beschreibung kennzeichnet android nicht als geplant oder noch nicht verfügbar/,
+  );
+  assert.throws(
+    () => assertPlatformAvailabilityIfMentioned(
+      'Android jetzt verfügbar.',
+      'android',
+      false,
+      '/andere-seite/: Meta-Beschreibung',
+    ),
+    /\/andere-seite\/: Meta-Beschreibung behauptet android trotz fehlender bestätigter Store-URL als verfügbar/,
+  );
+  assert.throws(
+    () => assertPlatformAvailabilityIfMentioned(
+      'iOS noch nicht verfügbar.',
+      'ios',
+      true,
+      '/andere-seite/: Schema.org-Beschreibung',
+    ),
+    /\/andere-seite\/: Schema\.org-Beschreibung kennzeichnet ios nicht als verfügbar/,
   );
 });
