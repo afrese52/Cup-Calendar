@@ -42,3 +42,4 @@
 - [Bestätigungslink-Idempotenz](confirmation-link-idempotency.md) — Ein offener Bestätigungsbildschirm muss bereits verarbeitete Linkkennungen auch nach anderen Ereignissen dauerhaft ignorieren.
 - [WebKit-Tests in Replit](webkit-replit-tests.md) — Playwright WebKit braucht GTK unter Xvfb, Nix-Bibliotheken und ein geladenes GIO-TLS-Modul.
 - [React-Native-Web-Tastaturtests](react-native-web-keyboard-tests.md) — Den RNW-Tastaturpfad im Screen-Renderer mit echten Pressable-Key-Handlern testen, nicht nur `onClick` aufrufen.
+- [Expo-Geräteautomation](expo-native-automation.md) — Expo Go kann laufen, obwohl kein steuerbares MCP-Gerät verbunden ist; Cloud-Simulatoren sind in fresea nicht verfügbar.
