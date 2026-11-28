@@ -7,9 +7,35 @@ export type SearchConsoleCsvPeriods = {
   comparisonEndDate: string;
 };
 
-const CSV_HEADERS = ['Seite', 'Zeitraum', 'Suchbegriff', 'Klicks', 'Impressionen', 'Position'];
+const CSV_HEADERS = [
+  'Seite',
+  'Zeitraum',
+  'Suchbegriff',
+  'Klicks',
+  'Impressionen',
+  'Position',
+  'Website-Canonical',
+  'Google-Canonical',
+  'Canonical-Status',
+];
 const HIDDEN_QUERIES_NOTICE =
   'Google blendet seltene oder anonymisierte Suchanfragen möglicherweise aus. Die Liste kann unvollständig sein.';
+
+function canonicalCsvValues(item: SearchConsoleReportItem): [string, string, string] {
+  const websiteCanonical = item.indexing?.userCanonical?.trim() || null;
+  const googleCanonical = item.indexing?.googleCanonical?.trim() || null;
+  const status = !websiteCanonical || !googleCanonical
+    ? 'Unvollständig'
+    : websiteCanonical === googleCanonical
+      ? 'Übereinstimmend'
+      : 'Abweichend';
+
+  return [
+    websiteCanonical ?? 'Nicht verfügbar',
+    googleCanonical ?? 'Nicht verfügbar',
+    status,
+  ];
+}
 
 function protectSpreadsheetFormula(value: string) {
   return /^[\s\u0000-\u001f]*[=+\-@]/.test(value) ? `'${value}` : value;
@@ -50,6 +76,7 @@ export function buildSearchConsoleCsv(
   ] as const;
 
   for (const item of items) {
+    const canonicalValues = canonicalCsvValues(item);
     for (const period of reportPeriods) {
       const periodLabel = `${period.label}: ${period.startDate} bis ${period.endDate}`;
       const visibleQueries = item.queryComparisons.filter(
@@ -66,6 +93,7 @@ export function buildSearchConsoleCsv(
           null,
           null,
           null,
+          ...canonicalValues,
         ]));
         continue;
       }
@@ -78,11 +106,20 @@ export function buildSearchConsoleCsv(
           query[period.clicks],
           query[period.impressions],
           query[period.position],
+          ...canonicalValues,
         ]));
       }
     }
 
-    rows.push(csvRow([item.url, '', 'Hinweis', '', '', HIDDEN_QUERIES_NOTICE]));
+    rows.push(csvRow([
+      item.url,
+      '',
+      'Hinweis',
+      '',
+      '',
+      HIDDEN_QUERIES_NOTICE,
+      ...canonicalValues,
+    ]));
   }
 
   return `\uFEFF${rows.join('\r\n')}\r\n`;

@@ -215,7 +215,7 @@ test('lädt Indexstatus und Suchleistung mit der CupCal-Admin-Sitzung', async ()
     });
   });
 
-  await fireEvent.press(view.getByLabelText('Suchbegriffsbericht als CSV exportieren'));
+  await fireEvent.press(view.getByLabelText('Suchbericht als CSV exportieren'));
   await waitFor(() => {
     expect(Sharing.shareAsync).toHaveBeenCalledWith(
       'file:///cache/cupcal-suchbegriffe.csv',
@@ -225,7 +225,10 @@ test('lädt Indexstatus und Suchleistung mit der CupCal-Admin-Sitzung', async ()
   const mockedFile = (jest.requireMock('expo-file-system') as { File: jest.Mock }).File;
   const fileInstance = mockedFile.mock.results.at(-1)?.value as { write: jest.Mock };
   expect(fileInstance.write).toHaveBeenCalledWith(expect.stringContaining(
-    '"Seite";"Zeitraum";"Suchbegriff";"Klicks";"Impressionen";"Position"',
+    '"Seite";"Zeitraum";"Suchbegriff";"Klicks";"Impressionen";"Position";"Website-Canonical";"Google-Canonical";"Canonical-Status"',
+  ));
+  expect(fileInstance.write).toHaveBeenCalledWith(expect.stringContaining(
+    '"https://www.cupcal.af-software.app/";"https://cupcal.af-software.app/";"Abweichend"',
   ));
   expect(fileInstance.write).toHaveBeenCalledWith(expect.stringContaining(
     '"Aktuell: ',

@@ -313,7 +313,7 @@ export default function SearchConsoleScreen() {
         {reportMutation.data && loadedPeriods ? (
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Suchbegriffsbericht als CSV exportieren"
+            accessibilityLabel="Suchbericht als CSV exportieren"
             accessibilityState={{ disabled: exporting, busy: exporting }}
             disabled={exporting}
             onPress={() => void exportReport()}
@@ -328,7 +328,7 @@ export default function SearchConsoleScreen() {
               ? <ActivityIndicator color={colors.primary} />
               : <Feather name="download" size={17} color={colors.primary} />}
             <Text style={[styles.exportButtonText, { color: colors.foreground }]}>
-              {exporting ? 'CSV wird vorbereitet …' : 'Suchbegriffsbericht als CSV exportieren'}
+              {exporting ? 'CSV wird vorbereitet …' : 'Suchbericht als CSV exportieren'}
             </Text>
           </Pressable>
         ) : null}

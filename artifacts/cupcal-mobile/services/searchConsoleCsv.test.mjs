@@ -9,9 +9,10 @@ const periods = {
   comparisonEndDate: "2026-10-24",
 };
 
-function reportItem(queryComparisons) {
+function reportItem(queryComparisons, userCanonical = null, googleCanonical = null) {
   return {
     url: "https://cupcal.af-software.app/turnierkalender-app/",
+    indexing: { userCanonical, googleCanonical },
     queryComparisons,
   };
 }
@@ -29,10 +30,42 @@ test("exportiert beide Zeiträume mit Position und verständlichen Hinweisen", (
   }])], periods);
 
   assert.ok(csv.startsWith("\uFEFF"));
-  assert.ok(csv.includes('"Seite";"Zeitraum";"Suchbegriff";"Klicks";"Impressionen";"Position"'));
+  assert.ok(csv.includes(
+    '"Seite";"Zeitraum";"Suchbegriff";"Klicks";"Impressionen";"Position";"Website-Canonical";"Google-Canonical";"Canonical-Status"',
+  ));
   assert.ok(csv.includes('"Aktuell: 2026-10-25 bis 2026-11-21";"cupcal kalender";"8";"100";"4.5"'));
   assert.ok(csv.includes('"Vergleich: 2026-09-27 bis 2026-10-24";"cupcal kalender";"3";"50";"5.5"'));
   assert.ok(csv.includes("Google blendet seltene oder anonymisierte Suchanfragen möglicherweise aus."));
+});
+
+test("exportiert übereinstimmende und abweichende Canonical-Adressen", () => {
+  const matchingCanonical = "https://cupcal.af-software.app/";
+  const mismatchedReport = reportItem(
+    [],
+    "https://www.cupcal.af-software.app/",
+    matchingCanonical,
+  );
+  const matchingReport = reportItem([], matchingCanonical, matchingCanonical);
+  const csv = buildSearchConsoleCsv([mismatchedReport, matchingReport], periods);
+
+  assert.ok(csv.includes(
+    '"https://www.cupcal.af-software.app/";"https://cupcal.af-software.app/";"Abweichend"',
+  ));
+  assert.ok(csv.includes(
+    '"https://cupcal.af-software.app/";"https://cupcal.af-software.app/";"Übereinstimmend"',
+  ));
+});
+
+test("kennzeichnet fehlende Canonical-Adressen im CSV ausdrücklich", () => {
+  const csv = buildSearchConsoleCsv([
+    reportItem([], null, "https://cupcal.af-software.app/"),
+    reportItem([]),
+  ], periods);
+
+  assert.ok(csv.includes(
+    '"Nicht verfügbar";"https://cupcal.af-software.app/";"Unvollständig"',
+  ));
+  assert.ok(csv.includes('"Nicht verfügbar";"Nicht verfügbar";"Unvollständig"'));
 });
 
 test("kennzeichnet leere Zeiträume und schützt Suchbegriffe vor Tabellenformeln", () => {
