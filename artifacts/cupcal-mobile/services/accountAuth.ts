@@ -335,7 +335,7 @@ export async function clearPendingAccountConfirmationEmail(): Promise<void> {
 export function watchAuthSession(
   auth: AuthApi,
   callbacks: {
-    onSession: (session: Session | null) => void;
+    onSession: (session: Session | null, event?: string) => void;
     onError: (error: unknown) => void;
     onReady: () => void;
   },
@@ -344,10 +344,10 @@ export function watchAuthSession(
   let authEventCount = 0;
   const {
     data: { subscription },
-  } = auth.onAuthStateChange((_event, session) => {
+  } = auth.onAuthStateChange((event, session) => {
     if (!active) return;
     authEventCount += 1;
-    callbacks.onSession(session);
+    callbacks.onSession(session, event);
     callbacks.onReady();
   });
 

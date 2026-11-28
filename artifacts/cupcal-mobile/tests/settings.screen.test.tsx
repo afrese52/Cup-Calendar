@@ -2795,6 +2795,37 @@ test.each(['ios', 'android'] as const)(
   },
 );
 
+test('verwirft eine verspätete Abmeldeantwort nach einem externen Sitzungswechsel', async () => {
+  auth.getSession.mockResolvedValue({ data: { session: testSession }, error: null });
+  let finishSignOut!: (result: { error: Error | null }) => void;
+  auth.signOut.mockImplementation(
+    () => new Promise((resolve) => {
+      finishSignOut = resolve;
+    }),
+  );
+  const view = await render(<SettingsScreen />);
+  expect(await view.findByText('test@example.invalid')).toBeTruthy();
+
+  await fireEvent.press(view.getByTestId('sign-out-button'));
+
+  const nextSession = {
+    ...testSession,
+    user: { id: 'second-user', email: 'second@example.invalid' },
+  };
+  await act(async () => mockSupabase.__emitAuthStateChange('SIGNED_IN', nextSession));
+  expect(view.getByTestId('account-session-status').props.accessibilityLabel)
+    .toBe('Angemeldet. second@example.invalid');
+  expect(view.getByText('second@example.invalid')).toBeTruthy();
+  expect(view.queryByText('test@example.invalid')).toBeNull();
+
+  await act(async () => finishSignOut({ error: null }));
+
+  expect(view.getByTestId('account-session-status').props.accessibilityLabel)
+    .toBe('Angemeldet. second@example.invalid');
+  expect(view.getByText('second@example.invalid')).toBeTruthy();
+  expect(view.queryByTestId('auth-success-message')).toBeNull();
+});
+
 test.each(['ios', 'android'] as const)(
   'ersetzt den Status der laufenden Abmeldung auf %s nach einem Fehler',
   async (platform) => {

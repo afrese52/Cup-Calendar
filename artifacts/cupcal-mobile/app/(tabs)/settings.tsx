@@ -153,6 +153,7 @@ export default function SettingsScreen() {
   const [confirmationResendCooldownLoaded, setConfirmationResendCooldownLoaded] = useState(false);
   const announcedResendCooldownCompletionRef = useRef<number | null>(null);
   const sessionRef = useRef<Session | null>(session);
+  const sessionSwitchRevisionRef = useRef(0);
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
   const deleteConfirmationTitleRef = useRef<React.ComponentRef<typeof Text>>(null);
   const accountDeletionRequest = useRequestAccountDeletion();
@@ -295,7 +296,8 @@ export default function SettingsScreen() {
     if (!supabase) return;
 
     return watchAuthSession(supabase.auth, {
-      onSession: (nextSession) => {
+      onSession: (nextSession, event) => {
+        if (event === 'SIGNED_IN') sessionSwitchRevisionRef.current += 1;
         sessionRef.current = nextSession;
         setSession(nextSession);
         if (nextSession) {
@@ -528,6 +530,7 @@ export default function SettingsScreen() {
   const signOut = async () => {
     if (!supabase || isSigningOutRef.current) return;
 
+    const sessionSwitchRevision = sessionSwitchRevisionRef.current;
     isSigningOutRef.current = true;
     setSubmittingAction('sign-out');
     setAuthError(null);
@@ -537,6 +540,7 @@ export default function SettingsScreen() {
     }
     try {
       const result = await signOutAccount(supabase.auth);
+      if (sessionSwitchRevisionRef.current !== sessionSwitchRevision) return;
       if (result.ok) {
         setAuthMessage(result.message);
         setAuthMode('sign-in');
