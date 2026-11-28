@@ -2750,6 +2750,58 @@ test('verhindert doppelte Kontolöschanfragen im Browser und erlaubt nach einem 
   }
 });
 
+test('erlaubt nach einem API-Fehler im Browser einen neuen Löschlink-Versuch', async () => {
+  const originalPlatformOS = Platform.OS;
+  Object.defineProperty(Platform, 'OS', { configurable: true, value: 'web' });
+  const mockedApi = jest.requireMock('@workspace/api-client-react') as {
+    __requestAccountDeletion: jest.Mock;
+  };
+  mockedApi.__requestAccountDeletion
+    .mockImplementationOnce(async () => {
+      throw Object.assign(new Error('Server vorübergehend nicht verfügbar'), { status: 503 });
+    })
+    .mockImplementationOnce(async () => ({
+      confirmationToken: 'api-retry.confirmation.token',
+      expiresAt: '2026-11-12T12:30:00.000Z',
+    }));
+
+  try {
+    auth.getSession.mockResolvedValue({ data: { session: testSession }, error: null });
+    const view = await render(<SettingsScreen />);
+    expect(await view.findByText('test@example.invalid')).toBeTruthy();
+    await fireEvent.press(view.getByTestId('delete-account-button'));
+    await fireEvent.press(view.getByTestId('delete-account-confirm-button'));
+
+    const errorMessage = await view.findByTestId('auth-error-message');
+    expect(errorMessage.props.children).toBe(
+      'Supabase ist vorübergehend nicht verfügbar. Warte bitte kurz und versuche es dann erneut.',
+    );
+    expect(view.getByTestId('delete-account-confirmation-title')).toBeTruthy();
+    expect(view.getByTestId('delete-account-confirm-button').props.accessibilityState).toMatchObject({
+      disabled: false,
+      busy: false,
+    });
+    expect(auth.signInWithOtp).not.toHaveBeenCalled();
+
+    await fireEvent.press(view.getByTestId('delete-account-confirm-button'));
+
+    expect(await view.findByText(/Bestätigungslink an test@example\.invalid gesendet/)).toBeTruthy();
+    expect(view.queryByTestId('delete-account-confirmation-title')).toBeNull();
+    expect(mockedApi.__requestAccountDeletion).toHaveBeenCalledTimes(2);
+    expect(auth.signInWithOtp).toHaveBeenCalledTimes(1);
+    expect(auth.signInWithOtp).toHaveBeenCalledWith({
+      email: 'test@example.invalid',
+      options: {
+        emailRedirectTo:
+          'cupcal-test://auth/confirm?flow=cupcal-account-deletion&deletion_token=api-retry.confirmation.token',
+        shouldCreateUser: false,
+      },
+    });
+  } finally {
+    Object.defineProperty(Platform, 'OS', { configurable: true, value: originalPlatformOS });
+  }
+});
+
 test('stellt die Bestätigungsadresse nach einem App-Neustart wieder her und entfernt sie nach Anmeldung', async () => {
   const mockedSupabase = jest.requireMock('@/services/supabase') as {
     requestEmailConfirmation: jest.Mock;
