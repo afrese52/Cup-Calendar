@@ -25,6 +25,7 @@ export type SearchConsoleReportItem = {
     pageFetchState: string | null;
     googleCanonical: string | null;
     userCanonical: string | null;
+    canonicalHistory: SearchConsoleCanonicalHistorySummary;
   };
   performance: {
     clicks: number;
@@ -37,6 +38,37 @@ export type SearchConsoleReportItem = {
   countries: SearchConsoleCountry[];
   devices: SearchConsoleDevice[];
 };
+
+export type SearchConsoleCanonicalHistoryInput = {
+  url: string;
+  userCanonical: string | null;
+  googleCanonical: string | null;
+};
+
+export type SearchConsoleCanonicalHistorySummary = {
+  firstDetectedAt: string | null;
+  lastChangedAt: string | null;
+};
+
+type SearchConsoleCanonicalHistoryStore = (
+  snapshot: SearchConsoleCanonicalHistoryInput,
+) => Promise<SearchConsoleCanonicalHistorySummary>;
+
+export function hasCanonicalSnapshotChanged(
+  previous: Pick<SearchConsoleCanonicalHistoryInput, "userCanonical" | "googleCanonical">,
+  current: Pick<SearchConsoleCanonicalHistoryInput, "userCanonical" | "googleCanonical">,
+): boolean {
+  return previous.userCanonical !== current.userCanonical
+    || previous.googleCanonical !== current.googleCanonical;
+}
+
+export function shouldRecordCanonicalSnapshot(
+  previous: Pick<SearchConsoleCanonicalHistoryInput, "userCanonical" | "googleCanonical"> | null,
+  current: Pick<SearchConsoleCanonicalHistoryInput, "userCanonical" | "googleCanonical">,
+): boolean {
+  if (current.userCanonical === null || current.googleCanonical === null) return false;
+  return previous === null || hasCanonicalSnapshotChanged(previous, current);
+}
 
 export type SearchConsoleQuery = {
   query: string;
@@ -235,6 +267,7 @@ export function createSearchConsoleClient(options: {
   env?: NodeJS.ProcessEnv;
   fetchImpl?: typeof fetch;
   now?: () => number;
+  canonicalHistoryStore?: SearchConsoleCanonicalHistoryStore;
 } = {}) {
   const env = options.env ?? process.env;
   const fetchImpl = options.fetchImpl ?? fetch;
@@ -421,6 +454,14 @@ export function createSearchConsoleClient(options: {
           || a.query.localeCompare(b.query),
         );
 
+        const userCanonical = asCanonicalUrl(index["userCanonical"]);
+        const googleCanonical = asCanonicalUrl(index["googleCanonical"]);
+        const canonicalHistory = await options.canonicalHistoryStore?.({
+          url,
+          userCanonical,
+          googleCanonical,
+        }) ?? { firstDetectedAt: null, lastChangedAt: null };
+
         return {
           url,
           indexing: {
@@ -430,8 +471,9 @@ export function createSearchConsoleClient(options: {
             indexingState: asString(index["indexingState"]),
             lastCrawlTime: asString(index["lastCrawlTime"]),
             pageFetchState: asString(index["pageFetchState"]),
-            googleCanonical: asCanonicalUrl(index["googleCanonical"]),
-            userCanonical: asCanonicalUrl(index["userCanonical"]),
+            googleCanonical,
+            userCanonical,
+            canonicalHistory,
           },
           performance: {
             clicks: asNumber(row["clicks"]),
@@ -507,7 +549,12 @@ function parseSearchConsoleQueries(rows: unknown[]): SearchConsoleQuery[] {
   });
 }
 
-const searchConsoleClient = createSearchConsoleClient();
+const searchConsoleClient = createSearchConsoleClient({
+  canonicalHistoryStore: async (snapshot) => {
+    const { recordSearchConsoleCanonicalHistory } = await import("./searchConsoleCanonicalHistory");
+    return await recordSearchConsoleCanonicalHistory(snapshot);
+  },
+});
 
 export function isSearchConsoleConfigured(): boolean {
   return searchConsoleClient.isConfigured();

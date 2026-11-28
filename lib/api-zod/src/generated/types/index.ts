@@ -42,6 +42,7 @@ export * from './searchConsoleQueryComparison';
 export * from './searchConsoleQueryComparisonStatus';
 export * from './searchConsoleReportItem';
 export * from './searchConsoleReportItemIndexing';
+export * from './searchConsoleReportItemIndexingCanonicalHistory';
 export * from './searchConsoleReportItemPerformance';
 export * from './searchConsoleReportRequest';
 export * from './searchConsoleReportResponse';

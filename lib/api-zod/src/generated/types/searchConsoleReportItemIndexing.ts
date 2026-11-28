@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { SearchConsoleReportItemIndexingCanonicalHistory } from './searchConsoleReportItemIndexingCanonicalHistory';
 
 export type SearchConsoleReportItemIndexing = {
   /** @nullable */
@@ -23,4 +24,5 @@ export type SearchConsoleReportItemIndexing = {
   googleCanonical: string | null;
   /** @nullable */
   userCanonical: string | null;
+  canonicalHistory: SearchConsoleReportItemIndexingCanonicalHistory;
 };

@@ -4,7 +4,9 @@ import { test } from "node:test";
 import {
   createSearchConsoleClient,
   CUPCAL_SEARCH_CONSOLE_PROPERTY,
+  hasCanonicalSnapshotChanged,
   SearchConsoleError,
+  shouldRecordCanonicalSnapshot,
   validateSearchConsoleReportRequest,
 } from "./searchConsole.ts";
 
@@ -51,12 +53,41 @@ test("validates reports to only allow CupCal HTTPS URLs and dates", () => {
   );
 });
 
+test("speichert nur vollständige und veränderte Canonical-Zustände in der Historie", () => {
+  const previous = {
+    userCanonical: "https://cupcal.af-software.app/",
+    googleCanonical: "https://www.cupcal.af-software.app/",
+  };
+
+  assert.equal(hasCanonicalSnapshotChanged(previous, { ...previous }), false);
+  const changed = {
+    ...previous,
+    googleCanonical: "https://cupcal.af-software.app/",
+  };
+  assert.equal(hasCanonicalSnapshotChanged(previous, changed), true);
+  assert.equal(shouldRecordCanonicalSnapshot(null, previous), true);
+  assert.equal(shouldRecordCanonicalSnapshot(previous, { ...previous }), false);
+  assert.equal(shouldRecordCanonicalSnapshot(previous, changed), true);
+  assert.equal(shouldRecordCanonicalSnapshot(previous, {
+    userCanonical: "https://cupcal.af-software.app/",
+    googleCanonical: null,
+  }), false);
+});
+
 test("uses the readonly OAuth scope and maps index and search performance data", async () => {
   const calls = [];
+  const historySnapshots = [];
   const env = serviceAccountEnv();
   const client = createSearchConsoleClient({
     env,
     now: () => now.getTime(),
+    canonicalHistoryStore: async (snapshot) => {
+      historySnapshots.push(snapshot);
+      return {
+        firstDetectedAt: "2026-11-19T10:36:01.000Z",
+        lastChangedAt: "2026-11-20T10:36:01.000Z",
+      };
+    },
     fetchImpl: async (input, init = {}) => {
       const url = String(input);
       calls.push({ url, init });
@@ -139,6 +170,10 @@ test("uses the readonly OAuth scope and maps index and search performance data",
       pageFetchState: null,
       googleCanonical: "https://cupcal.af-software.app/",
       userCanonical: "https://www.cupcal.af-software.app/",
+      canonicalHistory: {
+        firstDetectedAt: "2026-11-19T10:36:01.000Z",
+        lastChangedAt: "2026-11-20T10:36:01.000Z",
+      },
     },
     performance: { clicks: 12, impressions: 340, ctr: 0.035, position: 8.2 },
     countries: [
@@ -184,6 +219,11 @@ test("uses the readonly OAuth scope and maps index and search performance data",
       },
     ],
   });
+  assert.deepEqual(historySnapshots, [{
+    url: validRequest.urls[0],
+    userCanonical: "https://www.cupcal.af-software.app/",
+    googleCanonical: "https://cupcal.af-software.app/",
+  }]);
   assert.equal(calls.length, 7);
   assert.ok(calls.slice(1).every(({ init }) => init.headers.authorization === "Bearer mock-access-token"));
   assert.ok(calls.slice(1).every(({ init }) => init.method === "POST"));

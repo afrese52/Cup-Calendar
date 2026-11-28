@@ -95,6 +95,7 @@ async function renderCanonicalReport(userCanonical: string | null, googleCanonic
           pageFetchState: null,
           googleCanonical,
           userCanonical,
+          canonicalHistory: { firstDetectedAt: null, lastChangedAt: null },
         },
         performance: { clicks: 0, impressions: 0, ctr: 0, position: null },
         countries: [],
@@ -145,6 +146,10 @@ test('lädt Indexstatus und Suchleistung mit der CupCal-Admin-Sitzung', async ()
           pageFetchState: null,
           googleCanonical: 'https://cupcal.af-software.app/',
           userCanonical: 'https://www.cupcal.af-software.app/',
+          canonicalHistory: {
+            firstDetectedAt: '2026-11-19T10:36:01Z',
+            lastChangedAt: '2026-11-20T10:36:01Z',
+          },
         },
         performance: { clicks: 12, impressions: 340, ctr: 0.035, position: 8.2 },
         countries: [
@@ -191,6 +196,9 @@ test('lädt Indexstatus und Suchleistung mit der CupCal-Admin-Sitzung', async ()
   expect(view.getByLabelText('Website-Canonical: https://www.cupcal.af-software.app/')).toBeTruthy();
   expect(view.getByLabelText('Google-Canonical: https://cupcal.af-software.app/')).toBeTruthy();
   expect(await view.findByText('Abweichung: Google verwendet eine andere Canonical-Adresse')).toBeTruthy();
+  expect(await view.findByText(/Abweichung erstmals erfasst: 19\.11\.2026, 11:36/)).toBeTruthy();
+  expect(await view.findByText(/Canonical-Werte zuletzt geändert: 20\.11\.2026, 11:36/)).toBeTruthy();
+  expect(view.getByText(/Historie beginnt mit der ersten Abfrage/)).toBeTruthy();
   expect(await view.findByText('12 Klicks · 340 Impressionen')).toBeTruthy();
   expect(await view.findByText('DEU')).toBeTruthy();
   expect(await view.findByText('Mobilgerät')).toBeTruthy();
@@ -269,6 +277,7 @@ test('erklärt, wenn für eine Seite keine sichtbaren Suchbegriffe vorliegen', a
           pageFetchState: null,
           googleCanonical: null,
           userCanonical: null,
+          canonicalHistory: { firstDetectedAt: null, lastChangedAt: null },
         },
         performance: { clicks: 0, impressions: 0, ctr: 0, position: null },
         countries: [],

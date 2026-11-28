@@ -26,6 +26,17 @@ function formatDate(value: string | null) {
       }).format(date);
 }
 
+function formatHistoryDate(value: string) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? value
+    : new Intl.DateTimeFormat('de-DE', {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+        timeZone: 'Europe/Berlin',
+      }).format(date);
+}
+
 function defaultDate(daysAgo: number) {
   const date = new Date();
   date.setUTCDate(date.getUTCDate() - daysAgo);
@@ -57,10 +68,12 @@ function compareCanonicals(userCanonical: string | null, googleCanonical: string
 function CanonicalComparison({
   userCanonical,
   googleCanonical,
+  history,
   colors,
 }: {
   userCanonical: string | null;
   googleCanonical: string | null;
+  history: { firstDetectedAt: string | null; lastChangedAt: string | null };
   colors: ReturnType<typeof useColors>;
 }) {
   const comparison = compareCanonicals(userCanonical, googleCanonical);
@@ -104,6 +117,21 @@ function CanonicalComparison({
         />
         <Text style={[styles.canonicalStatusText, { color: statusColor }]}>{statusText}</Text>
       </View>
+      {history.firstDetectedAt ? (
+        <View style={styles.canonicalHistory}>
+          <Text style={[styles.canonicalHistoryText, { color: colors.mutedForeground }]}>
+            Abweichung erstmals erfasst: {formatHistoryDate(history.firstDetectedAt)}
+          </Text>
+          {history.lastChangedAt ? (
+            <Text style={[styles.canonicalHistoryText, { color: colors.mutedForeground }]}>
+              Canonical-Werte zuletzt geändert: {formatHistoryDate(history.lastChangedAt)}
+            </Text>
+          ) : null}
+          <Text style={[styles.canonicalHistoryText, { color: colors.mutedForeground }]}>
+            Historie beginnt mit der ersten Abfrage; frühere Änderungen sind nicht erfasst.
+          </Text>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -346,6 +374,7 @@ export default function SearchConsoleScreen() {
             <CanonicalComparison
               userCanonical={result.indexing.userCanonical}
               googleCanonical={result.indexing.googleCanonical}
+              history={result.indexing.canonicalHistory}
               colors={colors}
             />
             <Text style={[styles.sectionLabel, { color: colors.mutedForeground, marginTop: 18 }]}>SUCHLEISTUNG IM ZEITRAUM</Text>
@@ -479,6 +508,8 @@ const styles = StyleSheet.create({
   canonicalUrl: { fontSize: 11, lineHeight: 16, marginTop: 3 },
   canonicalStatus: { flexDirection: 'row', alignItems: 'center', gap: 7, borderWidth: 1, borderRadius: 9, padding: 9, marginTop: 12 },
   canonicalStatusText: { flex: 1, fontSize: 11, fontWeight: '700', lineHeight: 16 },
+  canonicalHistory: { gap: 4, marginTop: 10 },
+  canonicalHistoryText: { fontSize: 11, lineHeight: 16 },
   emptyQueries: { fontSize: 13, lineHeight: 19, marginTop: 10 },
   queryList: { marginTop: 8 },
   queryRow: { borderBottomWidth: StyleSheet.hairlineWidth, paddingVertical: 10 },

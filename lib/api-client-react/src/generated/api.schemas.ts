@@ -461,6 +461,13 @@ export interface SearchConsoleDevice {
   position: number | null;
 }
 
+export type SearchConsoleReportItemIndexingCanonicalHistory = {
+  /** @nullable */
+  firstDetectedAt: string | null;
+  /** @nullable */
+  lastChangedAt: string | null;
+};
+
 export type SearchConsoleReportItemIndexing = {
   /** @nullable */
   verdict: string | null;
@@ -478,6 +485,7 @@ export type SearchConsoleReportItemIndexing = {
   googleCanonical: string | null;
   /** @nullable */
   userCanonical: string | null;
+  canonicalHistory: SearchConsoleReportItemIndexingCanonicalHistory;
 };
 
 export type SearchConsoleReportItemPerformance = {

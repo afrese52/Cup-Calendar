@@ -617,7 +617,13 @@ components:
             pageFetchState: { type: ["string", "null"] }
             googleCanonical: { type: ["string", "null"], format: uri }
             userCanonical: { type: ["string", "null"], format: uri }
-          required: [verdict, coverageState, robotsTxtState, indexingState, lastCrawlTime, pageFetchState, googleCanonical, userCanonical]
+            canonicalHistory:
+              type: object
+              properties:
+                firstDetectedAt: { type: ["string", "null"], format: date-time }
+                lastChangedAt: { type: ["string", "null"], format: date-time }
+              required: [firstDetectedAt, lastChangedAt]
+          required: [verdict, coverageState, robotsTxtState, indexingState, lastCrawlTime, pageFetchState, googleCanonical, userCanonical, canonicalHistory]
         performance:
           type: object
           properties:

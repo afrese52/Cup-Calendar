@@ -202,7 +202,11 @@ export const GetSearchConsoleReportResponse = zod.object({
   "lastCrawlTime": zod.coerce.date().nullable(),
   "pageFetchState": zod.string().nullable(),
   "googleCanonical": zod.string().url().nullable(),
-  "userCanonical": zod.string().url().nullable()
+  "userCanonical": zod.string().url().nullable(),
+  "canonicalHistory": zod.object({
+  "firstDetectedAt": zod.coerce.date().nullable(),
+  "lastChangedAt": zod.coerce.date().nullable()
+})
 }),
   "performance": zod.object({
   "clicks": zod.number(),
