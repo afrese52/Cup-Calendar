@@ -532,6 +532,9 @@ export default function SettingsScreen() {
     setSubmittingAction('sign-out');
     setAuthError(null);
     setAuthMessage(null);
+    if (Platform.OS === 'ios') {
+      AccessibilityInfo.announceForAccessibility('Abmeldung läuft. Bitte warten.');
+    }
     try {
       const result = await signOutAccount(supabase.auth);
       if (result.ok) {
@@ -675,6 +678,17 @@ export default function SettingsScreen() {
                   {isSubmittingAuth ? 'Wird abgemeldet …' : 'Abmelden'}
                 </Text>
               </Pressable>
+              {submittingAction === 'sign-out' ? (
+                <Text
+                  accessible
+                  accessibilityRole="text"
+                  accessibilityLiveRegion={Platform.OS === 'android' ? 'polite' : 'none'}
+                  testID="sign-out-status"
+                  style={[styles.authNotice, { color: colors.mutedForeground }]}
+                >
+                  Abmeldung läuft. Bitte warten.
+                </Text>
+              ) : null}
               {showDeleteConfirmation ? (
                 <View
                   style={[

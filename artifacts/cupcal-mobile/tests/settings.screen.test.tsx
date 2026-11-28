@@ -2397,8 +2397,13 @@ test.each(['ios', 'android'] as const)(
       expect(successMessage.props.accessibilityLiveRegion).toBe('none');
       expect(view.getByText('Bei CupCal anmelden')).toBeTruthy();
       if (platform === 'ios') {
-        expect(announceForAccessibility).toHaveBeenCalledTimes(1);
-        expect(announceForAccessibility).toHaveBeenCalledWith(
+        expect(announceForAccessibility).toHaveBeenCalledTimes(2);
+        expect(announceForAccessibility).toHaveBeenNthCalledWith(
+          1,
+          'Abmeldung läuft. Bitte warten.',
+        );
+        expect(announceForAccessibility).toHaveBeenNthCalledWith(
+          2,
           'Abgemeldet. Bei CupCal anmelden.',
         );
       } else {
@@ -2725,6 +2730,115 @@ test('startet bei synchronen Abmeldeklicks nur eine Anfrage', async () => {
     finishSignOut({ error: null });
   });
 });
+
+test.each(['ios', 'android'] as const)(
+  'kündigt die laufende Abmeldung auf %s an und aktualisiert den Status nach Erfolg',
+  async (platform) => {
+    const originalPlatformOS = Platform.OS;
+    Object.defineProperty(Platform, 'OS', { configurable: true, value: platform });
+    let finishSignOut!: (result: { error: Error | null }) => void;
+    auth.getSession.mockResolvedValue({ data: { session: testSession }, error: null });
+    auth.signOut.mockImplementation(
+      () => new Promise((resolve) => {
+        finishSignOut = resolve;
+      }),
+    );
+
+    try {
+      const view = await render(<SettingsScreen />);
+      expect(await view.findByText('test@example.invalid')).toBeTruthy();
+      announceForAccessibility.mockClear();
+      sendAccessibilityFocus.mockClear();
+
+      await fireEvent.press(view.getByTestId('sign-out-button'));
+
+      const pendingStatus = view.getByTestId('sign-out-status');
+      expect(pendingStatus.props.accessible).toBe(true);
+      expect(pendingStatus.props.accessibilityRole).toBe('text');
+      expect(pendingStatus.props.children).toBe('Abmeldung läuft. Bitte warten.');
+      expect(pendingStatus.props.accessibilityLiveRegion).toBe(
+        platform === 'android' ? 'polite' : 'none',
+      );
+      expect(view.getByTestId('sign-out-button').props.accessibilityLabel).toBe('Abmeldung läuft');
+      expect(view.getByTestId('sign-out-button').props.accessibilityState).toEqual({
+        disabled: true,
+        busy: true,
+      });
+      if (platform === 'ios') {
+        expect(announceForAccessibility).toHaveBeenCalledTimes(1);
+        expect(announceForAccessibility).toHaveBeenCalledWith('Abmeldung läuft. Bitte warten.');
+      } else {
+        expect(announceForAccessibility).not.toHaveBeenCalled();
+      }
+      expect(sendAccessibilityFocus).not.toHaveBeenCalled();
+
+      await act(async () => {
+        mockSupabase.__emitAuthStateChange('SIGNED_OUT', null);
+        finishSignOut({ error: null });
+      });
+
+      expect(view.queryByTestId('sign-out-status')).toBeNull();
+      expect(view.getByTestId('auth-success-message').props.children).toBe('Du bist abgemeldet.');
+      expect(view.getByTestId('account-session-status').props.children).toBe('Bei CupCal anmelden');
+      if (platform === 'ios') {
+        expect(announceForAccessibility).toHaveBeenCalledTimes(2);
+        expect(announceForAccessibility).toHaveBeenLastCalledWith(
+          'Abgemeldet. Bei CupCal anmelden.',
+        );
+      } else {
+        expect(announceForAccessibility).not.toHaveBeenCalled();
+      }
+      expect(sendAccessibilityFocus).not.toHaveBeenCalled();
+    } finally {
+      Object.defineProperty(Platform, 'OS', { configurable: true, value: originalPlatformOS });
+    }
+  },
+);
+
+test.each(['ios', 'android'] as const)(
+  'ersetzt den Status der laufenden Abmeldung auf %s nach einem Fehler',
+  async (platform) => {
+    const originalPlatformOS = Platform.OS;
+    Object.defineProperty(Platform, 'OS', { configurable: true, value: platform });
+    let finishSignOut!: (result: { error: Error | null }) => void;
+    auth.getSession.mockResolvedValue({ data: { session: testSession }, error: null });
+    auth.signOut.mockImplementation(
+      () => new Promise((resolve) => {
+        finishSignOut = resolve;
+      }),
+    );
+
+    try {
+      const view = await render(<SettingsScreen />);
+      expect(await view.findByText('test@example.invalid')).toBeTruthy();
+      announceForAccessibility.mockClear();
+      sendAccessibilityFocus.mockClear();
+
+      await fireEvent.press(view.getByTestId('sign-out-button'));
+      expect(view.getByTestId('sign-out-status').props.children).toBe(
+        'Abmeldung läuft. Bitte warten.',
+      );
+
+      await act(async () => {
+        finishSignOut({ error: new Error('Abmeldung fehlgeschlagen') });
+      });
+
+      expect(view.queryByTestId('sign-out-status')).toBeNull();
+      const errorMessage = view.getByTestId('auth-error-message');
+      expect(errorMessage.props.children).toBe('Abmeldung fehlgeschlagen');
+      expect(errorMessage.props.accessibilityRole).toBe('alert');
+      expect(errorMessage.props.accessibilityLiveRegion).toBe('assertive');
+      expect(view.getByTestId('account-session-status').props.children).toBe('Angemeldet');
+      expect(announceForAccessibility).toHaveBeenCalledTimes(platform === 'ios' ? 1 : 0);
+      if (platform === 'ios') {
+        expect(announceForAccessibility).toHaveBeenCalledWith('Abmeldung läuft. Bitte warten.');
+      }
+      expect(sendAccessibilityFocus).toHaveBeenCalledWith(expect.anything(), 'focus');
+    } finally {
+      Object.defineProperty(Platform, 'OS', { configurable: true, value: originalPlatformOS });
+    }
+  },
+);
 
 test('fragt vor dem Versand des Kontolöschungslinks ausdrücklich nach', async () => {
   auth.getSession.mockResolvedValue({ data: { session: testSession }, error: null });
