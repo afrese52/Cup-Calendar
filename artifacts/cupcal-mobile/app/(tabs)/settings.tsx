@@ -99,9 +99,10 @@ export default function SettingsScreen() {
     authMode?: string;
   }>();
   const { storageError } = useCupCal();
-  const { width, height } = useWindowDimensions();
+  const { width, height, fontScale } = useWindowDimensions();
   const isCompactWidth = width < 360;
   const isCompactHeight = height < 640;
+  const accountSubtitleLineHeight = Math.max(17, 17 * fontScale);
   const [session, setSession] = useState<Session | null>(null);
   const [isCheckingSession, setIsCheckingSession] = useState(Boolean(supabase));
   const importAccessQuery = useGetAdminImportAccess({
@@ -648,7 +649,7 @@ export default function SettingsScreen() {
                   >
                     Angemeldet
                   </Text>
-                  <Text style={[styles.accountSubtitle, { color: colors.mutedForeground }]}>
+                  <Text style={[styles.accountSubtitle, { color: colors.mutedForeground, lineHeight: accountSubtitleLineHeight }]}>
                     {session.user.email ?? 'Deine CupCal-Sitzung ist aktiv.'}
                   </Text>
                 </View>
@@ -809,7 +810,7 @@ export default function SettingsScreen() {
                     ? 'Konto erstellen'
                     : 'Passwort zurücksetzen'}
               </Text>
-              <Text style={[styles.accountSubtitle, { color: colors.mutedForeground }]}>
+              <Text style={[styles.accountSubtitle, { color: colors.mutedForeground, lineHeight: accountSubtitleLineHeight }]}>
                 {authMode === 'sign-in'
                   ? 'Melde dich mit deinem CupCal-Konto an.'
                   : authMode === 'sign-up'
@@ -898,7 +899,7 @@ export default function SettingsScreen() {
                 <Text
                   accessibilityRole="text"
                   testID="auth-password-requirement"
-                  style={[styles.accountSubtitle, { color: colors.mutedForeground }]}
+                  style={[styles.accountSubtitle, { color: colors.mutedForeground, lineHeight: accountSubtitleLineHeight }]}
                 >
                   {PASSWORD_LENGTH_POLICY_MESSAGE}
                 </Text>
@@ -909,7 +910,7 @@ export default function SettingsScreen() {
                   accessibilityRole="text"
                   accessibilityLiveRegion={Platform.OS === 'android' ? 'polite' : 'none'}
                   testID="registration-request-recipient"
-                  style={[styles.accountSubtitle, { color: colors.mutedForeground }]}
+                  style={[styles.accountSubtitle, { color: colors.mutedForeground, lineHeight: accountSubtitleLineHeight }]}
                 >
                   Die Registrierung wird für {registrationRequestEmail} angefordert.
                 </Text>
@@ -982,7 +983,7 @@ export default function SettingsScreen() {
                   {confirmationResendEmail ? (
                     <Text
                       testID="confirmation-resend-recipient"
-                      style={[styles.accountSubtitle, { color: colors.mutedForeground }]}
+                      style={[styles.accountSubtitle, { color: colors.mutedForeground, lineHeight: accountSubtitleLineHeight }]}
                     >
                       Der Bestätigungslink wird an {confirmationResendEmail} gesendet.
                     </Text>
@@ -1085,7 +1086,7 @@ export default function SettingsScreen() {
                 <>
                   <Text
                     testID="confirmation-resend-recipient"
-                    style={[styles.accountSubtitle, { color: colors.mutedForeground }]}
+                    style={[styles.accountSubtitle, { color: colors.mutedForeground, lineHeight: accountSubtitleLineHeight }]}
                   >
                     Der Bestätigungslink wird an {confirmationResendEmail} gesendet.
                   </Text>

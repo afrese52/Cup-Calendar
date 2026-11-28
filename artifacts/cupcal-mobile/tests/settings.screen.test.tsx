@@ -657,6 +657,65 @@ test('registriert ein Konto und zeigt die Bestätigungsmeldung', async () => {
   expect(view.getByTestId('auth-password-input').props.value).toBe('');
 });
 
+test('hält Registrierungsadresse und erneutes Senden bei 200 Prozent Schrift auf kleinem Display lesbar', async () => {
+  const compactDimensions = { width: 320, height: 480, scale: 1, fontScale: 2 };
+  Dimensions.set({
+    window: compactDimensions,
+    screen: compactDimensions,
+  });
+  const registeredEmail = 'tournament.registration+cupcal@example.invalid';
+  const mockedSupabase = jest.requireMock('@/services/supabase') as {
+    requestEmailConfirmation: jest.Mock;
+  };
+  const view = await openSettings();
+  await fireEvent.press(view.getByTestId('auth-mode-toggle'));
+  await fireEvent.changeText(view.getByTestId('auth-email-input'), registeredEmail);
+  await fireEvent.changeText(view.getByTestId('auth-password-input'), 'test-password');
+  await fireEvent.press(view.getByTestId('auth-submit-button'));
+
+  const scrollView = view.getByTestId('settings-scroll-view');
+  const compactScreen = within(scrollView);
+  const recipient = await compactScreen.findByTestId('confirmation-resend-recipient');
+  expect(Dimensions.get('window').fontScale).toBe(2);
+  expect(scrollView.props.scrollEnabled).toBe(true);
+  expect(recipient.props.allowFontScaling).not.toBe(false);
+  expect(recipient.props.children).toEqual([
+    'Der Bestätigungslink wird an ',
+    registeredEmail,
+    ' gesendet.',
+  ]);
+  expect(recipient.props.numberOfLines).toBeUndefined();
+  expect(recipient.props.ellipsizeMode).toBeUndefined();
+  expect(StyleSheet.flatten(recipient.props.style).lineHeight).toBe(34);
+
+  await fireEvent.scroll(scrollView, {
+    nativeEvent: {
+      contentOffset: { x: 0, y: 800 },
+      contentSize: { width: compactDimensions.width, height: 1400 },
+      layoutMeasurement: { width: compactDimensions.width, height: compactDimensions.height },
+    },
+  });
+
+  const resendButton = compactScreen.getByTestId('registration-resend-confirmation-button');
+  const resendLabel = compactScreen.getByText('Bestätigungslink erneut senden');
+  expect(resendButton.props.accessibilityState?.disabled).not.toBe(true);
+  expect(resendButton.props.style).toBeDefined();
+  expect(StyleSheet.flatten(resendLabel.props.style)).toMatchObject({
+    width: '100%',
+    flexShrink: 1,
+    textAlign: 'center',
+  });
+  expect(resendLabel.props.allowFontScaling).not.toBe(false);
+  expect(resendLabel.props.numberOfLines).toBeUndefined();
+  expect(resendLabel.props.ellipsizeMode).toBeUndefined();
+
+  await fireEvent.press(resendButton);
+  expect(mockedSupabase.requestEmailConfirmation).toHaveBeenCalledWith(
+    registeredEmail,
+    'cupcal-test://auth/confirm',
+  );
+});
+
 test('sperrt den Moduswechsel bis die verzögerte Registrierungsantwort eintrifft', async () => {
   type SignUpResult = { data: { session: null }; error: null };
   let finishSignUp!: (result: SignUpResult) => void;
