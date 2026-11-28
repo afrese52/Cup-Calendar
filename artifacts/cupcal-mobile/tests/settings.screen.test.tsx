@@ -2111,6 +2111,57 @@ test('sperrt den Moduswechsel bis die verzögerte Passwortlink-Antwort eintrifft
   );
 });
 
+test('hält nach einem verzögerten Passwortlink-Fehler den Wiederherstellungsmodus offen und erlaubt einen neuen Versuch', async () => {
+  let finishReset!: (result: { error: Error | null }) => void;
+  let finishRetry!: (result: { error: Error | null }) => void;
+  auth.resetPasswordForEmail
+    .mockImplementationOnce(
+      () => new Promise((resolve) => { finishReset = resolve; }),
+    )
+    .mockImplementationOnce(
+      () => new Promise((resolve) => { finishRetry = resolve; }),
+    );
+  const view = await openSettings();
+  await fireEvent.press(view.getByTestId('forgot-password-button'));
+  await fireEvent.changeText(view.getByTestId('auth-email-input'), 'test@example.invalid');
+
+  await fireEvent.press(view.getByTestId('auth-submit-button'));
+
+  expect(view.getByText('Passwort zurücksetzen')).toBeTruthy();
+  expect(view.getByTestId('auth-mode-toggle').props.accessibilityState).toEqual({
+    disabled: true,
+  });
+  expect(auth.resetPasswordForEmail).toHaveBeenCalledTimes(1);
+
+  await act(async () => finishReset({ error: new Error('Email rate limit exceeded') }));
+
+  const errorMessage = await view.findByTestId('auth-error-message');
+  expect(errorMessage.props.children).toBe(
+    'Zu viele Versuche in kurzer Zeit. Warte bitte einige Minuten und versuche es dann erneut.',
+  );
+  expect(view.getByText('Passwort zurücksetzen')).toBeTruthy();
+  expect(view.getByTestId('auth-mode-toggle').props.accessibilityLabel)
+    .toBe('Zurück zur Anmeldung');
+  expect(view.getByTestId('auth-mode-toggle').props.accessibilityState).toEqual({
+    disabled: false,
+  });
+  expect(view.getByTestId('auth-submit-button').props.accessibilityState).toEqual({
+    disabled: false,
+    busy: false,
+  });
+
+  await fireEvent.press(view.getByTestId('auth-submit-button'));
+
+  expect(auth.resetPasswordForEmail).toHaveBeenCalledTimes(2);
+  expect(view.getByTestId('auth-submit-button').props.accessibilityState).toEqual({
+    disabled: true,
+    busy: true,
+  });
+  expect(view.queryByTestId('auth-error-message')).toBeNull();
+  await act(async () => finishRetry({ error: null }));
+  expect(await view.findByTestId('auth-success-message')).toBeTruthy();
+});
+
 test.each(['ios', 'android'] as const)(
   'hält den Passwortlink-Modus während eines Wechselversuchs auf %s gesperrt',
   async (platform) => {
