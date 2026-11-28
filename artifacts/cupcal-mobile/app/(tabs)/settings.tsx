@@ -387,6 +387,11 @@ export default function SettingsScreen() {
     isSubmittingAuthRef.current = true;
     isRequestingRecoveryRef.current = submittedMode === 'forgot-password';
     setRegistrationRequestEmail(submittedMode === 'sign-up' ? normalizedEmail : null);
+    if (submittedMode === 'sign-up' && Platform.OS === 'ios') {
+      AccessibilityInfo.announceForAccessibility(
+        `Die Registrierung wird für ${normalizedEmail} angefordert.`,
+      );
+    }
     setSubmittingAction('submit');
     setAuthError(null);
     recoveryErrorEmailRef.current = null;
@@ -412,12 +417,19 @@ export default function SettingsScreen() {
         return;
       }
       if (result.ok) {
+        if (result.emailConfirmationRequired) {
+          setRegistrationConfirmationEmail(normalizedEmail);
+          if (submittedMode === 'sign-up' && Platform.OS === 'ios') {
+            AccessibilityInfo.announceForAccessibility(
+              `${result.message} Der Bestätigungslink wird an ${normalizedEmail} gesendet.`,
+            );
+          }
+        }
         setAuthMessage(
           result.message,
           submittedMode === 'forgot-password' ? normalizedEmail : null,
         );
         if (result.emailConfirmationRequired) {
-          setRegistrationConfirmationEmail(normalizedEmail);
           try {
             await savePendingAccountConfirmationEmail(normalizedEmail);
           } catch {
@@ -893,8 +905,9 @@ export default function SettingsScreen() {
               ) : null}
               {registrationRequestEmail ? (
                 <Text
+                  accessible
                   accessibilityRole="text"
-                  accessibilityLiveRegion="polite"
+                  accessibilityLiveRegion={Platform.OS === 'android' ? 'polite' : 'none'}
                   testID="registration-request-recipient"
                   style={[styles.accountSubtitle, { color: colors.mutedForeground }]}
                 >
@@ -1044,13 +1057,24 @@ export default function SettingsScreen() {
               <Text
                 accessible
                 accessibilityRole={
-                  isSessionStatusSuccessMessage || isConfirmationResendSuccessMessage ? 'text' : 'alert'
+                  isSessionStatusSuccessMessage
+                    || isConfirmationResendSuccessMessage
+                    || (registrationConfirmationEmail !== null && !session)
+                    ? 'text'
+                    : 'alert'
                 }
                 accessibilityLiveRegion={
                   isSessionStatusSuccessMessage
                     || (isConfirmationResendSuccessMessage && Platform.OS === 'ios')
                     ? 'none'
-                    : 'polite'
+                    : registrationConfirmationEmail && Platform.OS === 'ios'
+                      ? 'none'
+                      : 'polite'
+                }
+                accessibilityLabel={
+                  registrationConfirmationEmail && !session
+                    ? `${authMessage} Der Bestätigungslink wird an ${registrationConfirmationEmail} gesendet.`
+                    : undefined
                 }
                 testID="auth-success-message"
                 style={[styles.authNotice, { color: colors.success }]}

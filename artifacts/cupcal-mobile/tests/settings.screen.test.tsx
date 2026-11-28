@@ -643,8 +643,9 @@ test('registriert ein Konto und zeigt die Bestätigungsmeldung', async () => {
   await fireEvent.press(view.getByTestId('auth-submit-button'));
 
   const successMessage = await view.findByTestId('auth-success-message');
-  expect(successMessage.props.accessibilityRole).toBe('alert');
-  expect(successMessage.props.accessibilityLiveRegion).toBe('polite');
+  expect(successMessage.props.accessibilityRole).toBe('text');
+  expect(successMessage.props.accessibilityLiveRegion)
+    .toBe(Platform.OS === 'ios' ? 'none' : 'polite');
   expect(successMessage.props.children).toBe(
     'Dein Konto ist erstellt. Bitte bestätige deine E-Mail-Adresse über den Link in deinem Postfach.',
   );
@@ -740,6 +741,76 @@ test('behält die Registrierungsadresse sichtbar, wenn das E-Mail-Feld während 
     'cupcal-test://auth/confirm',
   );
 });
+
+test.each(['ios', 'android'] as const)(
+  'kündigt bei %s die abgeschickte und bestätigte Registrierungsadresse an',
+  async (platform) => {
+    const originalPlatformOS = Platform.OS;
+    Object.defineProperty(Platform, 'OS', { configurable: true, value: platform });
+    let finishSignUp!: (result: { data: { session: null }; error: null }) => void;
+    auth.signUp.mockImplementation(
+      () => new Promise((resolve) => { finishSignUp = resolve; }),
+    );
+
+    try {
+      const view = await openSettings();
+      await fireEvent.press(view.getByTestId('auth-mode-toggle'));
+      await enterCredentials(view);
+      announceForAccessibility.mockClear();
+
+      await fireEvent.press(view.getByTestId('auth-submit-button'));
+      await waitFor(() => expect(finishSignUp).toBeDefined());
+
+      const pendingNotice = view.getByTestId('registration-request-recipient');
+      expect(pendingNotice.props).toMatchObject({
+        accessible: true,
+        accessibilityRole: 'text',
+        accessibilityLiveRegion: platform === 'android' ? 'polite' : 'none',
+      });
+      expect(pendingNotice.props.children).toEqual([
+        'Die Registrierung wird für ',
+        'test@example.invalid',
+        ' angefordert.',
+      ]);
+      if (platform === 'ios') {
+        expect(announceForAccessibility).toHaveBeenCalledWith(
+          'Die Registrierung wird für test@example.invalid angefordert.',
+        );
+      } else {
+        expect(announceForAccessibility).not.toHaveBeenCalled();
+      }
+
+      await fireEvent.changeText(view.getByTestId('auth-email-input'), 'changed@example.invalid');
+      expect(view.getByTestId('registration-request-recipient').props.children).toEqual([
+        'Die Registrierung wird für ',
+        'test@example.invalid',
+        ' angefordert.',
+      ]);
+
+      await act(async () => finishSignUp({ data: { session: null }, error: null }));
+
+      const successMessage = await view.findByTestId('auth-success-message');
+      const finalAnnouncement =
+        'Dein Konto ist erstellt. Bitte bestätige deine E-Mail-Adresse über den Link in deinem Postfach. '
+        + 'Der Bestätigungslink wird an test@example.invalid gesendet.';
+      expect(successMessage.props.accessibilityLabel).toBe(finalAnnouncement);
+      expect(successMessage.props.accessibilityLiveRegion)
+        .toBe(platform === 'ios' ? 'none' : 'polite');
+      expect(view.getByTestId('confirmation-resend-recipient').props.children).toEqual([
+        'Der Bestätigungslink wird an ',
+        'test@example.invalid',
+        ' gesendet.',
+      ]);
+      if (platform === 'ios') {
+        expect(announceForAccessibility).toHaveBeenNthCalledWith(2, finalAnnouncement);
+      } else {
+        expect(announceForAccessibility).not.toHaveBeenCalled();
+      }
+    } finally {
+      Object.defineProperty(Platform, 'OS', { configurable: true, value: originalPlatformOS });
+    }
+  },
+);
 
 test('verschiebt den Screenreader-Fokus während einer laufenden Registrierung nicht', async () => {
   let finishSignUp!: (result: { data: { session: null }; error: null }) => void;
