@@ -2111,6 +2111,54 @@ test('sperrt den Moduswechsel bis die verzögerte Passwortlink-Antwort eintrifft
   );
 });
 
+test.each(['ios', 'android'] as const)(
+  'hält den Passwortlink-Modus während eines Wechselversuchs auf %s gesperrt',
+  async (platform) => {
+    const originalPlatformOS = Platform.OS;
+    Object.defineProperty(Platform, 'OS', { configurable: true, value: platform });
+
+    try {
+      let finishReset!: (result: { error: null }) => void;
+      auth.resetPasswordForEmail.mockImplementation(
+        () => new Promise((resolve) => { finishReset = resolve; }),
+      );
+      const view = await openSettings();
+      await fireEvent.press(view.getByTestId('forgot-password-button'));
+      await fireEvent.changeText(view.getByTestId('auth-email-input'), 'test@example.invalid');
+      await fireEvent.press(view.getByTestId('auth-submit-button'));
+
+      expect(auth.resetPasswordForEmail).toHaveBeenCalledTimes(1);
+      expect(typeof finishReset).toBe('function');
+      const modeToggle = view.getByTestId('auth-mode-toggle');
+      expect(modeToggle.props.accessibilityState).toEqual({ disabled: true });
+
+      await fireEvent.press(modeToggle);
+
+      expect(auth.resetPasswordForEmail).toHaveBeenCalledTimes(1);
+      expect(view.getByTestId('account-session-status').props.children).toBe('Passwort zurücksetzen');
+      expect(view.queryByTestId('auth-success-message')).toBeNull();
+      expect(view.getByTestId('auth-mode-toggle').props.accessibilityState).toEqual({
+        disabled: true,
+      });
+
+      await act(async () => finishReset({ error: null }));
+
+      expect(view.getByTestId('account-session-status').props.children).toBe('Passwort zurücksetzen');
+      expect(view.getByTestId('auth-mode-toggle').props.accessibilityLabel).toBe(
+        'Zurück zur Anmeldung',
+      );
+      expect(view.getByTestId('auth-mode-toggle').props.accessibilityState).toEqual({
+        disabled: false,
+      });
+      expect(view.getByTestId('auth-success-message').props.children).toBe(
+        'Wenn zu dieser E-Mail ein CupCal-Konto besteht, erhältst du in Kürze einen Wiederherstellungslink. Der Versand kann etwas dauern. Prüfe auch deinen Spam-Ordner.',
+      );
+    } finally {
+      Object.defineProperty(Platform, 'OS', { configurable: true, value: originalPlatformOS });
+    }
+  },
+);
+
 test('hält die aktuelle Wartezeit bei fehlgeschlagenem Speichern nach erfolgreichem Versand ein', async () => {
   const mockedSupabase = jest.requireMock('@/services/supabase') as {
     requestEmailConfirmation: jest.Mock;
