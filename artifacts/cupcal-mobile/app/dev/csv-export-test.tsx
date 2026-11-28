@@ -1,8 +1,9 @@
 import { File as ExpoFile } from 'expo-file-system';
-import { Stack } from 'expo-router';
 import React, { useState } from 'react';
-import { Pressable, SafeAreaView, ScrollView, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import type { SearchConsoleReportItem } from '@workspace/api-client-react';
+import { useColors } from '@/hooks/useColors';
 import { shareSearchConsoleCsv } from '@/services/share-search-console-csv';
 
 const periods = {
@@ -41,7 +42,22 @@ const reportItem = {
   devices: [],
 } satisfies SearchConsoleReportItem;
 
+const styles = StyleSheet.create({
+  safe: { flex: 1 },
+  content: { padding: 24, gap: 16 },
+  title: { fontSize: 24, fontWeight: '700' },
+  description: { lineHeight: 22 },
+  button: {
+    minHeight: 48,
+    justifyContent: 'center',
+    padding: 16,
+  },
+  buttonText: { fontWeight: '700', textAlign: 'center' },
+  result: { lineHeight: 22 },
+});
+
 export default function CsvExportTestScreen() {
+  const colors = useColors();
   const [result, setResult] = useState<string | null>(null);
 
   const exportSample = async () => {
@@ -67,13 +83,15 @@ export default function CsvExportTestScreen() {
   if (!__DEV__) return null;
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#080b10' }}>
-      <Stack.Screen options={{ title: 'CSV-Export-Test', headerShown: true }} />
-      <ScrollView contentContainerStyle={{ padding: 24, gap: 16 }}>
-        <Text style={{ color: '#f5f7fa', fontSize: 24, fontWeight: '700' }}>
+    <SafeAreaView
+      edges={['top', 'bottom']}
+      style={[styles.safe, { backgroundColor: colors.background }]}
+    >
+      <View style={styles.content}>
+        <Text style={[styles.title, { color: colors.foreground }]}>
           Nativer CSV-Export-Test
         </Text>
-        <Text style={{ color: '#aab3c0', lineHeight: 22 }}>
+        <Text style={[styles.description, { color: colors.mutedForeground }]}>
           Die Testdatei enthält Canonical-Spalten, einen fehlenden Canonical-Wert,
           Umlaute und eine URL mit Sonderzeichen.
         </Text>
@@ -82,18 +100,18 @@ export default function CsvExportTestScreen() {
           accessibilityLabel="CSV-Testdatei erstellen und teilen"
           testID="native-csv-export-button"
           onPress={() => void exportSample()}
-          style={{ backgroundColor: '#d2f52b', borderRadius: 12, padding: 16 }}
+          style={[styles.button, { backgroundColor: colors.primary, borderRadius: colors.radius }]}
         >
-          <Text style={{ color: '#10140a', fontWeight: '700', textAlign: 'center' }}>
+          <Text style={[styles.buttonText, { color: colors.primaryForeground }]}>
             CSV-Testdatei erstellen und teilen
           </Text>
         </Pressable>
         {result ? (
           <View testID="native-csv-export-result">
-            <Text style={{ color: '#f5f7fa', lineHeight: 22 }}>{result}</Text>
+            <Text style={[styles.result, { color: colors.foreground }]}>{result}</Text>
           </View>
         ) : null}
-      </ScrollView>
+      </View>
     </SafeAreaView>
   );
 }
